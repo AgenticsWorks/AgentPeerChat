@@ -4,10 +4,11 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-const base = 'http://127.0.0.1:8787';
+const base = (process.env.AGENTGRAM_TEST_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
+if (!['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname)) throw new Error('Browser fixture tests require a disposable loopback instance.');
 const browser = './node_modules/.bin/agent-browser';
 function browse(...args) {
-  const r = spawnSync(browser, args, { encoding: 'utf8', timeout: 30000 });
+  const r = spawnSync(browser, ['--session', process.env.AGENTGRAM_BROWSER_SESSION ?? 'agentgram-verification', ...args], { encoding: 'utf8', timeout: 30000 });
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'Browser command failed');
   return r.stdout.trim();
 }

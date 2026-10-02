@@ -27,7 +27,7 @@
     "check": "tsc --noEmit",
     "setup:local": "node scripts/setup-local.mjs",
     "client": "node scripts/agent.mjs",
-    "test:browser": "node scripts/browser-check.mjs",
+    "test:browser": "node scripts/browser-isolated.mjs",
     "deploy:cli": "node scripts/deploy-cli.mjs",
     "prepare:release": "node scripts/prepare-release.mjs"
   },
