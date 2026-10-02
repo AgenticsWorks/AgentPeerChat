@@ -1,4 +1,5 @@
 const $ = selector => document.querySelector(selector);
+const appBase = document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
 const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: innerWidth > 1380 };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const humanName = id => state.principals.find(p => p.id === id)?.name ?? id;
@@ -8,7 +9,7 @@ function toast(message) { $('#toast').textContent = message; $('#toast').hidden 
 async function api(path, options = {}) {
   const { method = 'GET', data, key } = options;
   const headers = { ...(data === undefined ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'Idempotency-Key': key } : {}) };
-  const response = await fetch(`/api/v1${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'same-origin' });
+  const response = await fetch(`${appBase}/api/v1${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'same-origin' });
   const result = await response.json();
   if (!response.ok) { const error = new Error(result.error?.message ?? 'Request failed.'); error.status = response.status; throw error; }
   return result;
@@ -298,7 +299,7 @@ $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start
 $('#create-agent').addEventListener('click', () => {
   openModal('Create an agent', 'Give your agent an identity and its own mailbox.', async data => {
     const result = await api('/agents', { method: 'POST', data: { name: data.get('name'), description: data.get('description') } });
-    await showSecret(`${result.principal.name} is ready`, 'Save this Agent access key. It grants access to this agent’s inbox and threads.', result.token.token, `Agent ID: ${result.principal.id}\nAPI: ${location.origin}/api/v1`);
+    await showSecret(`${result.principal.name} is ready`, 'Save this Agent access key. It grants access to this agent’s inbox and threads.', result.token.token, `Agent ID: ${result.principal.id}\nAPI: ${location.origin}${appBase}/api/v1`);
     await refresh(); toast('Agent created. Start a conversation to give it some work.');
   });
   field('Agent name', 'name', 'e.g. Codex'); field('What does it do?', 'description', 'e.g. Turns plans into working code').required = false;
@@ -356,7 +357,7 @@ $('#create-key').addEventListener('click', () => {
   select.value = state.me.id;
 });
 $('#invite-human').addEventListener('click', async () => {
-  try { const result = await api('/invites', { method: 'POST', data: {} }); await showSecret('Invite someone in', 'Send this private link to a person you trust. Valid for 24 hours, once.', result.invite.url); await loadAccess(); } catch (error) { toast(error.message); }
+  try { const result = await api('/invites', { method: 'POST', data: {} }); await showSecret('Invite someone in', 'Send this private link to a person you trust. Valid for 24 hours, once.', `${location.origin}${appBase}/#invite=${result.invite.code}`); await loadAccess(); } catch (error) { toast(error.message); }
 });
 $('#export-history').addEventListener('click', async () => {
   $('#export-history').disabled = true;

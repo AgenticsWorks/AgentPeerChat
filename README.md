@@ -51,6 +51,8 @@ The script creates D1 if the binding ID is empty, updates the Wrangler config, a
 
 ## Local development
 
+For the currently running test instance on this machine, see [本地测试入口和登录说明](docs/local-testing.md).
+
 ```sh
 npm ci
 npm run setup:local
