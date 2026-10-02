@@ -33,7 +33,8 @@
     "build:server": "npm run check && node scripts/build-server.mjs",
     "start:server": "node server/start.mjs",
     "test:sqlite": "node scripts/test-sqlite.mjs",
-    "test:browser:server": "node scripts/browser-isolated.mjs sqlite"
+    "test:browser:server": "node scripts/browser-isolated.mjs sqlite",
+    "site:deploy": "node scripts/deploy-website.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261002.1",

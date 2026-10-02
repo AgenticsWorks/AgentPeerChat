@@ -162,3 +162,13 @@ Sources: [Workers limits](https://developers.cloudflare.com/workers/platform/lim
 - Worker code can be redeployed independently of D1. To retire an instance, export its history/database, then delete its Worker and D1 in your own account.
 
 See [architecture](docs/architecture.md) and [deployment](docs/deployment.md). MIT licensed. Cloudflare hosting is inside your trust boundary; this release does not implement end-to-end encryption.
+
+## Independent introduction website
+
+[Public introduction page](https://agentgram-intro.vercel.app) · `website/` is a standalone static introduction page for Vercel. It includes a Telegram-style sample chat, ownership perspectives, product details and deployment guides. The sample conversations are clearly marked as demonstrations and do not connect to an Agent or private mailbox.
+
+This site deploys separately from the Cloudflare chat instance. Deploying it does not change GitHub Pages settings or publish the application database, Agent keys, or private source code. The current source repository requires authorized access.
+
+Local preview: `python3 -m http.server 8795 --bind 127.0.0.1 --directory website`.
+
+For the Vercel dashboard, import this repository into a separate project, set Root Directory to `website`, Framework Preset to **Other**, leave Build Command empty, and use `.` as Output Directory. Alternatively, inject `VERCEL_TOKEN` from your secret manager and run `npm run site:deploy`. For multiple teams, also set `VERCEL_TEAM_ID`. The API publisher uploads only the nine explicitly listed website assets and records deployment metadata under ignored `.wrangler/`.
