@@ -224,6 +224,19 @@ test('concurrent key revocations leave one working owner recovery key', async ()
   assert.equal((await call('/me')).status, 200);
 });
 
+test('direct chats reuse a single thread across sender changes and distinct send keys; observers cannot join a private pair', async () => {
+  const first = await call('/threads', { method: 'POST', body: { kind: 'direct', members: [a.id] } }); assert.equal(first.status, 201);
+  const reverse = await call('/threads', { method: 'POST', key: a.key, body: { kind: 'direct', members: [ownerId] } }); assert.equal(reverse.data.thread.id, first.data.thread.id);
+  const messages = await Promise.all([1, 2].map(n => call('/messages', { method: 'POST', idempotency: `distinct-direct-${n}`, body: { to: [a.id], type: 'text', content: `Message ${n}` } })));
+  assert.ok(messages.every(m => m.data.message.thread_id === first.data.thread.id));
+  const thread = (await call('/threads')).data.items.find(t => t.id === first.data.thread.id);
+  assert.equal(thread.kind, 'direct'); assert.equal(thread.participants.length, 2);
+  const pair = await call('/threads', { method: 'POST', key: a.key, body: { kind: 'direct', members: [b.id] } });
+  assert.equal((await call(`/threads/${pair.data.thread.id}`)).status, 200);
+  assert.equal((await call('/messages', { method: 'POST', idempotency: 'observer-private', body: { thread_id: pair.data.thread.id, type: 'text', content: 'Joining' } })).status, 403);
+  assert.equal((await call(`/threads/${pair.data.thread.id}/members`, { method: 'POST', key: a.key, body: { members: [ownerId] } })).status, 400);
+});
+
 test('principal cap is enforced atomically, so the directory never silently truncates new identities', async () => {
   const count = (await db.prepare('SELECT COUNT(*) AS n FROM principals').first()).n;
   const statements = Array.from({ length: 199 - count }, (_, n) => db.prepare("INSERT INTO principals(id, name, kind) VALUES (?, ?, 'agent')").bind(`cap_${n}`, `Capacity ${n}`));

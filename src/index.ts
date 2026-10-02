@@ -171,13 +171,18 @@ async function api(request: Request, env: Env, url: URL) {
   }
 
   if (path === '/threads' && method === 'POST') {
-    const b = await body(request), members = [...new Set([p.id, ...ids(b.members, 'members')])].sort();
-    if (members.length > 32) fail(400, 'member_limit', 'Threads support up to 32 participants.');
+    const b = await body(request), recipients = ids(b.members, 'members');
+    const members = [...new Set([p.id, ...recipients])];
     await activePrincipals(env, members);
-    const threadId = id('thr'), title = str(b.title, 'title', 120);
+    if (members.length < 2 || members.length > 32) fail(400, 'invalid_members', 'Choose 1–31 other participants.');
+    if (b.kind !== undefined && (typeof b.kind !== 'string' || !['direct', 'group'].includes(b.kind))) fail(400, 'invalid_kind', 'Choose direct or group.');
+    const direct = b.kind === 'direct';
+    if (direct && members.length !== 2) fail(400, 'invalid_members', 'A direct conversation has two participants.');
+    const threadId = direct ? `thr_dm_${(await hash([...members].sort().join(':'))).slice(0, 40)}` : id('thr');
+    const title = direct ? (await findPrincipal(env, members.find(member => member !== p.id)!)).name : str(b.title, 'title', 120);
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO threads(id, title, created_by) VALUES (?, ?, ?)').bind(threadId, title, p.id),
-      env.DB.prepare(`INSERT INTO thread_members(thread_id, principal_id) VALUES ${members.map(() => '(?, ?)').join(',')}`)
+      env.DB.prepare(`INSERT ${direct ? 'OR IGNORE ' : ''}INTO threads(id, title, created_by, kind) VALUES (?, ?, ?, ?)`).bind(threadId, title, p.id, direct ? 'direct' : 'group'),
+      env.DB.prepare(`INSERT ${direct ? 'OR IGNORE ' : ''}INTO thread_members(thread_id, principal_id) VALUES ${members.map(() => '(?, ?)').join(',')}`)
         .bind(...members.flatMap(member => [threadId, member]))
     ]);
     return json({ thread: { ...await threadAccess(env, threadId, p), members: await threadMembers(env, threadId) } }, 201);
@@ -186,15 +191,17 @@ async function api(request: Request, env: Env, url: URL) {
     const { after, limit } = pagination(url);
     // Thread pagination uses rowid cursors; messages have a separate global sequence.
     const { results } = await env.DB.prepare(`SELECT t.rowid AS cursor, t.*,
+      (SELECT json_group_array(json_object('id', pm.id, 'name', pm.name, 'kind', pm.kind)) FROM thread_members tm JOIN principals pm ON pm.id = tm.principal_id WHERE tm.thread_id = t.id) AS participants,
       (SELECT json_object('type', m.type, 'content', json(m.content), 'sender_id', m.sender_id, 'created_at', m.created_at) FROM messages m WHERE m.seq = t.last_message_seq) AS last_message
       FROM threads t WHERE t.rowid > ? ${p.kind === 'agent' ? 'AND EXISTS (SELECT 1 FROM thread_members tm WHERE tm.thread_id = t.id AND tm.principal_id = ?)' : ''}
       ORDER BY t.rowid ASC LIMIT ?`).bind(after, ...(p.kind === 'agent' ? [p.id] : []), limit + 1).all<{ cursor: number; last_message: string | null }>();
-    const items = results.slice(0, limit).map(row => ({ ...row, last_message: row.last_message ? JSON.parse(row.last_message) : null }));
+    const items = results.slice(0, limit).map(row => ({ ...row, last_message: row.last_message ? JSON.parse(row.last_message) : null, participants: JSON.parse((row as unknown as { participants: string }).participants) }));
     return json({ items, next_cursor: String(items.at(-1)?.cursor ?? after), has_more: results.length > limit });
   }
   match = /^\/threads\/([^/]+)\/members$/.exec(path);
   if (match && method === 'POST') {
-    await threadAccess(env, match[1], p);
+    const targetThread = await threadAccess(env, match[1], p);
+    if (targetThread.kind === 'direct') fail(400, 'direct_members', 'Create a group to invite more participants.');
     const b = await body(request), added = ids(b.members, 'members');
     await activePrincipals(env, added);
     // Count and insert inside one atomic statement to enforce the cap under concurrent additions.
@@ -223,6 +230,13 @@ async function api(request: Request, env: Env, url: URL) {
     return json({ items: results.map(row => ({ ...row, recipients: JSON.parse(row.recipients) })) });
   }
   match = /^\/threads\/([^/]+)$/.exec(path);
+  if (match && method === 'PATCH') {
+    const thread = await threadAccess(env, match[1], p);
+    if (thread.kind === 'direct') fail(400, 'direct_title', 'Direct chats use participant names.');
+    const title = str((await body(request)).title, 'title', 120);
+    await env.DB.prepare('UPDATE threads SET title = ? WHERE id = ?').bind(title, match[1]).run();
+    return json({ thread: { ...thread, title } });
+  }
   if (match && method === 'GET') {
     const thread = await threadAccess(env, match[1], p), { after, limit } = pagination(url);
     const page = await store.listThread(match[1], after, limit);
@@ -255,10 +269,11 @@ async function api(request: Request, env: Env, url: URL) {
       if (existing.request_hash !== requestHash) fail(409, 'idempotency_conflict', 'This key was already used for a different request.');
       return json({ message: await store.get(existing.id), replayed: true });
     }
-    let threadId: string, recipients: string[], newThread: { title: string; members: string[] } | undefined;
+    let threadId: string, recipients: string[], newThread: { title: string; members: string[]; kind?: 'group' | 'direct' } | undefined;
     if (typeof destination === 'string') {
       threadId = destination; await threadAccess(env, threadId, p);
       const members = await threadMembers(env, threadId);
+      if (!members.some(m => m.id === p.id) && (await threadAccess(env, threadId, p)).kind === 'direct') fail(403, 'direct_observer', 'You can observe this conversation; create a group to join it.');
       if (!members.some(m => m.id === p.id) && members.length >= 32) fail(409, 'member_limit', 'This thread already has 32 participants.');
       recipients = members.filter(m => m.id !== p.id && m.active).map(m => m.id);
       if (!recipients.length) fail(400, 'no_recipients', 'The thread has no other active participants.');
@@ -267,7 +282,10 @@ async function api(request: Request, env: Env, url: URL) {
       if (recipients.includes(p.id)) fail(400, 'invalid_recipient', 'Send to another principal.');
       if (recipients.length > 31) fail(400, 'member_limit', 'Send to at most 31 other participants.');
       await activePrincipals(env, recipients);
-      threadId = id('thr'); newThread = { title: `${p.name} · message`, members: [p.id, ...recipients] };
+      const members = [p.id, ...recipients];
+      const direct = recipients.length === 1;
+      threadId = direct ? `thr_dm_${(await hash([...members].sort().join(':'))).slice(0, 40)}` : id('thr');
+      newThread = { title: direct ? (await findPrincipal(env, recipients[0])).name : '新群组', members, kind: direct ? 'direct' : 'group' };
     }
     const result = await store.put({ id: id('msg'), thread_id: threadId, sender_id: p.id, type, content,
       idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread });

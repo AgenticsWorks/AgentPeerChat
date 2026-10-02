@@ -39,7 +39,7 @@ test('server persists messages, acknowledgments and keys across restart; HTTP pr
   const inbox = await call('/api/v1/inbox?include_acked=0', { key: agentKey }); assert.equal(inbox.status, 200); assert.ok(!inbox.data.items.some(message => message.id === sent.data.message.id));
   const history = await call(`/api/v1/messages/${sent.data.message.id}`, { key }); assert.ok(history.data.receipts.find(receipt => receipt.recipient_id === agent.data.principal.id).acked_at);
   const replay = await call('/api/v1/messages', { method: 'POST', key, body: { to: [agent.data.principal.id], type: 'text', content: 'Survives a restart' }, headers: { 'Idempotency-Key': 'persistent-message' } }); assert.equal(replay.status, 200); assert.equal(replay.data.message.id, sent.data.message.id);
-  assert.equal((await app.database.prepare('SELECT COUNT(*) AS n FROM agentgram_migrations').first()).n, 2);
+  assert.equal((await app.database.prepare('SELECT COUNT(*) AS n FROM agentgram_migrations').first()).n, 3);
  } finally { if (app) await app.close(); await rm(directory, { recursive: true, force: true }); }
 });
 test('server refuses weak setup secrets and public HTTP origins before creating storage', async () => {

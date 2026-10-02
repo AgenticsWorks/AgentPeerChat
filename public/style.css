@@ -292,3 +292,11 @@ textarea{resize:vertical}
 .overview-card footer{align-items:flex-start;flex-direction:column;gap:4px}}
 
 .connection-box{min-height:250px;line-height:1.5}.principal-card footer{flex-wrap:wrap}
+.perspective-picker{margin:0;padding:8px 16px;border-bottom:1px solid var(--line)}
+.perspective-picker select{margin:0;border:0;padding:6px 8px;font-size:13px;color:var(--muted);background:#f5f7f9}
+.contact-picker{margin-top:16px;max-height:300px;overflow:auto}
+.contact-option{display:flex;align-items:center;gap:12px;width:100%;padding:10px;background:white;text-align:left;border-radius:8px}
+.contact-option:hover{background:#f1f6fb}
+.principal-kind{display:none}.connection-box{min-height:160px}
+#activity-list .activity-card{border-left:0;padding-left:0}#activity-list .activity-card:before{display:none}
+.rail{padding-bottom:10px}.panel-footer{justify-content:center;padding:10px}.info-banner .empty-symbol{display:none}

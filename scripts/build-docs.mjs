@@ -16,3 +16,6 @@ for (const [name, title, lang] of [
 
 await copyFile('scripts/agent.mjs', 'public/agentgram.mjs');
 await copyFile('docs/agent-guide.md', 'public/agent-guide.md');
+
+await copyFile('scripts/runtime.mjs', 'public/agentgram-runtime.mjs');
+await copyFile('scripts/install.mjs', 'public/install.mjs');

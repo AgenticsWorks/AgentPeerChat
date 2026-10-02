@@ -1,3 +1,4 @@
+import { chatName, chatsForPerspective } from './chat-presentation.js';
 import { connectionInstructions } from './connection-kit.js';
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
@@ -87,25 +88,31 @@ function showSecret(title, description, value, extra = '', options = {}) {
     // Finish the current form submission before reusing its dialog.
     $('#modal').close();
     openModal(title, description, async () => {
-      if (!$('#saved-key').checked) throw new Error('Confirm that you saved this key before continuing.');
+      if (!$('#saved-key').checked) throw new Error('请先保存或交付这段接入指令。');
       state.secretOpen = false; $('#modal').close(); resolve();
     });
     state.secretOpen = true;
-    const box = field('Copy and store safely', 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = options.copyLabel ? 'secret-box connection-box' : 'secret-box';
+    const box = field('接入指令', 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = options.copyLabel ? 'secret-box connection-box' : 'secret-box';
+    if (options.adapt) {
+      const label = el('label', 'runtime-choice', '它在哪运行？'), select = el('select'); select.id = 'connection-runtime';
+      for (const [id, name] of [['current','已有 Bot / Agent 平台'], ['codex','本机 Codex'], ['claude','本机 Claude Code']]) { const option = el('option', '', name); option.value = id; select.append(option); }
+      select.addEventListener('change', () => { box.value = options.adapt(select.value); });
+      label.append(select); $('#modal-fields').prepend(label);
+    }
     const copy = el('button', 'secondary', options.copyLabel ?? 'Copy to clipboard'); copy.type = 'button';
-    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(value); toast(options.copyLabel ? '接入指令已复制，可以交给对应 Agent。' : 'Copied. Save it somewhere safe.'); } catch { box.select(); toast('Select and copy the key manually.'); } });
+    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? '接入指令已复制，可以交给对应 Agent。' : 'Copied. Save it somewhere safe.'); } catch { box.select(); toast('Select and copy the key manually.'); } });
     $('#modal-fields').append(copy);
     if (extra) $('#modal-fields').append(el('p', 'key-hint', extra));
     const label = el('label', 'check-list'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.id = 'saved-key'; checkbox.required = true;
     label.append(checkbox, document.createTextNode(options.savedLabel ?? ' I have saved this somewhere safe')); $('#modal-fields').append(label);
-    $('#modal-submit').textContent = 'Continue';
+    $('#modal-submit').textContent = '完成';
   });
 }
 
 async function enter() {
   state.me = (await api('/me')).principal;
   $('#onboarding').hidden = true; $('#shell').hidden = false;
-  $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? 'Instance owner' : 'Human';
+  $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? '拥有者' : '联系人';
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
   await refresh(); schedulePoll();
@@ -116,7 +123,8 @@ async function refresh() {
   renderThreads(); renderPrincipals();
   if (state.selected) await loadMessages();
   if (state.view === 'overview') { renderOverviewAgents(); await loadOverview(); }
-  $('#sync-state').textContent = 'Updated';
+  $('#sync-state').textContent = '';
+  renderPerspectives();
 }
 function schedulePoll() {
   clearTimeout(state.timer);
@@ -125,7 +133,7 @@ function schedulePoll() {
     try { await refresh(); state.pollDelay = 30000; }
     catch (error) {
       if (error.status === 401) { state.me = null; authMode('login'); toast('Session ended. Sign in again.'); return; }
-      state.pollDelay = Math.min(state.pollDelay * 2, 300000); $('#sync-state').textContent = 'Retrying later';
+      state.pollDelay = Math.min(state.pollDelay * 2, 300000); $('#sync-state').textContent = '连接中…';
     }
     schedulePoll();
   }, state.pollDelay + Math.random() * 5000);
@@ -143,7 +151,7 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
 }));
 function renderOverviewAgents() {
   const select = $('#overview-agent'), value = select.value;
-  select.replaceChildren(el('option', '', 'All agents')); select.firstChild.value = '';
+  select.replaceChildren(el('option', '', '所有 Agent')); select.firstChild.value = '';
   for (const p of state.principals.filter(p => p.kind === 'agent')) { const option = el('option', '', p.name); option.value = p.id; select.append(option); }
   select.value = value;
 }
@@ -166,8 +174,8 @@ async function loadOverview(more = false) {
 }
 function renderOverview() {
   const feed = $('#overview-feed'); feed.replaceChildren();
-  $('#overview-caption').textContent = `${state.overview.length} recent matching messages · Newest first · Acknowledgment confirms processing, not task completion.`;
-  if (!state.overview.length) feed.append(el('p', 'empty-list', 'No messages match these filters. Conversations will appear here as your agents exchange messages.'));
+  $('#overview-caption').textContent = `${state.overview.length} 条消息 · 最新消息在前`;
+  if (!state.overview.length) feed.append(el('p', 'empty-list', '没有符合条件的消息。'));
   for (const message of state.overview) {
     const card = el('article', 'overview-card'), header = el('header'), identity = el('div', 'overview-identity');
     const avatar = el('div', 'avatar', humanName(message.sender_id).slice(0, 1).toUpperCase()); colorAvatar(avatar, humanName(message.sender_id));
@@ -175,14 +183,14 @@ function renderOverview() {
     identity.append(avatar, names); header.append(identity, el('time', '', `${date(message.created_at)} · ${time(message.created_at)}`)); card.append(header);
     const content = el('div', 'overview-content');
     if (message.type === 'text') content.textContent = message.content;
-    else if (message.type === 'json') { content.append(el('span', 'eyebrow', 'STRUCTURED MESSAGE'), el('pre', '', JSON.stringify(message.content, null, 2))); }
+    else if (message.type === 'json') { content.append(el('span', 'eyebrow', '内容'), el('pre', '', JSON.stringify(message.content, null, 2))); }
     else { const link = el('a', '', message.type === 'artifact' ? `↗ ${message.content.name ?? 'Deliverable'}` : message.content); link.href = message.type === 'artifact' ? message.content.url : message.content; link.target = '_blank'; link.rel = 'noopener noreferrer'; content.append(link); }
     card.append(content);
     const recipients = message.recipients.filter(r => r.kind === 'agent'), pending = recipients.filter(r => !r.acked_at);
     const footer = el('footer'), summary = el('span', pending.length ? 'processing-state pending' : 'processing-state');
-    summary.textContent = pending.length ? `Awaiting: ${pending.map(r => humanName(r.recipient_id)).join(', ')}` : recipients.length ? `✓ All ${recipients.length} Agent recipients acknowledged` : 'No Agent recipients';
+    summary.textContent = pending.length ? `待处理：${pending.map(r => humanName(r.recipient_id)).join('、')}` : recipients.length ? '✓ 已处理' : '';
     summary.title = message.recipients.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? 'acknowledged' : 'awaiting acknowledgment'}`).join('\n');
-    const jump = el('button', 'text-button', 'Open conversation →');
+    const jump = el('button', 'text-button', '打开聊天');
     jump.addEventListener('click', async () => { $('[data-view="conversations"]').click(); await selectThread(message.thread_id); const target = $(`[data-message-id="${message.id}"]`); if (target) { target.scrollIntoView({ block: 'center' }); target.classList.add('spotlight'); setTimeout(() => target.classList.remove('spotlight'), 2000); } });
     footer.append(summary, jump); card.append(footer); feed.append(card);
   }
@@ -193,16 +201,16 @@ $('#overview-more').addEventListener('click', () => loadOverview(true));
 $('#thread-search').addEventListener('input', renderThreads);
 function renderThreads() {
   $('#thread-count').textContent = String(state.threads.length);
-  const filtered = state.threads.filter(t => t.title.toLowerCase().includes($('#thread-search').value.toLowerCase()));
+  const filtered = chatsForPerspective(state.threads, $('#chat-perspective').value, state.me.id).filter(t => chatName(t, state.me.id).toLowerCase().includes($('#thread-search').value.toLowerCase()));
   $('#thread-list').replaceChildren();
-  if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? 'No matching conversations.' : 'Your first conversation starts here.\nCreate an agent, then start a thread.'));
+  if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? '没有找到聊天。' : '选择联系人，开始第一段聊天。'));
   for (const thread of [...filtered].sort((a, b) => (b.last_message_seq ?? 0) - (a.last_message_seq ?? 0))) {
     const button = el('button', 'thread-item'); button.classList.toggle('selected', thread.id === state.selected);
     const copy = el('div', 'thread-copy');
     const last = thread.last_message;
-    const preview = !last ? 'Start the conversation' : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? 'Structured message' : last.content;
-    copy.append(el('strong', '', thread.title), el('small', '', last ? `${humanName(last.sender_id)}: ${preview}` : preview));
-    const avatar = el('div', 'avatar thread-avatar', thread.title.slice(0, 2).toUpperCase()); colorAvatar(avatar, thread.title);
+    const preview = !last ? '还没有消息' : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? '内容' : last.content;
+    copy.append(el('strong', '', chatName(thread, state.me.id)), el('small', '', last ? `${humanName(last.sender_id)}: ${preview}` : preview));
+    const avatar = el('div', 'avatar thread-avatar', chatName(thread, state.me.id).slice(0, 2).toUpperCase()); colorAvatar(avatar, chatName(thread, state.me.id));
     button.append(avatar, copy, el('time', '', last?.created_at ? time(last.created_at) : date(thread.created_at)));
     button.addEventListener('click', () => selectThread(thread.id)); $('#thread-list').append(button);
   }
@@ -218,10 +226,14 @@ async function loadMessages(forceScroll = false) {
   const threadId = state.selected, cursor = state.cursor;
   const result = await allPages(`/threads/${threadId}`, cursor);
   if (state.selected !== threadId || state.cursor !== cursor) return;
-  $('#chat-title').textContent = result.last.thread.title;
-  $('#chat-members').textContent = `${result.last.thread.members.length} members · ${result.last.thread.members.filter(p => p.kind === 'agent').length} agents`;
-  $('#chat-avatar').textContent = result.last.thread.title.slice(0, 2).toUpperCase(); colorAvatar($('#chat-avatar'), result.last.thread.title);
+  $('#chat-title').textContent = chatName(result.last.thread, state.me.id);
+  $('#chat-members').textContent = result.last.thread.kind === 'direct' ? '私聊' : `${result.last.thread.members.length} 位成员`;
+  $('#chat-avatar').textContent = chatName(result.last.thread, state.me.id).slice(0, 2).toUpperCase(); colorAvatar($('#chat-avatar'), chatName(result.last.thread, state.me.id));
   state.members = result.last.thread.members;
+  const observing = result.last.thread.kind === 'direct' && !state.members.some(p => p.id === state.me.id);
+  $('#message-text').disabled = observing; $('#send-button').disabled = observing;
+  $('#message-text').placeholder = observing ? '正在查看这段私聊' : '消息';
+  $('#add-members').hidden = result.last.thread.kind === 'direct';
   renderMembers();
   if (result.items.length || forceScroll) {
     state.messages.push(...result.items); state.cursor = result.next_cursor;
@@ -235,7 +247,7 @@ function renderMembers() {
   $('#inspector-member-list').replaceChildren();
   for (const p of state.members) {
     const row = el('div', 'member-row'), summary = el('div');
-    summary.append(el('strong', '', p.name), el('small', '', p.kind === 'agent' ? p.description || 'Agent' : p.kind === 'owner' ? 'Instance owner' : 'Human'));
+    summary.append(el('strong', '', p.name), el('small', '', p.kind === 'agent' ? p.description || 'Agent' : p.kind === 'owner' ? '拥有者' : '联系人'));
     row.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), summary);
     if (!p.active) row.append(el('span', 'badge off', 'OFF'));
     $('#inspector-member-list').append(row);
@@ -248,26 +260,12 @@ async function loadActivity(threadId) {
   const activity = (await api(`/threads/${threadId}/activity`)).items;
   if (state.selected !== threadId) return;
   $('#activity-list').replaceChildren();
-  if (activity.length) {
-    const acked = activity.reduce((n, item) => n + item.recipients.filter(r => r.acked_at).length, 0);
-    const pending = activity.reduce((n, item) => n + item.recipients.filter(r => !r.acked_at).length, 0);
-    const summary = el('div', 'activity-summary');
-    summary.append(el('strong', '', `✓ ${acked} acknowledged`), el('small', '', `${pending} pending · last ${activity.length} messages`));
-    $('#activity-list').append(summary);
-  }
-  if (!activity.length) $('#activity-list').append(el('p', 'fine', 'The next handoff will appear here.'));
+  if (!activity.length) $('#activity-list').append(el('p', 'fine', '还没有消息。'));
   for (const item of activity) {
     const card = el('div', 'activity-card');
-    const who = el('p'); who.append(el('strong', '', humanName(item.sender_id)), document.createTextNode(' sent a ' + (item.type === 'artifact' ? 'deliverable' : item.type === 'json' ? 'structured message' : item.type === 'url' ? 'link' : 'message')));
-    card.append(el('span', 'activity-time', time(item.created_at)), who);
-    const recipients = el('div', 'handoff-recipients');
-    for (const recipient of item.recipients) {
-      const line = el('div', `handoff-recipient${recipient.acked_at ? ' done' : ''}`);
-      line.append(el('span', '', recipient.acked_at ? '✓' : '↗'), el('span', '', humanName(recipient.recipient_id)), el('small', '', recipient.acked_at ? 'acknowledged' : 'pending'));
-      recipients.append(line);
-    }
-    card.append(recipients); const jump = el('button', 'text-button', `View message #${item.seq}`);
-    jump.addEventListener('click', () => { const message = $(`[data-message-id="${item.message_id}"]`); if (message) { message.scrollIntoView({ behavior: 'smooth', block: 'center' }); message.classList.add('spotlight'); setTimeout(() => message.classList.remove('spotlight'), 2000); } });
+    card.append(el('span', 'activity-time', time(item.created_at)), el('strong', '', humanName(item.sender_id)));
+    const jump = el('button', 'text-button', '查看消息');
+    jump.addEventListener('click', () => { const message = $(`[data-message-id="${item.message_id}"]`); if (message) message.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
     card.append(jump); $('#activity-list').append(card);
   }
 }
@@ -296,13 +294,13 @@ function renderMessages(forceScroll = false) {
     const name = principal?.name ?? message.sender_id;
     const avatar = el('div', `avatar ${principal?.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, name.slice(0, 1).toUpperCase()); colorAvatar(avatar, name); article.append(avatar);
     const content = el('div', 'message-body'), meta = el('div', 'message-meta');
-    meta.append(el('strong', '', name), el('span', 'kind-pill', principal?.kind === 'agent' ? 'AGENT' : 'HUMAN'));
+    meta.append(el('strong', '', name));
     const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(); timestamp.dateTime = message.created_at;
     const bubble = el('div', 'bubble');
     if (message.type === 'text') bubble.textContent = message.content;
     else if (message.type === 'json') {
       bubble.classList.add('structured-message');
-      bubble.append(el('span', 'eyebrow', 'STRUCTURED MESSAGE'));
+      bubble.append(el('span', 'eyebrow', '内容'));
       if (message.content && typeof message.content === 'object' && !Array.isArray(message.content)) {
         const rows = el('dl', 'json-fields');
         for (const [key, value] of Object.entries(message.content)) { rows.append(el('dt', '', key.replaceAll('_', ' ')), el('dd', '', typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value))); }
@@ -316,18 +314,18 @@ function renderMessages(forceScroll = false) {
       if (message.type === 'artifact') { bubble.classList.add('artifact-message'); bubble.prepend(el('span', 'artifact-icon', '↗'), el('span', 'eyebrow', 'DELIVERABLE')); }
     }
     const footer = el('div', 'message-id'); footer.append(timestamp);
-    const receipts = el('button', 'receipt-button', '↗'); receipts.type = 'button'; receipts.title = 'Delivery details'; receipts.setAttribute('aria-label', 'Delivery details');
+    const receipts = el('button', 'receipt-button', '✓'); receipts.type = 'button'; receipts.title = '消息状态'; receipts.setAttribute('aria-label', '消息状态');
     receipts.addEventListener('click', async () => {
       try {
         const result = await api(`/messages/${message.id}`);
-        const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? 'acknowledged ' + time(r.acked_at) : 'awaiting acknowledgment'}`).join('\n');
-        openModal('Delivery details', `Message #${message.seq}. Acknowledgment means the recipient explicitly confirmed processing.`, async () => { $('#modal').close(); });
-        $('#modal-fields').append(el('p', 'key-hint', summary || 'No recipients.'));
+        const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? '已接收 ' + time(r.acked_at) : '等待接收'}`).join('\n');
+        openModal('消息状态', '查看消息的接收情况。', async () => { $('#modal').close(); });
+        $('#modal-fields').append(el('p', 'key-hint', summary || '没有收件人。'));
         const mine = result.receipts.find(r => r.recipient_id === state.me.id);
         if (mine && !mine.acked_at) {
-          state.modalAction = async () => { await api(`/messages/${message.id}/ack`, { method: 'POST' }); $('#modal').close(); await loadMessages(); toast('Message acknowledged.'); };
-          $('#modal-submit').textContent = 'Acknowledge processing';
-        } else $('#modal-submit').textContent = 'Close';
+          state.modalAction = async () => { await api(`/messages/${message.id}/ack`, { method: 'POST' }); $('#modal').close(); await loadMessages(); toast('已标记处理。'); };
+          $('#modal-submit').textContent = '标记已处理';
+        } else $('#modal-submit').textContent = '关闭';
       } catch (error) { toast(error.message); }
     });
     footer.append(receipts); bubble.prepend(meta); bubble.append(footer); content.append(bubble); article.append(content); list.append(article);
@@ -349,40 +347,67 @@ $('#compose-form').addEventListener('submit', async event => {
   } catch (error) { $('#compose-error').textContent = error.message; }
   finally { $('#send-button').disabled = false; }
 });
-function startThread(preselected) {
-  if (!state.principals.some(p => p.id !== state.me.id && p.active)) { toast('Create an agent or invite another person first.'); $('[data-view="network"]').click(); return; }
-  openModal('Start a conversation', 'Choose who receives messages in this thread. Humans can observe every thread.', async data => {
+async function directChat(principalId) {
+  const result = await api('/threads', { method: 'POST', data: { kind: 'direct', members: [principalId] } });
+  if ($('#modal').open) $('#modal').close();
+  await refresh(); $('[data-view="conversations"]').click(); await selectThread(result.thread.id);
+}
+function createGroup() {
+  openModal('新建群组', '给群组起个名字，选择一起聊天的联系人。', async data => {
     const result = await api('/threads', { method: 'POST', data: { title: data.get('title'), members: data.getAll('members') } });
     $('#modal').close(); await refresh(); $('[data-view="conversations"]').click(); await selectThread(result.thread.id);
   });
-  field('Conversation title', 'title', 'e.g. Ship the landing page');
+  field('群组名称', 'title', '例如：项目讨论');
   const wrapper = el('div', 'check-list');
   for (const principal of state.principals.filter(p => p.id !== state.me.id && p.active)) {
-    const label = el('label'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.name = 'members'; checkbox.value = principal.id; checkbox.checked = principal.id === preselected;
-    label.append(checkbox, document.createTextNode(`${principal.name} · ${principal.kind}`)); wrapper.append(label);
+    const label = el('label'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.name = 'members'; checkbox.value = principal.id;
+    label.append(checkbox, document.createTextNode(principal.name)); wrapper.append(label);
   }
-  $('#modal-fields').append(el('p', 'fine', 'Participants (choose at least one)'), wrapper);
+  $('#modal-fields').append(wrapper); $('#modal-submit').textContent = '创建群组';
+}
+function startThread(preselected) {
+  if (preselected) { directChat(preselected).catch(error => toast(error.message)); return; }
+  openModal('新聊天', '选择一个联系人直接聊天，或新建群组。', async () => { $('#modal').close(); });
+  const group = el('button', 'secondary', '新建群组'); group.type = 'button'; group.id = 'new-group';
+  group.addEventListener('click', () => { $('#modal').close(); createGroup(); }); $('#modal-fields').append(group);
+  const contacts = el('div', 'contact-picker');
+  for (const p of state.principals.filter(p => p.id !== state.me.id && p.active)) {
+    const contact = el('button', 'contact-option'); contact.type = 'button'; contact.dataset.contact = p.id;
+    const avatar = el('span', 'avatar', p.name.slice(0, 1)); colorAvatar(avatar, p.name);
+    contact.append(avatar, el('span', '', p.name)); contact.addEventListener('click', () => directChat(p.id).catch(error => toast(error.message))); contacts.append(contact);
+  }
+  $('#modal-fields').append(contacts); $('#modal-submit').textContent = '取消';
 }
 $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start').addEventListener('click', () => startThread());
+function renderPerspectives() {
+  const select = $('#chat-perspective'), selected = select.value;
+  select.replaceChildren();
+  for (const [value, name] of [['all', '全部聊天'], ['mine', '我的聊天'], ...state.principals.filter(p => p.kind === 'agent' && p.active).map(p => [p.id, `${p.name}的聊天`])]) {
+    const option = el('option', '', name); option.value = value; select.append(option);
+  }
+  select.value = [...select.options].some(option => option.value === selected) ? selected : 'all';
+}
+$('#chat-perspective').addEventListener('change', renderThreads);
 async function showAgentConnection(principal, token) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
   const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, ownerId });
-  await showSecret(`连接 ${principal.name}`, '复制下面整段内容给你的 Agent。客户端和指南直接来自这个私有实例，不需要公开仓库。', instructions, `Agent ID: ${principal.id}\nKey ID: ${token.id}\n仅限此 Agent 权限；可在 Access & invites 撤销。`, { copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
+  await showSecret(`连接 ${principal.name}`, '把这段话发给你的 Agent，它会按指引完成安装和连接。', instructions, '这段指令仅供这个 Agent 使用。', { adapt: adapter => connectionInstructions({ url: location.origin + appBase, principal, token, ownerId, adapter }), copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
 }
 $('#create-agent').addEventListener('click', () => {
-  openModal('Create an agent', 'Give your agent an identity and its own mailbox.', async data => {
+  openModal('添加 Agent', '给它起个名字。身份与它使用的模型或工具无关。', async data => {
     const result = await api('/agents', { method: 'POST', data: { name: data.get('name'), description: data.get('description') } });
     await showAgentConnection(result.principal, result.token);
-    await refresh(); toast('Agent created. Start a conversation to give it some work.');
+    await refresh(); toast('Agent 已添加。现在可以给它发消息了。');
   });
-  field('Agent name', 'name', 'e.g. Codex'); field('What does it do?', 'description', 'e.g. Turns plans into working code').required = false;
+  field('名字', 'name', '例如：小舟、研究员'); field('简介', 'description', '例如：帮我安排工作、查资料').required = false;
 });
+$('#show-disabled').addEventListener('change', renderPrincipals);
 function renderPrincipals() {
   $('#principal-grid').replaceChildren();
-  for (const p of state.principals) {
+  for (const p of state.principals.filter(p => p.active || $('#show-disabled').checked)) {
     const card = el('article', 'principal-card'), top = el('div', 'principal-top');
-    top.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'AGENT' : p.kind === 'owner' ? 'OWNER' : 'HUMAN') : 'DISABLED'));
-    card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? 'Ready for the next handoff.' : 'Can observe and join the conversation.')), el('code', '', p.id));
+    top.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'Agent' : p.kind === 'owner' ? '我' : '联系人') : '已停用'));
+    card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? '还没有简介。' : '可以查看聊天、参与讨论。')), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : '联系人'));
     const footer = el('footer');
     if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
       const connect = el('button', 'primary', '连接 Agent'); connect.dataset.connectAgent = p.id;
@@ -392,11 +417,11 @@ function renderPrincipals() {
         catch (error) { toast(error.message); } finally { connect.disabled = false; }
       }); footer.append(connect);
     }
-    if (p.id !== state.me.id && p.active) { const message = el('button', 'secondary', 'Message ↗'); message.addEventListener('click', () => startThread(p.id)); footer.append(message); }
+    if (p.id !== state.me.id && p.active) { const message = el('button', 'secondary', '发消息'); message.addEventListener('click', () => startThread(p.id)); footer.append(message); }
     if (state.me.kind === 'owner' && p.kind !== 'owner') {
-      const disable = el('button', 'text-button', p.active ? 'Disable' : 'Enable');
+      const disable = el('button', 'text-button', p.active ? '停用' : '启用');
       disable.addEventListener('click', async () => {
-        if (p.active && !confirm(`Disable ${p.name} and revoke all of their keys?`)) return;
+        if (p.active && !confirm(`停用 ${p.name} 并撤销其接入密钥？`)) return;
         try { await api(`/principals/${p.id}`, { method: 'PATCH', data: { active: !p.active } }); await refresh(); } catch (error) { toast(error.message); }
       }); footer.append(disable);
     }

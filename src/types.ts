@@ -9,7 +9,7 @@ export interface Message {
 export interface NewMessage {
   id: string; thread_id: string; sender_id: string; type: Message['type'];
   content: unknown; idempotency_key: string; request_hash: string;
-  recipients: string[]; new_thread?: { title: string; members: string[] };
+  recipients: string[]; new_thread?: { title: string; members: string[]; kind?: 'group' | 'direct' };
 }
 export interface Page<T> { items: T[]; next_cursor: string; has_more: boolean }
 export interface MessageStore {

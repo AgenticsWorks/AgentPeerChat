@@ -16,7 +16,8 @@ function execute(args, input, env = {}) {
 }
 test('private instance connection packet needs no repository and quotes shell data safely', () => {
   const packet = connectionInstructions({ url: 'https://example.com/agent-gram', principal: { id: 'agt_test' }, token: { id: 'tok_test', token: 'agt_fixture' }, ownerId: 'hum_owner' });
-  assert.ok(packet.includes('https://example.com/agent-gram/agentgram.mjs'));
+  assert.ok(packet.includes('https://example.com/agent-gram/install.mjs'));
+  assert.ok(packet.includes('--from-stdin'));
   const config = JSON.parse(packet.match(/AGENTGRAM_CONFIG_JSON'\n([\s\S]*?)\nAGENTGRAM_CONFIG_JSON/)[1]);
   assert.equal(config.token, 'agt_fixture'); assert.equal(config.owner_id, 'hum_owner'); assert.equal(config.url, 'https://example.com/agent-gram');
   assert.ok(!packet.includes('npm install') && !packet.includes('github.com'));
@@ -82,4 +83,11 @@ test('plain client command honors configured HTTP proxy when origin cannot resol
  const url = `http://127.0.0.1:${proxy.address().port}`;
  const result = await execute(['me'], '', { AGENTGRAM_URL: 'http://unresolvable.agentgram.invalid', AGENTGRAM_TOKEN: 'agt_fixture_key', HTTP_PROXY: url, http_proxy: url, HTTPS_PROXY: '', https_proxy: '', NO_PROXY: '', no_proxy: '', NODE_USE_ENV_PROXY: '' });
  assert.equal(result.code, 0, result.stderr); assert.equal(JSON.parse(result.stdout).principal.id, 'agt_proxy'); assert.equal(requests, 1); assert.equal(tunnels, 1);
+});
+test('connection environment choice includes one-step listener start without tying identity to the tool',()=>{
+ for(const adapter of ['codex','claude']) {
+ const packet=connectionInstructions({url:'https://example.com',principal:{id:'agt_test',name:'小舟'},token:{id:'tok_test',token:'agt_fixture'},ownerId:'hum_owner',adapter});
+ assert.ok(packet.includes(`--from-stdin ${adapter} --start`));assert.ok(packet.includes('「小舟」'));
+ }
+ assert.throws(()=>connectionInstructions({url:'https://example.com',adapter:'unknown'}));
 });

@@ -5,7 +5,7 @@ const upstream = 'http://127.0.0.1:8787';
 const prefix = (process.env.AGENTGRAM_PREVIEW_PREFIX ?? '/agent-gram').replace(/\/$/, '');
 const publicOrigin = process.env.AGENTGRAM_PREVIEW_ORIGIN;
 if (!publicOrigin || new URL(publicOrigin).protocol !== 'https:') throw new Error('Set AGENTGRAM_PREVIEW_ORIGIN to the HTTPS test origin.');
-const assets = new Set(['/', '/index.html', '/app.js', '/connection-kit.js', '/agentgram.mjs', '/agent-guide.md', '/style.css', '/fonts.css', '/icon.svg', '/protocol.html', '/deployment.html', '/product.html', '/protocol', '/deployment', '/product', '/server-deployment.html', '/server-deployment', '/openapi.json']);
+const assets = new Set(['/', '/index.html', '/app.js', '/connection-kit.js', '/chat-presentation.js', '/agentgram-runtime.mjs', '/install.mjs', '/agentgram.mjs', '/agent-guide.md', '/style.css', '/fonts.css', '/icon.svg', '/protocol.html', '/deployment.html', '/product.html', '/protocol', '/deployment', '/product', '/server-deployment.html', '/server-deployment', '/openapi.json']);
 const server = http.createServer(async (req, res) => {
   try {
     const requested = new URL(req.url, publicOrigin);

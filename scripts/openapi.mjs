@@ -13,7 +13,7 @@ const message = obj({ id, seq: { type: 'integer', minimum: 1 }, thread_id: id, s
 const schemas = {
   Principal: obj({ id, name, kind: { enum: ['owner', 'human', 'agent'] }, description: s(500, 0), active: { enum: [0, 1] }, created_at: date }),
   Message: message,
-  Thread: obj({ id, title: s(120), created_by: id, created_at: date, cursor: { type: 'integer', minimum: 1 }, message_count: { type: 'integer', minimum: 0 }, last_message_seq: { type: ['integer', 'null'] }, last_message: { anyOf: [{ type: 'null' }, obj({ type: message.properties.type, content: {}, sender_id: id, created_at: date })] }, members: arr(ref('Principal')) }, ['id', 'title', 'created_by', 'created_at']),
+  Thread: obj({ id, kind: { enum: ['group', 'direct'] }, participants: arr(obj({id, name, kind: {enum:['owner','human','agent']}})), title: s(120), created_by: id, created_at: date, cursor: { type: 'integer', minimum: 1 }, message_count: { type: 'integer', minimum: 0 }, last_message_seq: { type: ['integer', 'null'] }, last_message: { anyOf: [{ type: 'null' }, obj({ type: message.properties.type, content: {}, sender_id: id, created_at: date })] }, members: arr(ref('Principal')) }, ['id', 'title', 'created_by', 'created_at']),
   Receipt: obj({ recipient_id: id, acked_at: nullableDate }),
   Error: obj({ error: obj({ code: s(), message: s(), request_id: s() }) }),
   Token: obj({ id, token: { ...s(256), description: 'One-time returned access key. Save it securely; list endpoints never return this value.' }, expires_at: nullableDate }, ['id', 'token']),
@@ -48,9 +48,10 @@ route('/invites', 'get', 'List human invitations', owner, null, obj({ items: arr
 route('/invites', 'post', 'Create a 24-hour single-use human invite', owner, null, obj({ invite: obj({ id, code: s(256), url: { type: 'string', format: 'uri' }, expires_at: date }) }), { status: 201 });
 route('/invites/{id}', 'delete', 'Revoke a human invitation', owner, null, ok);
 route('/invites/redeem', 'post', 'Redeem a one-time invitation', ['public'], obj({ name, code: { ...s(256), writeOnly: true } }), obj({ principal: ref('Principal'), access_key: s(256) }), { status: 201 });
-route('/threads', 'post', 'Proactively create a group as any identity', all, obj({ title: s(120), members: ids }), obj({ thread: ref('Thread') }), { status: 201, description: 'The creator is included automatically. Total group size is at most 32.' });
+route('/threads', 'post', 'Proactively create a group as any identity', all, obj({ title: s(120), members: ids, kind: {enum:['group','direct'],default:'group'} }, ['members']), obj({ thread: ref('Thread') }), { status: 201, description: 'The creator is included automatically. Group title is required. Direct chats need exactly one other member, reuse the same pair, and cannot accept more members. Total group size is at most 32.' });
 route('/threads', 'get', 'List accessible groups', all, null, page(ref('Thread')), { paged: true, description: 'Agents see own membership groups. Humans see all. Thread-list cursors are separate from message cursors.' });
 route('/threads/{id}', 'get', 'Read a group and paged message history', all, null, ref('ThreadPage'), { paged: true });
+route('/threads/{id}', 'patch', 'Rename a group', all, obj({title:s(120)}), obj({thread:ref('Thread')}), {description:'Requires membership for Agents. Direct chat names follow participant identities.'});
 route('/threads/{id}/members', 'post', 'Add active participants to a group', all, obj({ members: ids }), obj({ members: arr(ref('Principal')) }), { description: 'Agents must be existing members. New members read history and receive only future inbox deliveries.' });
 route('/threads/{id}/activity', 'get', 'Read the latest 20 message handoffs and receipts', all, null, obj({ items: arr(obj({ message_id: id, seq: { type: 'integer' }, sender_id: id, type: message.properties.type, created_at: date, recipients: arr(ref('Receipt')) })) }));
 const sendRequest = obj({ thread_id: id, to: { ...ids, maxItems: 31 }, type: message.properties.type, content: {} }, ['type', 'content']);

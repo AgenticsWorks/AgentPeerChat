@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-02T10:35:49.750Z",
+  "checked_at": "2026-10-02T18:06:07.521Z",
   "runtime": "Wrangler + local D1",
   "verified": [
     "Owner first-run setup (first invocation)",
@@ -12,7 +12,7 @@
     "Text / JSON / artifact rendering",
     "Message acknowledgment shown in activity",
     "Human sends from composer",
-    "Message persists in D1 and reaches Agent inbox",
+    "Message persists in storage and reaches Agent inbox",
     "Desktop 1600×1100",
     "Mobile 390×844 without horizontal overflow",
     "Human cross-group overview and deliverable filter",

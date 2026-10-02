@@ -1047,7 +1047,7 @@
     "/threads": {
       "post": {
         "summary": "Proactively create a group as any identity",
-        "description": "The creator is included automatically. Total group size is at most 32.",
+        "description": "The creator is included automatically. Group title is required. Direct chats need exactly one other member, reuse the same pair, and cannot accept more members. Total group size is at most 32.",
         "operationId": "post__threads",
         "x-roles": [
           "owner",
@@ -1114,10 +1114,16 @@
                     "minItems": 1,
                     "maxItems": 32,
                     "uniqueItems": true
+                  },
+                  "kind": {
+                    "enum": [
+                      "group",
+                      "direct"
+                    ],
+                    "default": "group"
                   }
                 },
                 "required": [
-                  "title",
                   "members"
                 ]
               }
@@ -1269,6 +1275,86 @@
               "default": 50
             }
           },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Rename a group",
+        "description": "Requires membership for Agents. Direct chat names follow participant identities.",
+        "operationId": "patch__threads__id_",
+        "x-roles": [
+          "owner",
+          "human",
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "thread": {
+                      "$ref": "#/components/schemas/Thread"
+                    }
+                  },
+                  "required": [
+                    "thread"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
           {
             "name": "id",
             "in": "path",
@@ -2139,6 +2225,42 @@
             "type": "string",
             "maxLength": 80,
             "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "group",
+              "direct"
+            ]
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 80,
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 80,
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "owner",
+                    "human",
+                    "agent"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "kind"
+              ]
+            }
           },
           "title": {
             "type": "string",

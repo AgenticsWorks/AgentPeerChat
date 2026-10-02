@@ -87,7 +87,7 @@ if (evaluate('document.querySelector("#thread-inspector").hidden') === 'true') b
 await waitFor('#activity-list .activity-card');
 // Verify human participation through the composer and confirm the resulting row through the API.
 const unique = `Browser verification ${Date.now()}`;
-browse('click', '#new-thread'); browse('fill', '#field-title', unique);
+browse('click', '#new-thread'); browse('click', '#new-group'); browse('fill', '#field-title', unique);
 browse('check', `input[name="members"][value="${credentials.codex.id}"]`); browse('click', '#modal-submit');
 browse('wait', '--fn', `document.querySelector('#chat-title').textContent === ${JSON.stringify(unique)}`);
 browse('click', '#add-members'); browse('check', `input[name="members"][value="${credentials.reviewer.id}"]`); browse('click', '#modal-submit');

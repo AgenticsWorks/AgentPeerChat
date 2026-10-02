@@ -21,9 +21,9 @@ export class D1MessageStore implements MessageStore {
     if (existing) return this.replay(existing, m);
     const statements: D1PreparedStatement[] = [];
     if (m.new_thread) {
-      statements.push(this.db.prepare('INSERT INTO threads(id, title, created_by) VALUES (?, ?, ?)')
-        .bind(m.thread_id, m.new_thread.title, m.sender_id));
-      statements.push(this.db.prepare(`INSERT INTO thread_members(thread_id, principal_id) VALUES ${m.new_thread.members.map(() => '(?, ?)').join(',')}`)
+      statements.push(this.db.prepare(`INSERT ${m.new_thread.kind === 'direct' ? 'OR IGNORE ' : ''}INTO threads(id, title, created_by, kind) VALUES (?, ?, ?, ?)` )
+        .bind(m.thread_id, m.new_thread.title, m.sender_id, m.new_thread.kind ?? 'group'));
+      statements.push(this.db.prepare(`INSERT ${m.new_thread.kind === 'direct' ? 'OR IGNORE ' : ''}INTO thread_members(thread_id, principal_id) VALUES ${m.new_thread.members.map(() => '(?, ?)').join(',')}`)
         .bind(...m.new_thread.members.flatMap(member => [m.thread_id, member])));
     } else {
       statements.push(this.db.prepare('INSERT OR IGNORE INTO thread_members(thread_id, principal_id) VALUES (?, ?)')
