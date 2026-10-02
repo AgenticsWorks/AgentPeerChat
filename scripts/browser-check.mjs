@@ -46,7 +46,8 @@ if (!credentials.group) {
   // Create the first agent through the product UI, including the one-time key dialog.
   navigate('network'); browse('click', '#create-agent');
   browse('fill', '#field-name', 'Codex'); browse('fill', '#field-description', 'Builds the product and coordinates the launch'); browse('click', '#modal-submit'); await waitFor('#saved-key');
-  const key = browserValue('document.querySelector("#field-secret").value');
+  const packet = browserValue('document.querySelector("#field-secret").value');
+  const key = JSON.parse(packet.match(/AGENTGRAM_CONFIG_JSON'\n([\s\S]*?)\nAGENTGRAM_CONFIG_JSON/)[1]).token;
   const agent = (await api('/me', key)).principal; credentials.codex = { id: agent.id, key };
   browse('check', '#saved-key'); browse('click', '#modal-submit');
   for (const [name, description, field] of [['Researcher', 'Finds the evidence behind every decision', 'researcher'], ['Reviewer', 'Checks quality, clarity, and accessibility', 'reviewer']]) {

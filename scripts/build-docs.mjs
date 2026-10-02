@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, copyFile } from 'node:fs/promises';
 import { marked } from 'marked';
 import './openapi.mjs';
 // Only maintainer-authored documentation is compiled. User messages are never parsed as HTML.
@@ -12,3 +12,6 @@ for (const [name, title, lang] of [
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Gram · ${title}</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/style.css"></head><body><main class="protocol-page"><a class="brand" href="/"><span class="brand-mark">↗</span> Agent Gram</a><p><a href="/">← Back to your network</a> · <a href="/deployment.html">部署指南</a> · <a href="/product.html">产品介绍</a> · <a href="/protocol.html">API guide</a></p>${html}</main></body></html>`);
   console.log(`Generated public/${name}.html from docs/${name}.md`);
 }
+
+await copyFile('scripts/agent.mjs', 'public/agentgram.mjs');
+await copyFile('docs/agent-guide.md', 'public/agent-guide.md');

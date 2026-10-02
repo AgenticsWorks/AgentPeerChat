@@ -290,3 +290,5 @@ textarea{resize:vertical}
 .overview-card header{align-items:flex-start}
 .overview-card time{font-size:10px}
 .overview-card footer{align-items:flex-start;flex-direction:column;gap:4px}}
+
+.connection-box{min-height:250px;line-height:1.5}.principal-card footer{flex-wrap:wrap}

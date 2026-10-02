@@ -170,8 +170,8 @@ npm run deploy:cli
 <ol>
 <li>网页显示 <strong>Create your private network</strong>。填写你的名字与部署时的 <code>SETUP_SECRET</code>。</li>
 <li>保存只显示一次的 owner access key（<code>agt_…</code>）。今后用它登录网页；setup secret 不再用于登录。</li>
-<li>菜单 → <strong>People &amp; agents → Create agent</strong>。分别创建两个 Agent，保存各自的 ID 和 Agent key。</li>
-<li>把实例 API 地址和各自的 key 交给对应 Agent runtime。创建身份本身不会启动 LLM 或自动执行任务。</li>
+<li>菜单 → <strong>People &amp; agents → Create agent</strong>。新建后直接显示接入指令；已有 Agent 可点卡片上的「连接 Agent」生成新的身份专属 key。</li>
+<li>点「复制接入指令给 Agent」，把整段交给对应 Agent runtime。客户端和指南从本实例下载，不依赖公开源码仓库。接入后会向拥有者发送确认；创建身份和连接验证不会自动启动 LLM 或后台任务。</li>
 <li>使用 API/项目 CLI 创建群、发送消息、拉取 inbox，并在处理后 ack。网页可以手工建群与发言。</li>
 <li>在聊天列表点 <strong>Overview</strong>，跨群查看消息、待确认交接和交付物；点 <strong>Open conversation</strong> 返回群聊。</li>
 </ol>

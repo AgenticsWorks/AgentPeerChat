@@ -1,3 +1,4 @@
+import { connectionInstructions } from './connection-kit.js';
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
 const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, overview: [], overviewCursor: null, overviewRequest: 0 };
@@ -81,7 +82,7 @@ $('#modal-form').addEventListener('submit', async event => {
   catch (error) { $('#modal-error').textContent = error.message; }
   finally { $('#modal-submit').disabled = false; }
 });
-function showSecret(title, description, value, extra = '') {
+function showSecret(title, description, value, extra = '', options = {}) {
   return new Promise(resolve => {
     // Finish the current form submission before reusing its dialog.
     $('#modal').close();
@@ -90,13 +91,13 @@ function showSecret(title, description, value, extra = '') {
       state.secretOpen = false; $('#modal').close(); resolve();
     });
     state.secretOpen = true;
-    const box = field('Copy and store safely', 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = 'secret-box';
-    const copy = el('button', 'secondary', 'Copy to clipboard'); copy.type = 'button';
-    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(value); toast('Copied. Save it somewhere safe.'); } catch { box.select(); toast('Select and copy the key manually.'); } });
+    const box = field('Copy and store safely', 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = options.copyLabel ? 'secret-box connection-box' : 'secret-box';
+    const copy = el('button', 'secondary', options.copyLabel ?? 'Copy to clipboard'); copy.type = 'button';
+    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(value); toast(options.copyLabel ? '接入指令已复制，可以交给对应 Agent。' : 'Copied. Save it somewhere safe.'); } catch { box.select(); toast('Select and copy the key manually.'); } });
     $('#modal-fields').append(copy);
     if (extra) $('#modal-fields').append(el('p', 'key-hint', extra));
     const label = el('label', 'check-list'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.id = 'saved-key'; checkbox.required = true;
-    label.append(checkbox, document.createTextNode(' I have saved this somewhere safe')); $('#modal-fields').append(label);
+    label.append(checkbox, document.createTextNode(options.savedLabel ?? ' I have saved this somewhere safe')); $('#modal-fields').append(label);
     $('#modal-submit').textContent = 'Continue';
   });
 }
@@ -363,10 +364,15 @@ function startThread(preselected) {
   $('#modal-fields').append(el('p', 'fine', 'Participants (choose at least one)'), wrapper);
 }
 $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start').addEventListener('click', () => startThread());
+async function showAgentConnection(principal, token) {
+  const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
+  const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, ownerId });
+  await showSecret(`连接 ${principal.name}`, '复制下面整段内容给你的 Agent。客户端和指南直接来自这个私有实例，不需要公开仓库。', instructions, `Agent ID: ${principal.id}\nKey ID: ${token.id}\n仅限此 Agent 权限；可在 Access & invites 撤销。`, { copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
+}
 $('#create-agent').addEventListener('click', () => {
   openModal('Create an agent', 'Give your agent an identity and its own mailbox.', async data => {
     const result = await api('/agents', { method: 'POST', data: { name: data.get('name'), description: data.get('description') } });
-    await showSecret(`${result.principal.name} is ready`, 'Save this Agent access key. It grants access to this agent’s inbox and threads.', result.token.token, `Agent ID: ${result.principal.id}\nAPI: ${location.origin}${appBase}/api/v1`);
+    await showAgentConnection(result.principal, result.token);
     await refresh(); toast('Agent created. Start a conversation to give it some work.');
   });
   field('Agent name', 'name', 'e.g. Codex'); field('What does it do?', 'description', 'e.g. Turns plans into working code').required = false;
@@ -378,6 +384,14 @@ function renderPrincipals() {
     top.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'AGENT' : p.kind === 'owner' ? 'OWNER' : 'HUMAN') : 'DISABLED'));
     card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? 'Ready for the next handoff.' : 'Can observe and join the conversation.')), el('code', '', p.id));
     const footer = el('footer');
+    if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
+      const connect = el('button', 'primary', '连接 Agent'); connect.dataset.connectAgent = p.id;
+      connect.addEventListener('click', async () => {
+        connect.disabled = true;
+        try { const result = await api('/tokens', { method: 'POST', data: { principal_id: p.id, label: 'Agent connection kit' } }); await showAgentConnection(p, result.token); }
+        catch (error) { toast(error.message); } finally { connect.disabled = false; }
+      }); footer.append(connect);
+    }
     if (p.id !== state.me.id && p.active) { const message = el('button', 'secondary', 'Message ↗'); message.addEventListener('click', () => startThread(p.id)); footer.append(message); }
     if (state.me.kind === 'owner' && p.kind !== 'owner') {
       const disable = el('button', 'text-button', p.active ? 'Disable' : 'Enable');
