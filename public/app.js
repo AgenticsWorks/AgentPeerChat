@@ -1,7 +1,16 @@
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: innerWidth > 1380 };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
+const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
+function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
+function toggleMenu(open) { $('#main-menu').hidden = !open; $('#menu-backdrop').hidden = !open; $('#menu-toggle').setAttribute('aria-expanded', String(open)); if (open) $('#main-menu [data-view]').focus(); else $('#menu-toggle').focus(); }
+$('#menu-toggle').addEventListener('click', () => toggleMenu($('#main-menu').hidden));
+$('#menu-backdrop').addEventListener('click', () => toggleMenu(false));
+document.addEventListener('keydown', event => { if (event.key === 'Escape') { if (!$('#main-menu').hidden) toggleMenu(false); if (state.inspector) { state.inspector = false; renderMembers(); } } });
+$('#chat-back').addEventListener('click', () => { $('#conversations').classList.remove('chat-open'); state.inspector = false; renderMembers(); });
+$('#message-text').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); if (!$('#send-button').disabled) $('#compose-form').requestSubmit(); } });
+$('#message-text').addEventListener('input', () => { const input = $('#message-text'); input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 150) + 'px'; });
 const humanName = id => state.principals.find(p => p.id === id)?.name ?? id;
 const time = value => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const date = value => new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -124,9 +133,9 @@ $('#logout').addEventListener('click', async () => {
   try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => {
-  state.view = button.dataset.view;
+  state.view = button.dataset.view; toggleMenu(false);
   for (const view of ['conversations', 'network', 'access']) $(`#${view}`).hidden = view !== state.view;
-  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b === button));
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === state.view));
   if (state.view === 'access') try { await loadAccess(); } catch (error) { toast(error.message); }
 }));
 $('#thread-search').addEventListener('input', renderThreads);
@@ -141,11 +150,13 @@ function renderThreads() {
     const last = thread.last_message;
     const preview = !last ? 'Start the conversation' : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? 'Structured message' : last.content;
     copy.append(el('strong', '', thread.title), el('small', '', last ? `${humanName(last.sender_id)}: ${preview}` : preview));
-    button.append(el('div', 'avatar thread-avatar', '#'), copy, el('time', '', date(thread.created_at)));
+    const avatar = el('div', 'avatar thread-avatar', thread.title.slice(0, 2).toUpperCase()); colorAvatar(avatar, thread.title);
+    button.append(avatar, copy, el('time', '', last?.created_at ? time(last.created_at) : date(thread.created_at)));
     button.addEventListener('click', () => selectThread(thread.id)); $('#thread-list').append(button);
   }
 }
 async function selectThread(threadId) {
+  $('#conversations').classList.add('chat-open');
   state.selected = threadId; state.messages = []; state.cursor = '0';
   $('#compose-error').textContent = ''; $('#message-text').value = ''; $('#compose-form').dataset.pendingKey = ''; $('#compose-form').dataset.pendingSignature = '';
   $('#chat-empty').hidden = true; $('#chat-active').hidden = false; renderThreads(); $('#message-list').replaceChildren();
@@ -156,7 +167,8 @@ async function loadMessages(forceScroll = false) {
   const result = await allPages(`/threads/${threadId}`, cursor);
   if (state.selected !== threadId || state.cursor !== cursor) return;
   $('#chat-title').textContent = result.last.thread.title;
-  $('#chat-members').textContent = result.last.thread.members.map(p => p.name).join(' · ');
+  $('#chat-members').textContent = `${result.last.thread.members.length} members · ${result.last.thread.members.filter(p => p.kind === 'agent').length} agents`;
+  $('#chat-avatar').textContent = result.last.thread.title.slice(0, 2).toUpperCase(); colorAvatar($('#chat-avatar'), result.last.thread.title);
   state.members = result.last.thread.members;
   renderMembers();
   if (result.items.length || forceScroll) {
@@ -167,7 +179,7 @@ async function loadMessages(forceScroll = false) {
 }
 function renderMembers() {
   $('#thread-inspector').hidden = !state.selected || !state.inspector;
-  $('#toggle-activity').setAttribute('aria-expanded', String(state.inspector));
+  $('#toggle-activity').setAttribute('aria-expanded', String(state.inspector)); $('#group-info').setAttribute('aria-expanded', String(state.inspector));
   $('#inspector-member-list').replaceChildren();
   for (const p of state.members) {
     const row = el('div', 'member-row'), summary = el('div');
@@ -177,7 +189,8 @@ function renderMembers() {
     $('#inspector-member-list').append(row);
   }
 }
-$('#toggle-activity').addEventListener('click', async () => { state.inspector = !state.inspector; renderMembers(); if (state.inspector && state.selected) try { await loadActivity(state.selected); } catch (error) { toast(error.message); } });
+async function toggleInspector() { state.inspector = !state.inspector; renderMembers(); if (state.inspector && state.selected) try { await loadActivity(state.selected); } catch (error) { toast(error.message); } }
+$('#toggle-activity').addEventListener('click', toggleInspector); $('#group-info').addEventListener('click', toggleInspector); $('#close-inspector').addEventListener('click', () => { state.inspector = false; renderMembers(); });
 async function loadActivity(threadId) {
   if (!state.inspector) return;
   const activity = (await api(`/threads/${threadId}/activity`)).items;
@@ -221,15 +234,18 @@ function renderMessages(forceScroll = false) {
   const list = $('#message-list'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 100;
   list.replaceChildren();
   if (!state.messages.length) list.append(el('p', 'empty-list', 'A fresh conversation. Send the first message.'));
+  let previousDay;
   for (const message of state.messages) {
+    const day = new Date(message.created_at).toLocaleDateString();
+    if (day !== previousDay) { const separator = el('div', 'date-separator'); separator.append(el('span', '', date(message.created_at))); list.append(separator); previousDay = day; }
     const principal = state.principals.find(p => p.id === message.sender_id);
     const article = el('article', `message${message.sender_id === state.me.id ? ' mine' : ''}`);
     article.dataset.messageId = message.id;
     const name = principal?.name ?? message.sender_id;
-    article.append(el('div', `avatar ${principal?.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, name.slice(0, 1).toUpperCase()));
+    const avatar = el('div', `avatar ${principal?.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, name.slice(0, 1).toUpperCase()); colorAvatar(avatar, name); article.append(avatar);
     const content = el('div', 'message-body'), meta = el('div', 'message-meta');
     meta.append(el('strong', '', name), el('span', 'kind-pill', principal?.kind === 'agent' ? 'AGENT' : 'HUMAN'));
-    const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(); meta.append(timestamp);
+    const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(); timestamp.dateTime = message.created_at;
     const bubble = el('div', 'bubble');
     if (message.type === 'text') bubble.textContent = message.content;
     else if (message.type === 'json') {
@@ -247,8 +263,8 @@ function renderMessages(forceScroll = false) {
       link.href = message.type === 'artifact' ? message.content.url : message.content; link.target = '_blank'; link.rel = 'noopener noreferrer'; bubble.append(link);
       if (message.type === 'artifact') { bubble.classList.add('artifact-message'); bubble.prepend(el('span', 'artifact-icon', '↗'), el('span', 'eyebrow', 'DELIVERABLE')); }
     }
-    const footer = el('div', 'message-id', `#${message.seq} · ${message.type} · `);
-    const receipts = el('button', 'receipt-button', 'Delivery details'); receipts.type = 'button';
+    const footer = el('div', 'message-id'); footer.append(timestamp);
+    const receipts = el('button', 'receipt-button', '↗'); receipts.type = 'button'; receipts.title = 'Delivery details'; receipts.setAttribute('aria-label', 'Delivery details');
     receipts.addEventListener('click', async () => {
       try {
         const result = await api(`/messages/${message.id}`);
@@ -262,7 +278,7 @@ function renderMessages(forceScroll = false) {
         } else $('#modal-submit').textContent = 'Close';
       } catch (error) { toast(error.message); }
     });
-    footer.append(receipts); content.append(meta, bubble, footer); article.append(content); list.append(article);
+    footer.append(receipts); bubble.prepend(meta); bubble.append(footer); content.append(bubble); article.append(content); list.append(article);
   }
   if (atBottom || forceScroll) list.scrollTop = list.scrollHeight;
 }
@@ -276,7 +292,7 @@ $('#compose-form').addEventListener('submit', async event => {
   $('#send-button').disabled = true; $('#compose-error').textContent = '';
   try {
     await api('/messages', { method: 'POST', data: { thread_id: threadId, type: 'text', content }, key: $('#compose-form').dataset.pendingKey });
-    if (state.selected === threadId && $('#message-text').value === content) { $('#message-text').value = ''; $('#compose-form').dataset.pendingSignature = ''; }
+    if (state.selected === threadId && $('#message-text').value === content) { $('#message-text').value = ''; $('#message-text').style.height = 'auto'; $('#compose-form').dataset.pendingSignature = ''; }
     await refresh();
   } catch (error) { $('#compose-error').textContent = error.message; }
   finally { $('#send-button').disabled = false; }

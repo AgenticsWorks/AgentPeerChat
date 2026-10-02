@@ -11,6 +11,7 @@ function browse(...args) {
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'Browser command failed');
   return r.stdout.trim();
 }
+function navigate(view) { browse('click', '#menu-toggle'); browse('click', `#main-menu [data-view="${view}"]`); }
 function evaluate(code) { return browse('eval', code); }
 function browserValue(code) { return JSON.parse(evaluate(code)); }
 async function waitFor(selector) { browse('wait', selector); }
@@ -43,7 +44,7 @@ if (!status.initialized) {
 const me = (await api('/me', credentials.owner)).principal;
 if (!credentials.group) {
   // Create the first agent through the product UI, including the one-time key dialog.
-  browse('click', '[data-view="network"]'); browse('click', '#create-agent');
+  navigate('network'); browse('click', '#create-agent');
   browse('fill', '#field-name', 'Codex'); browse('fill', '#field-description', 'Builds the product and coordinates the launch'); browse('click', '#modal-submit'); await waitFor('#saved-key');
   const key = browserValue('document.querySelector("#field-secret").value');
   const agent = (await api('/me', key)).principal; credentials.codex = { id: agent.id, key };
@@ -88,7 +89,7 @@ browse('click', '#new-thread'); browse('fill', '#field-title', unique);
 browse('check', `input[name="members"][value="${credentials.codex.id}"]`); browse('click', '#modal-submit');
 browse('wait', '--fn', `document.querySelector('#chat-title').textContent === ${JSON.stringify(unique)}`);
 browse('click', '#add-members'); browse('check', `input[name="members"][value="${credentials.reviewer.id}"]`); browse('click', '#modal-submit');
-browse('wait', '--fn', 'document.querySelector("#chat-members").textContent.includes("Reviewer")');
+browse('wait', '--fn', 'Array.from(document.querySelectorAll("#inspector-member-list strong")).some(n => n.textContent === "Reviewer")');
 browse('fill', '#message-text', unique); browse('click', '#send-button');
 browse('wait', '--text', unique);
 const smoke = (await api('/threads?limit=100', credentials.owner)).items.find(t => t.title === unique);
@@ -101,10 +102,10 @@ assert.ok((await api('/inbox', credentials.codex.key)).items.some(m => m.content
 browse('find', 'text', 'Agent Gram · Launch crew', 'click'); await waitFor('[data-message-id]');
 evaluate('document.querySelector("#message-list").scrollTop = 0');
 browse('screenshot', 'docs/screenshots/conversation-desktop.png');
-browse('click', '[data-view="network"]'); browse('screenshot', 'docs/screenshots/network-desktop.png');
-browse('click', '[data-view="conversations"]');
+navigate('network'); browse('screenshot', 'docs/screenshots/network-desktop.png');
+navigate('conversations');
 browse('set', 'viewport', '390', '844');
-evaluate('document.querySelector("#thread-inspector").hidden = true');
+if (evaluate('document.querySelector("#thread-inspector").hidden') === 'false') browse('click', '#close-inspector');
 browse('screenshot', 'docs/screenshots/conversation-mobile.png');
 const overflow = evaluate('document.documentElement.scrollWidth > innerWidth'); assert.equal(overflow, 'false', 'Mobile viewport has horizontal overflow');
 const errors = browse('errors'); assert.ok(!errors.trim(), `Browser errors: ${errors}`);

@@ -186,7 +186,7 @@ async function api(request: Request, env: Env, url: URL) {
     const { after, limit } = pagination(url);
     // Thread pagination uses rowid cursors; messages have a separate global sequence.
     const { results } = await env.DB.prepare(`SELECT t.rowid AS cursor, t.*,
-      (SELECT json_object('type', m.type, 'content', json(m.content), 'sender_id', m.sender_id) FROM messages m WHERE m.seq = t.last_message_seq) AS last_message
+      (SELECT json_object('type', m.type, 'content', json(m.content), 'sender_id', m.sender_id, 'created_at', m.created_at) FROM messages m WHERE m.seq = t.last_message_seq) AS last_message
       FROM threads t WHERE t.rowid > ? ${p.kind === 'agent' ? 'AND EXISTS (SELECT 1 FROM thread_members tm WHERE tm.thread_id = t.id AND tm.principal_id = ?)' : ''}
       ORDER BY t.rowid ASC LIMIT ?`).bind(after, ...(p.kind === 'agent' ? [p.id] : []), limit + 1).all<{ cursor: number; last_message: string | null }>();
     const items = results.slice(0, limit).map(row => ({ ...row, last_message: row.last_message ? JSON.parse(row.last_message) : null }));
