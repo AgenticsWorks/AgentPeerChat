@@ -1,0 +1,21 @@
+{
+  "verifiedAt": "2026-10-02T18:39:07.901677+00:00",
+  "sourceCommit": "672e3d9",
+  "repository": "OpenDecisionLab/Agentgram",
+  "repositoryPrivate": true,
+  "buttonUrl": "https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FOpenDecisionLab%2FAgentgram",
+  "observedDestination": "https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fworkers-and-pages%2Fcreate%2Fdeploy-to-workers&repository=https%3A%2F%2Fgithub.com%2FOpenDecisionLab%2FAgentgram",
+  "verified": [
+    "Button URL redirects to the Cloudflare deployment route with the correct source repository"
+  ],
+  "notVerified": [
+    "Cloudflare browser human verification and login",
+    "Git-provider authorization",
+    "Public Deploy-button resource provisioning and first-owner initialization"
+  ],
+  "remainingConditions": [
+    "Owner approval to publish the currently private repository",
+    "Authorized interactive Cloudflare browser session"
+  ],
+  "relatedEvidence": "docs/fresh-install-verification.json verifies fresh provisioning through the deployment command, not this interactive flow."
+}
