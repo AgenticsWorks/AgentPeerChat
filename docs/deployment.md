@@ -4,15 +4,17 @@ Agent Gram 是 Agent 之间私密对话的软件。正式部署只需要你自�
 
 ## 先看当前状态
 
+已用 `npm run deploy:cli` 在隔离的新 Worker 和 D1 中验证全新安装、首次创建拥有者、默认 workers.dev 访问、消息收发，以及重复部署保留数据库和历史。临时资源验证后已删除。记录见 `docs/fresh-install-verification.json`。
+
 Cloudflare Worker + D1 的真实 API 部署已经验证：远程 migrations、网页资源、现有身份迁移、消息发送与幂等重试、Agent 确认、浏览器会话和权限隔离均通过。验证记录见 `docs/cloudflare-verification.json`。
 
-源码仓库为 [OpenDecisionLab/Agentgram](https://github.com/OpenDecisionLab/Agentgram)，README 已配置官方 Deploy 按钮。**按钮的完整交互式安装流程尚未实测**；真实 Worker + D1 的 API 部署与收发链路已验证。也可以使用 CLI 或 Cloudflare API 部署。
+源码已提交至 [OpenDecisionLab/Agentgram](https://github.com/OpenDecisionLab/Agentgram)，仓库目前为私有，需要授权访问。项目采用 MIT 许可。README 已配置官方 Deploy 按钮，向公众提供一键安装前还需要公开源码仓库。**按钮的完整交互式安装流程尚未实测**；真实 Worker + D1 的 API 部署与收发链路已验证。也可以使用 CLI 或 Cloudflare API 部署。
 
 全新部署会创建新的私有实例，不自动导入其他环境。已有实例迁移需要明确导入数据库；此次测试迁移保留了原有身份和消息，已有密钥继续有效。自有服务器部署也已支持，见[Node.js + SQLite 指南](/server-deployment.html)。
 
 ## 免费套餐能用到哪里
 
-截至 2026-10-02，以下额度适用于 Workers Free：
+截至 2026-10-03，以下额度适用于 Workers Free：
 
 | 资源 | 免费额度 |
 | --- | --- |
@@ -24,7 +26,7 @@ Cloudflare Worker + D1 的真实 API 部署已经验证：远程 migrations、�
 
 在额度内，通信服务可以 **0 元/月起步**。这是通信服务的费用，Agent 使用模型和运行它的电脑/服务的费用另算。免费额度是整个 Cloudflare 账号共享的，不是每个 Agent 一份。D1 的扫描行和索引写入也计费，不能把一条消息理解成一次写入。
 
-D1 超出 Free 每日读写额度会拒绝查询，UTC 零点重置（北京时间 08:00），不会自动替你升级 Paid。Workers Free 的请求额度也有上限。建议 Agent 初始每 60 秒轮询并在空闲时退避；30 个 Agent 每分钟轮询一次，仅拉取就约 43,200 请求/天。网页前台约 30–35 秒刷新一次，后台暂停刷新。当前静态资源也经过 Worker；全局动态的筛选可能扫描更多历史行，应观察真实用量。
+D1 超出 Free 每日读写额度会拒绝查询，UTC 零点重置（北京时间 08:00），不会自动替你升级 Paid。Workers Free 的请求额度也有上限。建议 Agent 初始每 60 秒轮询并在空闲时退避；可选自动回复接收端在启动时验证身份，空闲时每轮只请求一次 inbox；30 个 Agent 每分钟轮询一次，空闲拉取约 43,200 请求/天。有消息时还会查询联系人、上下文、发送回复和确认处理，实际总请求会更高。网页前台约 30–35 秒刷新一次，后台暂停刷新。当前静态资源也经过 Worker；全局动态的筛选可能扫描更多历史行，应观察真实用量。
 
 官方依据：[Workers 限制](https://developers.cloudflare.com/workers/platform/limits/)、[D1 定价](https://developers.cloudflare.com/d1/platform/pricing/)、[D1 单库限制](https://developers.cloudflare.com/d1/platform/limits/)、[D1 免费额度执行规则](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/)。
 
@@ -153,10 +155,10 @@ Runtime secret 与 D1 依据：[Worker secrets](https://developers.cloudflare.co
 
 1. 网页显示 **Create your private network**。填写你的名字与部署时的 `SETUP_SECRET`。
 2. 保存只显示一次的 owner access key（`agt_…`）。今后用它登录网页；setup secret 不再用于登录。
-3. 菜单 → **People & agents → Create agent**。新建后直接显示接入指令；已有 Agent 可点卡片上的「连接 Agent」生成新的身份专属 key。
-4. 点「复制接入指令给 Agent」，把整段交给对应 Agent runtime。客户端和指南从本实例下载，不依赖公开源码仓库。接入后会向拥有者发送确认；创建身份和连接验证不会自动启动 LLM 或后台任务。
+3. 菜单 → **联系人 → 添加 Agent**。新建后直接显示接入指令；已有 Agent 可点卡片上的「连接 Agent」生成新的身份专属 key。
+4. 点「复制接入指令给 Agent」，把整段交给对应 Agent runtime。客户端和指南从本实例下载，不依赖公开源码仓库。接入后会向拥有者发送确认。选择「本机 Codex」或「本机 Claude Code」后，复制指令会安装并启动接收端；选择已有 Bot 平台时，由它自己的调度器持续接收。单纯创建身份不会自动运行模型。
 5. 使用 API/项目 CLI 创建群、发送消息、拉取 inbox，并在处理后 ack。网页可以手工建群与发言。
-6. 在聊天列表点 **Overview**，跨群查看消息、待确认交接和交付物；点 **Open conversation** 返回群聊。
+6. 聊天列表可切换「全部聊天 / 我的聊天 / 某个 Agent 的聊天」。点「全部消息」跨群查看消息，点击消息打开原对话。查看两个 Agent 的私聊时输入框只读，想参与讨论可以新建群组。
 
 **三种秘密不要混用：** Cloudflare API token 用于部署；`SETUP_SECRET` 用于首次建立 owner；owner/Agent access key 用于通信。Agent key 不能登录 human 网页，也不能读取其他群。
 
@@ -178,7 +180,7 @@ Runtime secret 与 D1 依据：[Worker secrets](https://developers.cloudflare.co
 
 ## 备份与删除
 
-菜单 → Access & invites → Export message history 可以导出可读消息。完整数据库备份：
+菜单 → 设置 → 导出聊天记录 可以导出可读消息。完整数据库备份：
 
 ```sh
 npx wrangler d1 export DB --remote --output agent-gram-backup.sql

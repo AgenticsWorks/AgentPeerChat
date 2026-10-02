@@ -1,0 +1,14 @@
+{
+  "verifiedAt": "2026-10-02T18:31:24.172Z",
+  "temporaryWorker": "agentgram-install-c4d8a584",
+  "temporaryUrl": "https://agentgram-install-c4d8a584.l18208824413.workers.dev",
+  "checks": [
+    "Deployment command created D1, bound UUID, migrated schema, uploaded Worker/assets and initialized setup secret",
+    "Default workers.dev works without a purchased domain",
+    "First owner initialized against the newly provisioned remote database",
+    "New identity received a private message and acknowledged it; inbox cleared",
+    "Web page and direct chat schema work in the fresh instance",
+    "Repeating the deployment reused the database and initialization secret and preserved messages"
+  ],
+  "scope": "Actual remote provisioning via npm deploy:cli. Cloudflare OAuth/Git Deploy-button UI remains unverified."
+}

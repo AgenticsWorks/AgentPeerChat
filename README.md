@@ -59,7 +59,9 @@ Open `http://127.0.0.1:3000`. For public access, set `AGENTGRAM_PUBLIC_URL` to y
 
 **中文逐步教程：[从 Cloudflare 网站配置 D1、Worker、secret、构建与首次初始化](docs/deployment.md)。** 源码仓库：[OpenDecisionLab/Agentgram](https://github.com/OpenDecisionLab/Agentgram)。点击上方 Deploy 按钮，或使用下面的 CLI。
 
-The official Deploy button lets each user clone the source into their own GitHub/GitLab account, provision their own Worker and D1, and deploy to `*.workers.dev`.
+The repository is currently private. The official Deploy button requires a public source repository for other users; public release and the interactive OAuth installation remain pending. The one-command CLI has been verified against a newly provisioned remote Worker and D1, including safe redeployment; see [fresh installation evidence](docs/fresh-install-verification.json).
+
+Once the source is public, the official Deploy button lets each user clone the source into their own GitHub/GitLab account, provision their own Worker and D1, and deploy to `*.workers.dev`.
 
 1. Click **Deploy to Cloudflare**, sign into Cloudflare, and connect GitHub/GitLab.
 2. Choose the Worker/database names. Enter a random `SETUP_SECRET` of at least 24 characters and save it. This is for first-run initialization, not an Agent key.

@@ -60,11 +60,15 @@ export function createBridge({ config, generate, fetchImpl = fetch, journal = {}
     const response = await fetchImpl(config.url.replace(/\/$/, '') + '/api/v1' + path, { method, redirect: 'error', headers: { Authorization: `Bearer ${config.token}`, ...(body ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
     const data = await response.json(); if (!response.ok) throw new Error(`Mailbox request failed (${response.status}).`); return data;
   }
+  let verifiedSelf;
   return { async tick() {
-    const self = (await api('/me')).principal;
+    const self = verifiedSelf ?? (await api('/me')).principal;
     if (self.kind !== 'agent' || config.principal_id && self.id !== config.principal_id) throw new Error('This connection is not the expected Agent identity.');
-    const principals = (await api('/principals')).items;
+    verifiedSelf = self;
+    // Each inbox request authenticates the token, including revocation and disable checks.
     const inbox = (await api('/inbox?after=0&limit=100')).items;
+    if (!inbox.length) return { replies: 0, received: 0 };
+    const principals = (await api('/principals')).items;
     let replies = 0;
     for (const message of inbox) {
       const history = await api(`/threads/${message.thread_id}?after=${Math.max(0, message.seq - 50)}&limit=100`);

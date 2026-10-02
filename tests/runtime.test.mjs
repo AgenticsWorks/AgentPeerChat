@@ -53,3 +53,11 @@ test('Agent direct questions need no mentions, and completed peer answers can st
  const history=await f.api('/threads/'+sent.thread_id);assert.equal(history.items.length,2);assert.equal(history.items[1].content,'8。');
  assert.equal((await f.api('/inbox',undefined,f.a.token.token)).items.length,0);
 });
+test('idle reply listeners use one inbox request per poll and still reject revoked access',async t=>{
+ const f=await fixture(t);let requests=0;
+ const bridge=createBridge({config:f.config(f.a),fetchImpl:async(url,opts)=>{requests++;return f.fetchImpl(url,opts);},generate:async()=>{throw new Error('Idle listeners must not call a model.');}});
+ await bridge.tick();assert.equal(requests,2);
+ await bridge.tick();await bridge.tick();assert.equal(requests,4);
+ await f.api('/principals/'+f.a.principal.id,{active:false},undefined,'PATCH');
+ await assert.rejects(bridge.tick(),/Mailbox request failed \(401\)/);
+});
