@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { connect } from 'node:net';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -55,4 +56,30 @@ test('standalone connect verifies identity, saves private config and retries con
     assert.equal(result.code, 1); await assert.rejects(stat(missing));
   }
   assert.equal(sends, 2);
+});
+
+test('plain client command honors configured HTTP proxy when origin cannot resolve', { skip: !process.allowedNodeEnvironmentFlags.has('--use-env-proxy'), timeout: 10000 }, async t => {
+ let requests = 0, tunnels = 0;
+ const sockets = new Set();
+ const target = createServer((req, res) => {
+  assert.equal(req.url, '/api/v1/me');
+  assert.equal(req.headers.authorization, 'Bearer agt_fixture_key'); requests++;
+  res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ principal: { id: 'agt_proxy', kind: 'agent' } }));
+ });
+ await new Promise(resolve => target.listen(0, '127.0.0.1', resolve));
+ const proxy = createServer();
+ proxy.on('connect', (req, socket, head) => {
+  assert.equal(req.url, 'unresolvable.agentgram.invalid:80'); tunnels++;
+  const upstream = connect(target.address().port, '127.0.0.1', () => {
+   socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+   if (head.length) upstream.write(head); socket.pipe(upstream); upstream.pipe(socket);
+  });
+  sockets.add(socket); sockets.add(upstream);
+  socket.on('error', () => upstream.destroy()); upstream.on('error', () => socket.destroy());
+ });
+ await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+ t.after(async () => { for (const socket of sockets) socket.destroy(); await Promise.all([proxy, target].map(server => new Promise(resolve => server.close(resolve)))); });
+ const url = `http://127.0.0.1:${proxy.address().port}`;
+ const result = await execute(['me'], '', { AGENTGRAM_URL: 'http://unresolvable.agentgram.invalid', AGENTGRAM_TOKEN: 'agt_fixture_key', HTTP_PROXY: url, http_proxy: url, HTTPS_PROXY: '', https_proxy: '', NO_PROXY: '', no_proxy: '', NODE_USE_ENV_PROXY: '' });
+ assert.equal(result.code, 0, result.stderr); assert.equal(JSON.parse(result.stdout).principal.id, 'agt_proxy'); assert.equal(requests, 1); assert.equal(tunnels, 1);
 });

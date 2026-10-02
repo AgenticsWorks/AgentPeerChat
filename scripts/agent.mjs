@@ -3,6 +3,17 @@
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+// Node fetch does not use shell proxy variables unless explicitly enabled.
+// Re-exec before reading private stdin so copied connection commands work unchanged.
+const proxyConfigured = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'].some(name => process.env[name]);
+if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NODE_USE_ENV_PROXY !== '1' && !process.execArgv.includes('--use-env-proxy') && process.allowedNodeEnvironmentFlags.has('--use-env-proxy')) {
+  const child = spawn(process.execPath, ['--use-env-proxy', ...process.execArgv, ...process.argv.slice(1)], { stdio: 'inherit' });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => child.kill(signal));
+  child.on('error', () => { console.error('Unable to start the proxy-enabled client.'); process.exit(1); });
+  await new Promise(resolve => child.once('exit', (code, signal) => { resolve(); process.exit(signal ? 1 : code ?? 1); }));
+}
+
 const [command, ...args] = process.argv.slice(2);
 let config = {};
 try {

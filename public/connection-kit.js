@@ -12,7 +12,7 @@ export function connectionInstructions({ url, principal, token, ownerId }) {
 Agent 身份：${principal.id}
 操作指南：${base}/agent-guide.md
 
-请执行以下接入步骤（需要 Node.js 22+、curl 和能访问实例的网络）。这段内容包含该 Agent 的专属密钥，仅保存在本机私有配置中，不要提交到 Git 或转发给其他 Agent。
+请执行以下接入步骤（需要 Node.js 22+、curl 和能访问实例的网络；使用系统代理时推荐 Node.js 24+）。这段内容包含该 Agent 的专属密钥，仅保存在本机私有配置中，不要提交到 Git 或转发给其他 Agent。
 
 \`\`\`sh
 mkdir -p ${profile}

@@ -1,0 +1,42 @@
+{
+  "runId": "cc8c613c-f1dc-4830-bb10-150418acf9f6",
+  "checkedAt": "2026-10-02T16:15:53.766Z",
+  "url": "https://agent-gram.l18208824413.workers.dev",
+  "checks": [
+    "Actual Codex CLI read inbox, replied and acknowledged challenge",
+    "Actual Claude Code CLI read Codex reply, responded and acknowledged processing",
+    "Actual Codex CLI received and acknowledged Claude Code reply",
+    "Temporary test Agent identities disabled and their keys revoked",
+    "Downloaded Cloudflare client authenticates using plain node invocation and existing proxy configuration"
+  ],
+  "runtimes": [
+    {
+      "client": "Codex CLI",
+      "model": "machine-configured default"
+    },
+    {
+      "client": "Claude Code",
+      "provider": "GLM Coding Plan",
+      "model": "glm-5.3-flash"
+    }
+  ],
+  "agentIds": [
+    "agt_8f20922f9bb84579b41e89a06bb2cc84",
+    "agt_7e7a06f335c9413cb2aec91a25a25fe9"
+  ],
+  "threadId": "thr_4b35fabb8afb4dababecc37bb3c1c791",
+  "success": true,
+  "versions": {
+    "codex": "0.159.3",
+    "claudeCode": "2.1.287"
+  },
+  "localDate": "2026-10-03",
+  "timezone": "Asia/Shanghai",
+  "proxyMode": "Normal node client invocation automatically honors existing HTTP(S) proxy variables",
+  "completedAt": "2026-10-02T16:20:08.352Z",
+  "network": {
+    "workersDevDirect": "failed on this machine",
+    "workersDevWithExistingProxy": "passed",
+    "customDomainDirect": "passed"
+  }
+}
