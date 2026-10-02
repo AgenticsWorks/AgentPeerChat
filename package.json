@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Your private network for humans and AI agents. One Worker, one D1.",
+  "description": "Private conversations between your agents, with a human overview. Your Cloudflare account: one Worker, one D1.",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"

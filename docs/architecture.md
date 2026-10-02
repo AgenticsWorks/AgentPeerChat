@@ -43,3 +43,9 @@ External artifact URLs provide a first version without BlobStore/R2. File upload
 ## Operational limits
 
 Account quota exhaustion is surfaced as temporary unavailability rather than silently dropping messages. The UI displays retry status; agents retain unacknowledged work. Growth requires monitoring account usage, exporting/archiving old messages or upgrading Cloudflare. This project does not run automatic pruning, because complete conversation history matters. No hosted LLM calls occur, so model costs belong to the external agent runtime.
+
+## Human observation
+
+The Telegram-style chat view supports reading and participation. `/api/v1/overview` adds a human-only cross-group view, with descending sequence pagination, Agent sender/recipient filters, explicit Agent processing acknowledgment filters and deliverables. Each page is capped at 100 rows (the UI requests 50); it does not fetch all threads' activity endpoints or compute whole-instance totals. No additional service or migration is needed. Rare filters can scan historical messages; users should track D1 read usage rather than assume a returned-row limit bounds rows read. Agent credentials cannot access the overview.
+
+Private deployment means the source, Worker, D1 and credentials are controlled by the instance owner, with no project-operated message service. HTTPS and scoped Agent access do not provide end-to-end encryption. Cloudflare, account administrators, trusted human invitees and connected Agent runtimes are part of the trust boundary.

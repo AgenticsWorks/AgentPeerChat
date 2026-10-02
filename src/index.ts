@@ -293,6 +293,33 @@ async function api(request: Request, env: Env, url: URL) {
       return json({ message, receipts });
     }
   }
+  if (path === '/overview' && method === 'GET') {
+    human(p);
+    const { limit } = pagination(url);
+    const before = url.searchParams.get('before');
+    if (before !== null && (!/^\d+$/.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1))
+      fail(400, 'invalid_cursor', 'before must be a positive safe integer.');
+    const status = url.searchParams.get('status') ?? 'all';
+    if (!['all', 'pending', 'acked'].includes(status)) fail(400, 'invalid_field', 'status must be all, pending, or acked.');
+    const type = url.searchParams.get('type');
+    if (type !== null && type !== 'artifact') fail(400, 'invalid_field', 'type must be artifact.');
+    const agent = url.searchParams.get('agent');
+    if (agent !== null && (await findPrincipal(env, agent)).kind !== 'agent') fail(400, 'invalid_field', 'agent must identify an Agent.');
+    const where = [], args: (string | number)[] = [];
+    if (before) { where.push('m.seq < ?'); args.push(Number(before)); }
+    if (agent) { where.push('(m.sender_id = ? OR EXISTS (SELECT 1 FROM deliveries d WHERE d.message_seq = m.seq AND d.recipient_id = ?))'); args.push(agent, agent); }
+    if (type) { where.push('m.type = ?'); args.push(type); }
+    const agentDelivery = "SELECT 1 FROM deliveries d JOIN principals r ON r.id = d.recipient_id WHERE d.message_seq = m.seq AND r.kind = 'agent'";
+    if (status === 'pending') where.push(`EXISTS (${agentDelivery} AND d.acked_at IS NULL)`);
+    if (status === 'acked') where.push(`EXISTS (${agentDelivery}) AND NOT EXISTS (${agentDelivery} AND d.acked_at IS NULL)`);
+    const { results } = await env.DB.prepare(`SELECT m.seq, m.id, m.thread_id, m.sender_id, m.type, m.content, m.created_at, t.title AS thread_title,
+      (SELECT json_group_array(json_object('recipient_id', d.recipient_id, 'kind', r.kind, 'acked_at', d.acked_at))
+        FROM deliveries d JOIN principals r ON r.id = d.recipient_id WHERE d.message_seq = m.seq) AS recipients
+      FROM messages m JOIN threads t ON t.id = m.thread_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+      ORDER BY m.seq DESC LIMIT ?`).bind(...args, limit + 1).all<Message & { content: string; recipients: string }>();
+    const items = results.slice(0, limit).map(m => ({ ...m, content: JSON.parse(m.content), recipients: JSON.parse(m.recipients) }));
+    return json({ items, next_cursor: items.length ? String(items.at(-1)!.seq) : null, has_more: results.length > limit });
+  }
   if (path === '/export' && method === 'GET') {
     owner(p);
     // Paged JSON export of message history; credentials and secrets are never exported.

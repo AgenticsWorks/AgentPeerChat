@@ -1,6 +1,6 @@
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, overview: [], overviewCursor: null, overviewRequest: 0 };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -114,6 +114,7 @@ async function refresh() {
   state.threads = (await allPages('/threads')).items;
   renderThreads(); renderPrincipals();
   if (state.selected) await loadMessages();
+  if (state.view === 'overview') { renderOverviewAgents(); await loadOverview(); }
   $('#sync-state').textContent = 'Updated';
 }
 function schedulePoll() {
@@ -130,14 +131,64 @@ function schedulePoll() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state.me) { state.pollDelay = 30000; schedulePoll(); } });
 $('#logout').addEventListener('click', async () => {
-  try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
+  try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; state.overviewRequest++; state.overview = []; $('#overview-feed').replaceChildren(); clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => {
   state.view = button.dataset.view; toggleMenu(false);
-  for (const view of ['conversations', 'network', 'access']) $(`#${view}`).hidden = view !== state.view;
+  for (const view of ['conversations', 'overview', 'network', 'access']) $(`#${view}`).hidden = view !== state.view;
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === state.view));
+  if (state.view === 'overview') { renderOverviewAgents(); await loadOverview(); }
   if (state.view === 'access') try { await loadAccess(); } catch (error) { toast(error.message); }
 }));
+function renderOverviewAgents() {
+  const select = $('#overview-agent'), value = select.value;
+  select.replaceChildren(el('option', '', 'All agents')); select.firstChild.value = '';
+  for (const p of state.principals.filter(p => p.kind === 'agent')) { const option = el('option', '', p.name); option.value = p.id; select.append(option); }
+  select.value = value;
+}
+async function loadOverview(more = false) {
+  const request = ++state.overviewRequest, principalId = state.me?.id;
+  const params = new URLSearchParams({ limit: '50', status: $('#overview-status').value });
+  if ($('#overview-agent').value) params.set('agent', $('#overview-agent').value);
+  if ($('#overview-type').value) params.set('type', $('#overview-type').value);
+  if (more && state.overviewCursor) params.set('before', state.overviewCursor);
+  $('#overview-error').textContent = ''; $('#overview-more').disabled = true; $('#overview-feed').setAttribute('aria-busy', 'true');
+  try {
+    const result = await api(`/overview?${params}`);
+    if (request !== state.overviewRequest || state.me?.id !== principalId) return;
+    state.overview = more ? [...state.overview, ...result.items] : result.items;
+    state.overviewCursor = result.next_cursor;
+    $('#overview-more').hidden = !result.has_more;
+    renderOverview();
+  } catch (error) { if (request === state.overviewRequest) $('#overview-error').textContent = error.message; }
+  finally { if (request === state.overviewRequest) { $('#overview-more').disabled = false; $('#overview-feed').setAttribute('aria-busy', 'false'); } }
+}
+function renderOverview() {
+  const feed = $('#overview-feed'); feed.replaceChildren();
+  $('#overview-caption').textContent = `${state.overview.length} recent matching messages · Newest first · Acknowledgment confirms processing, not task completion.`;
+  if (!state.overview.length) feed.append(el('p', 'empty-list', 'No messages match these filters. Conversations will appear here as your agents exchange messages.'));
+  for (const message of state.overview) {
+    const card = el('article', 'overview-card'), header = el('header'), identity = el('div', 'overview-identity');
+    const avatar = el('div', 'avatar', humanName(message.sender_id).slice(0, 1).toUpperCase()); colorAvatar(avatar, humanName(message.sender_id));
+    const names = el('div'); names.append(el('strong', '', humanName(message.sender_id)), el('small', '', message.thread_title));
+    identity.append(avatar, names); header.append(identity, el('time', '', `${date(message.created_at)} · ${time(message.created_at)}`)); card.append(header);
+    const content = el('div', 'overview-content');
+    if (message.type === 'text') content.textContent = message.content;
+    else if (message.type === 'json') { content.append(el('span', 'eyebrow', 'STRUCTURED MESSAGE'), el('pre', '', JSON.stringify(message.content, null, 2))); }
+    else { const link = el('a', '', message.type === 'artifact' ? `↗ ${message.content.name ?? 'Deliverable'}` : message.content); link.href = message.type === 'artifact' ? message.content.url : message.content; link.target = '_blank'; link.rel = 'noopener noreferrer'; content.append(link); }
+    card.append(content);
+    const recipients = message.recipients.filter(r => r.kind === 'agent'), pending = recipients.filter(r => !r.acked_at);
+    const footer = el('footer'), summary = el('span', pending.length ? 'processing-state pending' : 'processing-state');
+    summary.textContent = pending.length ? `Awaiting: ${pending.map(r => humanName(r.recipient_id)).join(', ')}` : recipients.length ? `✓ All ${recipients.length} Agent recipients acknowledged` : 'No Agent recipients';
+    summary.title = message.recipients.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? 'acknowledged' : 'awaiting acknowledgment'}`).join('\n');
+    const jump = el('button', 'text-button', 'Open conversation →');
+    jump.addEventListener('click', async () => { $('[data-view="conversations"]').click(); await selectThread(message.thread_id); const target = $(`[data-message-id="${message.id}"]`); if (target) { target.scrollIntoView({ block: 'center' }); target.classList.add('spotlight'); setTimeout(() => target.classList.remove('spotlight'), 2000); } });
+    footer.append(summary, jump); card.append(footer); feed.append(card);
+  }
+}
+for (const selector of ['#overview-agent', '#overview-status', '#overview-type']) $(selector).addEventListener('change', () => loadOverview());
+$('#overview-refresh').addEventListener('click', () => loadOverview());
+$('#overview-more').addEventListener('click', () => loadOverview(true));
 $('#thread-search').addEventListener('input', renderThreads);
 function renderThreads() {
   $('#thread-count').textContent = String(state.threads.length);

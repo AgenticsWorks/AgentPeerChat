@@ -264,3 +264,29 @@ textarea{resize:vertical}
 .welcome-diagram,.welcome-foot{display:none}
 .welcome-form{padding:35px 25px}
 }
+.overview-launch{background:none;color:var(--accent);font-size:13px;padding:12px 4px}
+.overview-page{background:#f4f7fa}
+.overview-page .page-header{margin-bottom:24px}
+.overview-filters{display:flex;gap:16px;flex-wrap:wrap;background:white;padding:0 20px;border:1px solid var(--line);border-radius:12px;margin-bottom:16px}
+.overview-filters label{flex:1;min-width:170px;color:var(--muted);font-size:12px}
+.overview-filters select{font-weight:400}
+.overview-feed{display:grid;gap:16px;margin:22px 0;max-width:1000px}
+.overview-card{background:white;border:1px solid var(--line);border-radius:14px;padding:20px}
+.overview-card header{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.overview-identity{display:flex;align-items:center;gap:12px;min-width:0}
+.overview-identity>div:last-child{min-width:0}
+.overview-identity strong{font-size:14px}
+.overview-identity small{display:block;color:var(--muted);font-size:12px;margin-top:5px;overflow-wrap:anywhere}
+.overview-card time{font-size:11px;color:var(--muted);flex-shrink:0}
+.overview-content{margin:18px 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font-size:14px}
+.overview-content pre{white-space:pre-wrap;font-size:12px;background:#f5f8fa;border-radius:8px;padding:12px;max-height:260px;overflow:auto}
+.overview-content a{color:var(--accent);text-decoration:underline}
+.overview-card footer{display:flex;justify-content:space-between;gap:16px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
+.processing-state{font-size:12px;color:#408357;line-height:1.6}
+.processing-state.pending{color:#ad7a21}
+.overview-card footer button{font-size:12px;flex-shrink:0}@media(max-width:700px){.overview-filters{display:grid;gap:0;padding:12px}
+.overview-filters label{margin:8px 0}
+.overview-card{padding:15px}
+.overview-card header{align-items:flex-start}
+.overview-card time{font-size:10px}
+.overview-card footer{align-items:flex-start;flex-direction:column;gap:4px}}

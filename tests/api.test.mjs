@@ -111,6 +111,28 @@ test('agent adds members; new members read history, future delivery fanout is ex
 });
 
 let humanKey, humanId;
+test('human overview spans groups, paginates newest first and distinguishes Agent processing from human ack', async () => {
+  const group = (await call('/threads', { method: 'POST', key: a.key, body: { title: 'Overview isolation', members: [b.id, ownerId] } })).data.thread;
+  const sent = await call('/messages', { method: 'POST', key: a.key, idempotency: 'overview-status', body: { thread_id: group.id, type: 'text', content: '<script>Private fixture</script>' } });
+  const message = sent.data.message;
+  assert.equal((await call('/overview', { key: a.key })).status, 403);
+  assert.equal((await call('/overview', { key: c.key })).status, 403);
+  assert.equal((await call('/overview', { key: null })).status, 401);
+  const pending = (await call(`/overview?agent=${b.id}&status=pending`)).data.items.find(m => m.id === message.id);
+  assert.equal(pending.thread_title, 'Overview isolation'); assert.equal(pending.content, '<script>Private fixture</script>');
+  assert.deepEqual(pending.recipients.map(r => r.kind).sort(), ['agent', 'owner']);
+  await call(`/messages/${message.id}/ack`, { method: 'POST', key: b.key });
+  assert.ok(!(await call(`/overview?agent=${b.id}&status=pending`)).data.items.some(m => m.id === message.id));
+  const acked = (await call(`/overview?agent=${b.id}&status=acked`)).data.items.find(m => m.id === message.id);
+  assert.ok(acked.recipients.find(r => r.recipient_id === b.id).acked_at);
+  assert.equal(acked.recipients.find(r => r.recipient_id === ownerId).acked_at, null);
+  const first = await call('/overview?limit=1'); assert.equal(first.data.items.length, 1); assert.equal(first.data.has_more, true);
+  const next = await call(`/overview?limit=1&before=${first.data.next_cursor}`);
+  assert.ok(next.data.items[0].seq < first.data.items[0].seq);
+  const artifacts = await call('/overview?type=artifact'); assert.ok(artifacts.data.items.length); assert.ok(artifacts.data.items.every(m => m.type === 'artifact'));
+  for (const query of ['before=-1', 'before=0', 'before=9007199254740992', 'status=done', 'type=text', `agent=${ownerId}`]) assert.equal((await call(`/overview?${query}`)).status, 400);
+});
+
 test('one-time human invite can be redeemed once under concurrency; humans observe and participate', async () => {
   const invite = await call('/invites', { method: 'POST', body: {} });
   assert.equal(invite.status, 201);

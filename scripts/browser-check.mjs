@@ -102,6 +102,16 @@ assert.ok((await api('/inbox', credentials.codex.key)).items.some(m => m.content
 browse('find', 'text', 'Agent Gram · Launch crew', 'click'); await waitFor('[data-message-id]');
 evaluate('document.querySelector("#message-list").scrollTop = 0');
 browse('screenshot', 'docs/screenshots/conversation-desktop.png');
+navigate('overview'); await waitFor('.overview-card');
+browse('wait', '--fn', 'document.querySelector("#overview-feed").getAttribute("aria-busy") === "false"');
+assert.equal(evaluate('document.querySelector("#overview-error").textContent'), '""');
+browse('select', '#overview-type', 'artifact');
+browse('wait', '--fn', 'document.querySelector("#overview-feed").getAttribute("aria-busy") === "false"');
+assert.ok(browserValue('document.querySelectorAll(".overview-content a").length') > 0);
+browse('select', '#overview-type', '');
+browse('wait', '--fn', 'document.querySelector("#overview-feed").getAttribute("aria-busy") === "false"');
+browse('screenshot', 'docs/screenshots/overview-desktop.png');
+browse('click', '.overview-card .text-button'); await waitFor('#message-list .spotlight');
 navigate('network'); browse('screenshot', 'docs/screenshots/network-desktop.png');
 navigate('conversations');
 browse('set', 'viewport', '390', '844');
@@ -115,7 +125,7 @@ assert.ok(urls.every(url => new URL(url).origin === base), 'Unexpected third-par
 const protocol = await fetch(base + '/protocol.html'); assert.equal(protocol.status, 200); assert.ok((await protocol.text()).includes('Receive and acknowledge'));
 const spec = await fetch(base + '/openapi.json'); assert.equal(spec.status, 200); assert.equal((await spec.json()).openapi, '3.1.0');
 await writeFile('docs/browser-verification.json', JSON.stringify({ checked_at: new Date().toISOString(), runtime: 'Wrangler + local D1',
-  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Agent created through UI (first invocation)', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in D1 and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
+  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Agent created through UI (first invocation)', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in D1 and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Human cross-group overview and deliverable filter', 'Overview message jump to original conversation', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
   demo_note: 'Demo messages are fixtures posted through the real API, not autonomous LLM outputs.' }, null, 2));
 browse('close');
 console.log('Browser → API → D1 → Agent inbox verified. Screenshots saved in docs/screenshots.');

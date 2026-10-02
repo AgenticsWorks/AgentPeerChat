@@ -13,7 +13,7 @@ const message = obj({ id, seq: { type: 'integer', minimum: 1 }, thread_id: id, s
 const schemas = {
   Principal: obj({ id, name, kind: { enum: ['owner', 'human', 'agent'] }, description: s(500, 0), active: { enum: [0, 1] }, created_at: date }),
   Message: message,
-  Thread: obj({ id, title: s(120), created_by: id, created_at: date, cursor: { type: 'integer', minimum: 1 }, message_count: { type: 'integer', minimum: 0 }, last_message_seq: { type: ['integer', 'null'] }, last_message: { anyOf: [{ type: 'null' }, obj({ type: message.properties.type, content: {}, sender_id: id })] }, members: arr(ref('Principal')) }, ['id', 'title', 'created_by', 'created_at']),
+  Thread: obj({ id, title: s(120), created_by: id, created_at: date, cursor: { type: 'integer', minimum: 1 }, message_count: { type: 'integer', minimum: 0 }, last_message_seq: { type: ['integer', 'null'] }, last_message: { anyOf: [{ type: 'null' }, obj({ type: message.properties.type, content: {}, sender_id: id, created_at: date })] }, members: arr(ref('Principal')) }, ['id', 'title', 'created_by', 'created_at']),
   Receipt: obj({ recipient_id: id, acked_at: nullableDate }),
   Error: obj({ error: obj({ code: s(), message: s(), request_id: s() }) }),
   Token: obj({ id, token: { ...s(256), description: 'One-time returned access key. Save it securely; list endpoints never return this value.' }, expires_at: nullableDate }, ['id', 'token']),
@@ -61,6 +61,14 @@ paths['/messages'].post.responses['200'] = { description: 'Identical send replay
 route('/messages/{id}', 'get', 'Read a message and all recipient receipts', all, null, obj({ message: ref('Message'), receipts: arr(ref('Receipt')) }));
 route('/messages/{id}/ack', 'post', 'Acknowledge processing as the delivery recipient', all, null, obj({ message_id: id, acked_at: date }), { description: 'Idempotent. Fetching or advancing a cursor does not acknowledge.' });
 route('/inbox', 'get', 'Pull this identity’s durable inbox', all, null, ref('MessagePage'), { paged: true, parameters: [{ name: 'include_acked', in: 'query', schema: { type: 'integer', enum: [0, 1], default: 0 } }], description: 'Unacknowledged messages by default. Restart at after=0 each sweep unless pending work is durably tracked in the client.' });
+schemas.OverviewMessage = obj({ ...message.properties, thread_title: s(120), recipients: arr(obj({ recipient_id: id, kind: { enum: ['owner', 'human', 'agent'] }, acked_at: nullableDate })) }, ['id', 'seq', 'thread_id', 'thread_title', 'sender_id', 'type', 'content', 'created_at', 'recipients']);
+route('/overview', 'get', 'Human view of messages across all groups, newest first', humans, null, obj({ items: arr(ref('OverviewMessage')), next_cursor: { type: ['string', 'null'] }, has_more: { type: 'boolean' } }), { parameters: [
+  { name: 'before', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 9007199254740991 } },
+  { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+  { name: 'agent', in: 'query', schema: id },
+  { name: 'status', in: 'query', schema: { enum: ['all', 'pending', 'acked'], default: 'all' } },
+  { name: 'type', in: 'query', schema: { enum: ['artifact'] } }
+], description: 'Human only. Agent filter matches sender or recipient. Pending and acked consider Agent recipients only; acked requires at least one Agent recipient and all have acknowledged. New members have no retrospective delivery record. Processing acknowledgment is not task completion. No global counts or unbounded history queries.' });
 route('/export', 'get', 'Export paged message history', owner, null, ref('MessagePage'), { paged: true, description: 'Excludes credentials and idempotency internals. Full relational backup requires D1 export.' });
 const spec = { openapi: '3.1.0', info: { title: 'Agent Gram', version: '1.0.0', description: 'Private Cloudflare-native async communication for humans and agents. See /protocol.html for reliability semantics.' },
   servers: [{ url: '/api/v1' }], paths, components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' }, sessionCookie: { type: 'apiKey', in: 'cookie', name: 'ag_session' } }, schemas } };

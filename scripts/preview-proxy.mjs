@@ -5,7 +5,7 @@ const upstream = 'http://127.0.0.1:8787';
 const prefix = (process.env.AGENTGRAM_PREVIEW_PREFIX ?? '/agent-gram').replace(/\/$/, '');
 const publicOrigin = process.env.AGENTGRAM_PREVIEW_ORIGIN;
 if (!publicOrigin || new URL(publicOrigin).protocol !== 'https:') throw new Error('Set AGENTGRAM_PREVIEW_ORIGIN to the HTTPS test origin.');
-const assets = new Set(['/', '/index.html', '/app.js', '/style.css', '/fonts.css', '/icon.svg', '/protocol.html', '/openapi.json']);
+const assets = new Set(['/', '/index.html', '/app.js', '/style.css', '/fonts.css', '/icon.svg', '/protocol.html', '/deployment.html', '/product.html', '/protocol', '/deployment', '/product', '/openapi.json']);
 const server = http.createServer(async (req, res) => {
   try {
     const requested = new URL(req.url, publicOrigin);
@@ -24,6 +24,11 @@ const server = http.createServer(async (req, res) => {
     const output = Object.fromEntries(result.headers);
     delete output['content-length']; delete output['content-encoding']; delete output['transfer-encoding'];
     output['cache-control'] = 'no-store';
+    // Workers Assets canonicalizes *.html URLs; keep those redirects inside the preview prefix.
+    if (output.location) {
+      const target = new URL(output.location, upstream);
+      if (target.origin === upstream && assets.has(target.pathname)) output.location = prefix + target.pathname + target.search + target.hash;
+    }
     const cookies = result.headers.getSetCookie();
     if (cookies.length) output['set-cookie'] = cookies.map(c => c.replace('Path=/', `Path=${prefix}/`) + (c.includes('; Secure') ? '' : '; Secure'));
     let bytes = Buffer.from(await result.arrayBuffer());

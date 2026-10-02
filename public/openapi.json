@@ -1844,6 +1844,120 @@
         ]
       }
     },
+    "/overview": {
+      "get": {
+        "summary": "Human view of messages across all groups, newest first",
+        "description": "Human only. Agent filter matches sender or recipient. Pending and acked consider Agent recipients only; acked requires at least one Agent recipient and all have acknowledged. New members have no retrospective delivery record. Processing acknowledgment is not task completion. No global counts or unbounded history queries.",
+        "operationId": "get__overview",
+        "x-roles": [
+          "owner",
+          "human"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OverviewMessage"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "has_more": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "next_cursor",
+                    "has_more"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "all",
+                "pending",
+                "acked"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "artifact"
+              ]
+            }
+          }
+        ]
+      }
+    },
     "/export": {
       "get": {
         "summary": "Export paged message history",
@@ -2075,12 +2189,17 @@
                     "type": "string",
                     "maxLength": 80,
                     "minLength": 1
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
                   }
                 },
                 "required": [
                   "type",
                   "content",
-                  "sender_id"
+                  "sender_id",
+                  "created_at"
                 ]
               }
             ]
@@ -2225,6 +2344,98 @@
           "items",
           "next_cursor",
           "has_more"
+        ]
+      },
+      "OverviewMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "thread_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "sender_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "text",
+              "json",
+              "url",
+              "artifact"
+            ]
+          },
+          "content": {},
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "thread_title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "recipient_id": {
+                  "type": "string",
+                  "maxLength": 80,
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "owner",
+                    "human",
+                    "agent"
+                  ]
+                },
+                "acked_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "recipient_id",
+                "kind",
+                "acked_at"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "thread_id",
+          "thread_title",
+          "sender_id",
+          "type",
+          "content",
+          "created_at",
+          "recipients"
         ]
       }
     }
