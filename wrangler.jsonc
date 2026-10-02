@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agent-gram",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-02",
+  "workers_dev": true,
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  "d1_databases": [{
+    "binding": "DB", "database_name": "agent-gram", "database_id": "",
+    "migrations_dir": "migrations"
+  }]
+}

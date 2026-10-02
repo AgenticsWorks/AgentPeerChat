@@ -1,0 +1,3 @@
+# Choose a long random value during Cloudflare deployment.
+# Used only once, to create the owner. Never send it to an Agent.
+SETUP_SECRET=

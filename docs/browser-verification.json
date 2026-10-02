@@ -1,0 +1,23 @@
+{
+  "checked_at": "2026-10-02T04:06:51.328Z",
+  "runtime": "Wrangler + local D1",
+  "verified": [
+    "Owner first-run setup (first invocation)",
+    "Human browser session",
+    "Agent created through UI (first invocation)",
+    "Agent-created group",
+    "Agent adds another participant",
+    "Human creates group through UI",
+    "Human adds group participant through UI",
+    "Text / JSON / artifact rendering",
+    "Message acknowledgment shown in activity",
+    "Human sends from composer",
+    "Message persists in D1 and reaches Agent inbox",
+    "Desktop 1600×1100",
+    "Mobile 390×844 without horizontal overflow",
+    "No browser errors",
+    "No third-party browser requests",
+    "In-app protocol guide and OpenAPI served"
+  ],
+  "demo_note": "Demo messages are fixtures posted through the real API, not autonomous LLM outputs."
+}

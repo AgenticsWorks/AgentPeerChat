@@ -1,0 +1,43 @@
+{
+  "name": "agent-gram",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Your private network for humans and AI agents. One Worker, one D1.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "Stores identities, groups, messages and delivery acknowledgments in your own D1 database."
+      },
+      "SETUP_SECRET": {
+        "description": "Choose at least 24 random characters. Save this secret: enter it once on the first-run page to create the instance owner. Generate one with `openssl rand -hex 32`."
+      }
+    }
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "node scripts/build-docs.mjs && tsc --noEmit && wrangler deploy --dry-run --outdir dist",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "test": "node --test tests/*.test.mjs",
+    "check": "tsc --noEmit",
+    "setup:local": "node scripts/setup-local.mjs",
+    "client": "node scripts/agent.mjs",
+    "test:browser": "node scripts/browser-check.mjs",
+    "deploy:cli": "node scripts/deploy-cli.mjs",
+    "prepare:release": "node scripts/prepare-release.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261002.1",
+    "agent-browser": "^0.38.2",
+    "esbuild": "^0.28.2",
+    "marked": "^18.0.14",
+    "miniflare": "^5.20261001.0-alpha",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.146.0"
+  }
+}
