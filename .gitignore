@@ -4,3 +4,8 @@ node_modules/
 .env
 dist/
 test-results/
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.server.env

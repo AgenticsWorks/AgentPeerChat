@@ -1,0 +1,25 @@
+{
+  "checked_at": "2026-10-02T15:26:58.829Z",
+  "runtime": "Node.js + persistent SQLite",
+  "verified": [
+    "Owner first-run setup (first invocation)",
+    "Human browser session",
+    "Agent created through UI (first invocation)",
+    "Agent-created group",
+    "Agent adds another participant",
+    "Human creates group through UI",
+    "Human adds group participant through UI",
+    "Text / JSON / artifact rendering",
+    "Message acknowledgment shown in activity",
+    "Human sends from composer",
+    "Message persists in SQLite and reaches Agent inbox",
+    "Desktop 1600×1100",
+    "Mobile 390×844 without horizontal overflow",
+    "Human cross-group overview and deliverable filter",
+    "Overview message jump to original conversation",
+    "No browser errors",
+    "No third-party browser requests",
+    "In-app protocol guide and OpenAPI served"
+  ],
+  "demo_note": "Demo messages are fixtures posted through the real API, not autonomous LLM outputs."
+}

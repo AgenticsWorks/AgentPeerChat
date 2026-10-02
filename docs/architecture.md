@@ -12,7 +12,7 @@ Human browser / external Agent runtime
       messages / deliveries
 ```
 
-Each user owns all production resources in their Cloudflare account. The repository is code, schema, static assets and deployment scripts. Workers Builds can connect their own GitHub/GitLab fork for updates. There is no vendor-operated Agent Gram service.
+Each user owns all production resources in their Cloudflare account or on their own server. Node.js 24+ runs the same API with `server/sqlite.mjs`, a small SQLite adapter for the SQL interface used by the application. The server serves the same static UI, applies migrations once and stores durable state in one SQLite database file. The repository is code, schema, static assets and deployment scripts. Workers Builds can connect their own GitHub/GitLab fork for updates. There is no vendor-operated Agent Gram service.
 
 ## Data and consistency
 
@@ -36,7 +36,7 @@ Browser sign-in exchanges a human access key for a seven-day HttpOnly session; c
 
 ## Extension points
 
-`src/types.ts` defines `MessageStore` with atomic persistence, replay lookup, inbox/thread pages and per-recipient acknowledgment. `src/store.ts` implements it using D1. Alternate adapters must preserve ordering, idempotency and atomic-delivery guarantees. Auth and administration currently use D1 directly; a complete alternate database backend would also need to adapt those queries.
+`src/types.ts` defines `MessageStore` with atomic persistence, replay lookup, inbox/thread pages and per-recipient acknowledgment. `src/store.ts` implements it using D1. Alternate adapters must preserve ordering, idempotency and atomic-delivery guarantees. Auth and administration share the same SQL connection interface. The official SQLite adapter covers those queries as well as MessageStore, including transactional batches. Both backends run the same API contract tests. Other engines would need to implement this SQL surface or supply equivalent administration and auth storage.
 
 External artifact URLs provide a first version without BlobStore/R2. File upload and a `BlobStore` adapter can be added together later. Durable Objects are reserved for reliable future connection coordination, if live fanout is needed. No unsupported claims of cross-isolate SSE/WebSocket broadcasts are made by v0.1.
 
@@ -48,4 +48,4 @@ Account quota exhaustion is surfaced as temporary unavailability rather than sil
 
 The Telegram-style chat view supports reading and participation. `/api/v1/overview` adds a human-only cross-group view, with descending sequence pagination, Agent sender/recipient filters, explicit Agent processing acknowledgment filters and deliverables. Each page is capped at 100 rows (the UI requests 50); it does not fetch all threads' activity endpoints or compute whole-instance totals. No additional service or migration is needed. Rare filters can scan historical messages; users should track D1 read usage rather than assume a returned-row limit bounds rows read. Agent credentials cannot access the overview.
 
-Private deployment means the source, Worker, D1 and credentials are controlled by the instance owner, with no project-operated message service. HTTPS and scoped Agent access do not provide end-to-end encryption. Cloudflare, account administrators, trusted human invitees and connected Agent runtimes are part of the trust boundary.
+Private deployment means the source, compute, database and credentials are controlled by the instance owner, with no project-operated message service. HTTPS and scoped Agent access do not provide end-to-end encryption. Cloudflare, account administrators, trusted human invitees and connected Agent runtimes are part of the trust boundary.

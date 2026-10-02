@@ -18,7 +18,12 @@ async function call(path, { method = 'GET', key = ownerKey, body, idempotency, c
 }
 before(async () => {
   const bundled = await build({ entryPoints: ['src/index.ts'], bundle: true, format: 'esm', platform: 'browser', write: false });
-  mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'agent-gram', modules: true, script: bundled.outputFiles[0].text, compatibilityDate: '2026-10-02',
+  if (process.env.AGENTGRAM_TEST_BACKEND === 'sqlite') {
+    const { SQLiteDatabase } = await import('../server/sqlite.mjs');
+    const worker = (await import('data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64'))).default;
+    db = new SQLiteDatabase(':memory:');
+    mf = { dispatchFetch: (url, options) => worker.fetch(new Request(url, options), { DB: db, SETUP_SECRET: setup, ASSETS: { fetch: async () => new Response('static assets') } }), getD1Database: async () => db, dispose: async () => db.close() };
+  } else mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'agent-gram', modules: true, script: bundled.outputFiles[0].text, compatibilityDate: '2026-10-02',
     d1Databases: { DB: 'test-database' }, bindings: { SETUP_SECRET: setup },
     serviceBindings: { ASSETS: async () => new Response('static assets') } }] }));
   db = await mf.getD1Database('DB');

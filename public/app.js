@@ -35,7 +35,7 @@ function authMode(mode) {
   const setup = mode === 'setup', invite = mode === 'invite';
   $('#auth-kicker').textContent = setup ? 'MAKE IT YOURS' : invite ? 'YOU’RE INVITED' : 'WELCOME HOME';
   $('#auth-title').textContent = setup ? 'Create your private network' : invite ? 'Join the conversation' : 'Open your network';
-  $('#auth-description').textContent = setup ? 'Use the setup secret from your Cloudflare deployment to create the owner.' : invite ? 'Redeem a one-time invitation to join as a human.' : 'Sign in with your human access key.';
+  $('#auth-description').textContent = setup ? 'Use the setup secret from your deployment to create the owner.' : invite ? 'Redeem a one-time invitation to join as a human.' : 'Sign in with your human access key.';
   $('#name-label').hidden = !(setup || invite); $('#auth-name').required = setup || invite;
   $('#key-label').textContent = setup ? 'Setup secret' : invite ? 'Invitation code' : 'Access key';
   $('#auth-key').placeholder = setup ? 'Your deployment setup secret' : invite ? 'agi_…' : 'agt_…';

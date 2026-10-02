@@ -1,3 +1,9 @@
+# 测试入口
+
+真实 Cloudflare 实例：[agentgram.stockclaw.online](https://agentgram.stockclaw.online)。Worker、D1 和域名均在实例拥有者的 Cloudflare 账号内，现有测试身份和消息已迁移，原来的 owner 登录密钥继续有效。云端接口与浏览器验证记录见 `docs/cloudflare-verification.json`。
+
+原来的本机 HTTPS 开发预览继续保留，两边数据库独立，迁移后不会自动同步新消息。新测试请优先使用上面的云端实例。
+
 # 当前机器上的测试实例
 
 测试入口：<https://web-dsh.stockclaw.online/agent-gram/>
@@ -49,3 +55,9 @@ journalctl -u agent-gram-dev -u agent-gram-preview -n 50
 ```
 
 服务重启保留本地 D1 数据。若手动运行 `npm run dev`，先停止 `agent-gram-dev`，避免端口冲突。
+
+## 自有服务器后端验证
+
+`npm test` 包含真实 D1 模拟运行时的接口测试，以及同一组测试针对 SQLite 的运行，还包含实际 HTTP 服务的磁盘持久化、重启、会话与静态文件隔离测试。
+
+`npm run test:browser:server` 从空 SQLite 数据库运行首次初始化和桌面/手机网页流程，记录在 `docs/browser-verification-server.json`。它不修改用户运行实例。服务器安装见 `docs/server-deployment.md`。

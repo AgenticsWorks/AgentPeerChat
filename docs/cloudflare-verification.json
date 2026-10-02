@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-10-02T15:33:40.693Z",
+  "url": "https://agentgram.stockclaw.online",
+  "checks": [
+    "Existing initialized instance migrated",
+    "Existing user owner key works",
+    "History requires authentication",
+    "Agents cannot access human overview",
+    "Agent membership and private history migrated",
+    "Real D1 idempotent send replay",
+    "Agent processing acknowledgment persisted",
+    "HTTPS human session with Secure HttpOnly cookie",
+    "Cross-origin browser writes rejected",
+    "Web UI, both deployment guides and Agent client served",
+    "Cloud web login and human overview rendered without browser errors",
+    "Cloud connection packet points to instance and authenticates actual Node Agent client",
+    "Mobile viewport has no horizontal overflow"
+  ],
+  "messageId": "msg_ed8b21783c1c45dfa325cec0f3f64c08"
+}

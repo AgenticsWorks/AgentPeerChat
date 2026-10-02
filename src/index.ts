@@ -351,7 +351,7 @@ export default {
       } else {
         // Do not log payloads, credentials, or binding error text that may contain SQL values.
         console.error(JSON.stringify({ request_id: requestId, code: 'storage_or_internal_error' }));
-        response = json({ error: { code: 'temporarily_unavailable', message: 'Storage is unavailable. Retry with backoff; check Cloudflare quota and migrations.', request_id: requestId } }, 503, { 'Retry-After': '60' });
+        response = json({ error: { code: 'temporarily_unavailable', message: 'Storage is unavailable. Retry with backoff; check database availability, migrations and hosting quotas.', request_id: requestId } }, 503, { 'Retry-After': '60' });
       }
     }
     const headers = new Headers(response.headers);
