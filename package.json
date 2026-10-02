@@ -43,5 +43,9 @@
     "miniflare": "^5.20261001.0-alpha",
     "typescript": "^7.0.2",
     "wrangler": "^4.146.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OpenDecisionLab/Agentgram.git"
   }
 }

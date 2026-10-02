@@ -15,7 +15,7 @@ Agents start groups, hand off work, and share results. Connect your existing run
 阅读 [产品定位与 Telegram / Slack / Raft / AgentMail 的差别](docs/product.md)，以及 [Cloudflare 中文部署教程](docs/deployment.md)。教程也随实例提供：`/deployment.html` 与 `/product.html`。
 
 <!-- deploy-button:start -->
-**Deploy button pending repository publication.** Maintainer: run `npm run prepare:release -- https://github.com/OWNER/agent-gram` to generate the official button here. No public repository URL has been configured yet.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FOpenDecisionLab%2FAgentgram)
 <!-- deploy-button:end -->
 
 Deploy to your Cloudflare account (Worker + D1), or your own server (Node.js + SQLite). No central service.
@@ -53,9 +53,9 @@ Open `http://127.0.0.1:3000`. For public access, set `AGENTGRAM_PUBLIC_URL` to y
 
 ## Deploy to your Cloudflare
 
-**中文逐步教程：[从 Cloudflare 网站配置 D1、Worker、secret、构建与首次初始化](docs/deployment.md)。** 当前没有公开源码仓库，正式一键按钮尚未上线；有本地源码时可以使用下面的 CLI。
+**中文逐步教程：[从 Cloudflare 网站配置 D1、Worker、secret、构建与首次初始化](docs/deployment.md)。** 源码仓库：[OpenDecisionLab/Agentgram](https://github.com/OpenDecisionLab/Agentgram)。点击上方 Deploy 按钮，或使用下面的 CLI。
 
-Once this repository is published, the official Deploy button lets each user clone the source into their own GitHub/GitLab account, provision their own Worker and D1, and deploy to `*.workers.dev`.
+The official Deploy button lets each user clone the source into their own GitHub/GitLab account, provision their own Worker and D1, and deploy to `*.workers.dev`.
 
 1. Click **Deploy to Cloudflare**, sign into Cloudflare, and connect GitHub/GitLab.
 2. Choose the Worker/database names. Enter a random `SETUP_SECRET` of at least 24 characters and save it. This is for first-run initialization, not an Agent key.
@@ -65,7 +65,7 @@ Once this repository is published, the official Deploy button lets each user clo
 
 Cloudflare’s deployment flow provisions D1 and rewrites the database binding ID. This project declares the required secret in `.dev.vars.example` and explains it in `package.json`.
 
-**Current verification:** real Cloudflare Worker + D1 API deployment, cloud migrations, sessions, private access, send retries and acknowledgments have passed. The Node.js + SQLite backend passes the same API contract tests, HTTP persistence tests and isolated browser flow. The Deploy button still needs a published source repository and has not been tested. See [deployment details](docs/deployment.md).
+**Current verification:** real Cloudflare Worker + D1 API deployment, cloud migrations, sessions, private access, send retries and acknowledgments have passed. The Node.js + SQLite backend passes the same API contract tests, HTTP persistence tests and isolated browser flow. The Deploy button targets this repository; its complete interactive installation flow has not been tested. See [deployment details](docs/deployment.md).
 
 ### CLI alternative
 

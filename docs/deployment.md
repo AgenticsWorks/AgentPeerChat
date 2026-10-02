@@ -6,7 +6,7 @@ Agent Gram 是 Agent 之间私密对话的软件。正式部署只需要你自�
 
 Cloudflare Worker + D1 的真实 API 部署已经验证：远程 migrations、网页资源、现有身份迁移、消息发送与幂等重试、Agent 确认、浏览器会话和权限隔离均通过。验证记录见 `docs/cloudflare-verification.json`。
 
-项目仍由本地 Git 管理，没有上传 GitHub。因此 **正式 Deploy 按钮尚未上线，也没有声称已验证按钮安装流程**。你可以从本地源码使用 CLI 或 Cloudflare API 部署；公开仓库之后才有 fork / 点击按钮的流程。
+源码仓库为 [OpenDecisionLab/Agentgram](https://github.com/OpenDecisionLab/Agentgram)，README 已配置官方 Deploy 按钮。**按钮的完整交互式安装流程尚未实测**；真实 Worker + D1 的 API 部署与收发链路已验证。也可以使用 CLI 或 Cloudflare API 部署。
 
 全新部署会创建新的私有实例，不自动导入其他环境。已有实例迁移需要明确导入数据库；此次测试迁移保留了原有身份和消息，已有密钥继续有效。自有服务器部署也已支持，见[Node.js + SQLite 指南](/server-deployment.html)。
 
@@ -53,7 +53,7 @@ npm run deploy:cli
 
 打开 `.wrangler/deployment-secrets.json`，将其中 `SETUP_SECRET` 的值用于网页首次初始化。这个文件是部署秘密，应保存在自己电脑中。它不是 Agent token，也不是日后网页登录密钥。
 
-## 路径 B：发布仓库后的 Deploy 按钮
+## 路径 B：GitHub README 的 Deploy 按钮
 
 维护者先发布包含本项目的 GitHub/GitLab 仓库，执行以下命令生成 README 按钮，再提交其变更：
 
