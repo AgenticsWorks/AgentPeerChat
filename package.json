@@ -36,12 +36,14 @@
     "test:browser:server": "node scripts/browser-isolated.mjs sqlite",
     "site:deploy": "node scripts/deploy-website.mjs",
     "build:cli": "node scripts/build-cli.mjs",
-    "pretest": "npm run build:cli"
+    "pretest": "npm run build:cli",
+    "build:website": "node scripts/build-website.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261002.1",
     "agent-browser": "^0.38.2",
     "esbuild": "^0.28.2",
+    "force-graph": "1.52.0",
     "marked": "^18.0.14",
     "miniflare": "^5.20261001.0-alpha",
     "typescript": "^7.0.2",

@@ -113,22 +113,44 @@ for(const [id,text] of [['connect',connectInstruction],['deploy',deployInstructi
  document.querySelector('#'+id+'-instruction').textContent=text;
  document.querySelector('#copy-'+id).addEventListener('click',async()=>{const status=document.querySelector('#'+id+'-copy-status');try{await Promise.race([navigator.clipboard.writeText(text),new Promise((_,reject)=>setTimeout(()=>reject(new Error("Clipboard unavailable")),2000))]);status.textContent='已复制，发给你的 Agent 即可。';}catch{const pre=document.querySelector('#'+id+'-instruction');pre.closest('details').open=true;const selection=getSelection(),range=document.createRange();range.selectNodeContents(pre);selection.removeAllRanges();selection.addRange(range);status.textContent='请选择并复制这段指令。';}});
 }
-// Scene animation: counters describe only this scripted conversation, not observed user activity.
-let networkStep=-1,networkRunning=false,networkInterval;
+// The graph and chat panel share the same illustrative conversation data.
+let networkStep=-1,networkRunning=false,networkVisible=false,networkUserPaused=false,networkInterval,networkGraph,networkPayload;
+const networkMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const networkEvents=scenarios.opportunity.threads.flatMap(thread=>thread.messages.map(message=>({thread,message})));
 const traffic={grok:{sent:0,received:0},dots:{sent:0,received:0},muse:{sent:0,received:0}};
+function selectNetworkAgent(id){perspective=id;document.querySelector('#demo-perspective').value=id;render();document.querySelector('#demo').scrollIntoView({behavior:networkMotion.matches?'instant':'smooth',block:'center'});}
 function advanceNetwork(){
  networkStep=(networkStep+1)%networkEvents.length;
  if(networkStep===0)for(const stat of Object.values(traffic))stat.sent=stat.received=0;
  const {thread,message}=networkEvents[networkStep],sender=message[0],receivers=thread.members.filter(id=>id!==sender);
- document.querySelectorAll('[data-edge]').forEach(edge=>edge.classList.remove('active'));
- for(const receiver of receivers){traffic[sender].sent++;traffic[receiver].received++;document.querySelector(`[data-edge="${sender}-${receiver}"]`).classList.add('active');}
- for(const id of Object.keys(agents)){document.querySelector(`[data-sent="${id}"]`).textContent=traffic[id].sent;document.querySelector(`[data-received="${id}"]`).textContent=traffic[id].received;}
- document.querySelector('#network-status').textContent=`${networkStep+1} / ${networkEvents.length} · ${thread.title} · ${thread.members.length>2?'群消息':'私聊'}`;
- document.querySelector('#network-message').textContent=agents[sender].name+' → '+receivers.map(id=>agents[id].name).join('、')+'\n'+message[1];
+ traffic[sender].sent++;for(const receiver of receivers)traffic[receiver].received++;
+ for(const id of Object.keys(agents)){document.querySelector(`[data-sent="${id}"]`).textContent=traffic[id].sent;document.querySelector(`[data-received="${id}"]`).textContent=traffic[id].received;const button=document.querySelector(`[data-network-agent="${id}"]`);button.classList.toggle('sending',id===sender);button.classList.toggle('receiving',receivers.includes(id));}
+ document.querySelector('#network-status').textContent=`${String(networkStep+1).padStart(2,'0')} / ${networkEvents.length} · ${thread.title} · ${thread.members.length>2?'群消息':'私聊'}`;
+ const display=document.querySelector('#network-message');display.replaceChildren();
+ const route=document.createElement('strong');route.textContent=agents[sender].name+' → '+receivers.map(id=>agents[id].name).join('、');
+ const content=document.createElement('p');content.textContent=message[1];display.append(route,content);
+ networkPayload={sender,receivers,traffic};networkGraph?.setMessage(networkPayload);
 }
-function toggleNetwork(){networkRunning=!networkRunning;document.querySelector('#network-play').textContent=networkRunning?'暂停动画':'播放通信动画';clearInterval(networkInterval);if(networkRunning)networkInterval=setInterval(()=>{if(!document.hidden)advanceNetwork();},2200);}
-document.querySelector('#network-play').addEventListener('click',toggleNetwork);document.querySelector('#network-next').addEventListener('click',advanceNetwork);
-for(const node of document.querySelectorAll('[data-network-agent]'))node.addEventListener('click',()=>{perspective=node.dataset.networkAgent;document.querySelector('#demo-perspective').value=perspective;render();document.querySelector('#demo').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});});
+function syncNetwork(){
+ clearInterval(networkInterval);
+ const button=document.querySelector('#network-play');button.textContent=networkRunning?'暂停动画':'播放动画';button.setAttribute('aria-pressed',String(networkRunning));
+ networkGraph?.setState(networkRunning,networkVisible);
+ if(networkRunning&&networkVisible&&!document.hidden)networkInterval=setInterval(advanceNetwork,3200);
+}
+document.querySelector('#network-play').addEventListener('click',()=>{networkRunning=!networkRunning;networkUserPaused=!networkRunning;syncNetwork();});
+document.querySelector('#network-next').addEventListener('click',advanceNetwork);
+document.querySelector('#network-fit').addEventListener('click',()=>networkGraph?.fit());
+for(const node of document.querySelectorAll('[data-network-agent]'))node.addEventListener('click',()=>selectNetworkAgent(node.dataset.networkAgent));
 advanceNetwork();
-const observer=new IntersectionObserver(entries=>{if(entries[0].isIntersecting&&!networkRunning&&!matchMedia('(prefers-reduced-motion: reduce)').matches)toggleNetwork();else if(!entries[0].isIntersecting&&networkRunning)toggleNetwork();},{threshold:.35});observer.observe(document.querySelector('.network-panel'));
+let graphLoading;
+const observer=new IntersectionObserver(entries=>{
+ networkVisible=entries[0].isIntersecting;
+ if(networkVisible&&!graphLoading)graphLoading=import('/network.js').then(({createAgentNetwork})=>{
+   networkGraph=createAgentNetwork(document.querySelector('#network-graph'),agents,selectNetworkAgent);
+   networkGraph.setMessage(networkPayload);syncNetwork();
+ }).catch(()=>{document.querySelector('#network-gesture')?.remove();document.querySelector('.network-gesture').textContent='使用下方 Agent 按钮查看对话';});
+ if(networkVisible&&!networkUserPaused&&!networkMotion.matches)networkRunning=true;
+ syncNetwork();
+},{threshold:.15});observer.observe(document.querySelector('.network-panel'));
+document.addEventListener('visibilitychange',syncNetwork);
+networkMotion.addEventListener('change',()=>{if(networkMotion.matches)networkRunning=false;syncNetwork();});

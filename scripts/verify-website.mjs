@@ -25,9 +25,17 @@ try{
  browser('click','#replay');browser('wait','--fn','document.querySelectorAll(".demo-bubble").length === 4');
  checks.push('Reciprocal messages, three perspectives, direct/group visibility and output previews work');
  browser('eval','document.documentElement.style.scrollBehavior="auto";document.querySelector("#network").scrollIntoView({behavior:"instant",block:"center"})');
- const previous=value('document.querySelector("#network-status").textContent');browser('click','#network-next');assert.notEqual(value('document.querySelector("#network-status").textContent'),previous);assert.ok(value('document.querySelectorAll("[data-edge].active").length')>0);assert.ok(value('document.querySelector("#network-message").textContent').includes('→'));
+ const previous=value('document.querySelector("#network-status").textContent');browser('click','#network-next');assert.notEqual(value('document.querySelector("#network-status").textContent'),previous);browser('wait','#network-graph canvas');assert.equal(value('document.querySelector("#network-graph").getAttribute("data-library")'),'force-graph');assert.ok(JSON.parse(value('document.querySelector("#network-graph").getAttribute("data-active-edges")')).length>0);assert.ok(value('document.querySelector("#network-message").textContent').includes('→'));
+ browser('wait','--fn','document.querySelector("#network-graph").getAttribute("data-fitted") === "true"');
+ browser('eval','document.querySelector("#network-graph").scrollIntoView({behavior:"instant",block:"center"})');browser('wait','300');
+ const originalZoom=Number(value('document.querySelector("#network-graph").getAttribute("data-zoom")'));
+ // Dispatch the DOM wheel event directly: this CLI's mouse-wheel command scrolls the page.
+ browser('eval','const canvas=document.querySelector("#network-graph canvas"),r=canvas.getBoundingClientRect();canvas.dispatchEvent(new WheelEvent("wheel",{deltaY:-200,clientX:r.x+r.width/2,clientY:r.y+r.height/2,bubbles:true,cancelable:true,view:window}))');browser('wait','300');
+ assert.ok(Number(value('document.querySelector("#network-graph").getAttribute("data-zoom")'))>originalZoom);
+ browser('click','#network-fit');browser('wait','400');
+ assert.ok(Number(value('document.querySelector("#network-graph").getAttribute("data-zoom")'))<originalZoom*1.1);
  browser('click','[data-network-agent=muse]');assert.equal(value('document.querySelector("#demo-perspective").value'),'muse');
- checks.push('Network animates actual scene delivery directions, counts traffic, and links nodes to agent perspectives');
+ checks.push('Force Graph canvas renders directed message traffic and opens agent perspectives');
  assert.ok(value('document.querySelector("#cloudflare-deploy").href').startsWith('https://deploy.workers.cloudflare.com/?url='));
  browser('eval','document.querySelector("#copy-connect").scrollIntoView({behavior:"instant",block:"center"})');browser('wait','500');browser('click','#copy-connect');assert.ok(value('document.querySelector("#connect-instruction").textContent').includes('agentgram skill --install'));
  browser('wait','--fn','document.querySelector("#connect-copy-status").textContent.length > 0');
@@ -40,7 +48,12 @@ try{
  browser('select','#demo-perspective','muse');browser('click','[data-scenario=opportunity]');assert.equal(value('document.querySelectorAll("[data-thread=launch-sources]").length'),0);
  browser('click','[data-thread=launch-preferences]');assert.equal(value('document.querySelector("#demo-title").textContent'),'Dots · Muse');
  assert.equal(value('document.documentElement.scrollWidth>innerWidth'),false);
- assert.equal(browser('errors'),'');checks.push('Mobile interactions, images and layout verified; no browser errors');
- for(const path of ['/product.html','/assets/icon.svg','/assets/dots.svg','/assets/grok.svg','/assets/muse.svg','/style.css','/app.js']){const response=await fetch(base+path,{signal:AbortSignal.timeout(30000)});assert.equal(response.status,200,path);assert.ok(!(await response.text()).includes(privateOrigin),path);}
+ browser('set','media','light','reduced-motion');
+ browser('eval','document.querySelector(".network-panel").scrollIntoView({behavior:"instant",block:"center"})');browser('wait','500');
+ assert.equal(value('document.querySelector("#network-play").getAttribute("aria-pressed")'),'false');
+ const stopped=value('document.querySelector("#network-status").textContent');browser('wait','3500');assert.equal(value('document.querySelector("#network-status").textContent'),stopped);
+ browser('click','#network-next');assert.notEqual(value('document.querySelector("#network-status").textContent'),stopped);
+ assert.equal(browser('errors'),'');checks.push('Mobile layout, wheel zoom, reset and reduced-motion/manual playback verified; no browser errors');
+ for(const path of ['/product.html','/assets/icon.svg','/assets/dots.svg','/assets/grok.svg','/assets/muse.svg','/style.css','/app.js','/network.js','/assets/network-licenses.txt']){const response=await fetch(base+path,{signal:AbortSignal.timeout(30000)});assert.equal(response.status,200,path);assert.ok(!(await response.text()).includes(privateOrigin),path);}
  await mkdir('.wrangler',{recursive:true});await writeFile('.wrangler/website-verification.json',JSON.stringify({url:base,verifiedAt:new Date().toISOString(),checks},null,2)+'\n');console.log('Introduction website verified: '+base);for(const check of checks)console.log('✓ '+check);
 }finally{browser('close');}
