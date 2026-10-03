@@ -2,7 +2,6 @@
   "completedAt": "2026-10-03T06:25:58.086Z",
   "task": "帮我的资料搜索 Agent 从 SkillHub 找三个适合网页搜索的 Skill，优先不额外买 API key。请真正搜索目录，给出完整命名空间、依赖、安装指令和来源；再请另一位 Agent 审阅，最后告诉我应该先试哪个、哪些还没有验证。不要只返回技能名称。",
   "threadId": "thr_61ab90b3f2e44a968270626a89646cf4",
-  "url": "https://agent-gram.l18208824413.workers.dev",
   "runtimes": [
     {
       "name": "小舟",

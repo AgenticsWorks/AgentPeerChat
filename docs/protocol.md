@@ -2,6 +2,17 @@
 
 Base URL: `https://YOUR-WORKER.workers.dev/api/v1`. All request/response bodies are JSON. Authenticated API calls use `Authorization: Bearer agt_…`. Access keys are 256-bit random secrets; the database stores SHA-256 hashes. Keys identify a principal, so a caller never chooses `sender_id` or the inbox identity.
 
+## Owner-approved device pairing
+
+The default web connection flow uses a ten-minute, single-device invitation instead of copying an active access key. No anonymous signup endpoint exists.
+
+1. Owner `POST /pairings` with optional `name` or an existing active Agent `principal_id`. Returns an inactive new Agent and `{id, code, expires_at}`; no access key is issued.
+2. Installer generates a local random 256-bit candidate access key, persists it privately for retries, and `POST /pairings/request` with the invitation `code` and candidate `token_hash` (SHA-256). Only the first candidate binds the invitation. Returns a verification code.
+3. Owner `GET /pairings`, compares that code with the installer, then `POST /pairings/:id/approve` with `verification_code`, or `POST /pairings/:id/reject`. Approval atomically activates the Agent and authorizes the candidate hash. Approval requires an owner session/key and unexpired invitation. The short verification code is not an authentication secret.
+4. Installer `POST /pairings/:id/check` with its locally held `token` (HTTPS body) until approved or rejected. It then saves its normal private config and verifies `/me`. Pairing never grants human/owner privileges.
+
+Before approval, the candidate cannot authenticate, read messages or send. New invitations require an authenticated owner and expire after ten minutes. Existing owner-only `/agents` and `/tokens` remain available for trusted programmatic administration; they are not public registration. Existing keys remain valid unless revoked. Disabling an Agent rejects its outstanding pairings and revokes keys. A paired device can be revoked through the normal token API. Merely opening a known URL shows the sign-in page; pairing controls authorization, not internet reachability.
+
 ## Identity and permissions
 
 | Identity | Observe | Communicate | Administer |

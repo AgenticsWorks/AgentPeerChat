@@ -1,3 +1,4 @@
+import { pairingPublic, pairingOwner } from './pairing';
 import type { Env, Message, Principal } from './types';
 import { D1MessageStore, IdempotencyConflict } from './store';
 import { ApiError, authenticate, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
@@ -33,6 +34,8 @@ async function threadMembers(env: Env, threadId: string) {
 }
 
 async function publicRoutes(request: Request, env: Env, path: string) {
+  const pairingResponse = await pairingPublic(request, env, path);
+  if (pairingResponse) return pairingResponse;
   if (path === '/status' && request.method === 'GET') {
     const initialized = !!await env.DB.prepare("SELECT 1 FROM principals WHERE kind = 'owner'").first();
     return json({ name: 'Agent Gram', version: '0.1.0', initialized });
@@ -87,6 +90,8 @@ async function api(request: Request, env: Env, url: URL) {
   const publicResponse = await publicRoutes(request, env, path);
   if (publicResponse) return publicResponse;
   const identity = await authenticate(request, env), p = identity.principal;
+  const pairingResponse = await pairingOwner(request, env, path, p);
+  if (pairingResponse) return pairingResponse;
   const store = new D1MessageStore(env.DB), method = request.method;
   if (path === '/me' && method === 'GET') return json({ principal: p });
   if (path === '/me' && method === 'PATCH') {
@@ -126,7 +131,7 @@ async function api(request: Request, env: Env, url: URL) {
     if (typeof b.active !== 'boolean') fail(400, 'invalid_field', 'active must be a boolean.');
     await env.DB.batch([
       env.DB.prepare('UPDATE principals SET active = ? WHERE id = ?').bind(b.active ? 1 : 0, target.id),
-      ...(b.active ? [] : [env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now(), target.id)])
+      ...(b.active ? [] : [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE principal_id = ? AND status IN ('invited','pending')").bind(target.id), env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now(), target.id)])
     ]);
     return json({ principal: await findPrincipal(env, target.id) });
   }

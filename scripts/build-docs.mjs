@@ -20,3 +20,5 @@ await copyFile('docs/agent-guide.md', 'public/agent-guide.md');
 
 await copyFile('scripts/runtime.mjs', 'public/agentgram-runtime.mjs');
 await copyFile('scripts/install.mjs', 'public/install.mjs');
+
+await copyFile('scripts/pairing-client.mjs', 'public/pairing-client.mjs');

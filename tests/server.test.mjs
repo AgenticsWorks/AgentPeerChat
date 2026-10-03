@@ -39,10 +39,33 @@ test('server persists messages, acknowledgments and keys across restart; HTTP pr
   const inbox = await call('/api/v1/inbox?include_acked=0', { key: agentKey }); assert.equal(inbox.status, 200); assert.ok(!inbox.data.items.some(message => message.id === sent.data.message.id));
   const history = await call(`/api/v1/messages/${sent.data.message.id}`, { key }); assert.ok(history.data.receipts.find(receipt => receipt.recipient_id === agent.data.principal.id).acked_at);
   const replay = await call('/api/v1/messages', { method: 'POST', key, body: { to: [agent.data.principal.id], type: 'text', content: 'Survives a restart' }, headers: { 'Idempotency-Key': 'persistent-message' } }); assert.equal(replay.status, 200); assert.equal(replay.data.message.id, sent.data.message.id);
-  assert.equal((await app.database.prepare('SELECT COUNT(*) AS n FROM agentgram_migrations').first()).n, 3);
+  assert.equal((await app.database.prepare('SELECT COUNT(*) AS n FROM agentgram_migrations').first()).n, 4);
  } finally { if (app) await app.close(); await rm(directory, { recursive: true, force: true }); }
 });
 test('server refuses weak setup secrets and public HTTP origins before creating storage', async () => {
  await assert.rejects(createApplication({ ...options, databasePath: '/unused', setupSecret: '' }), /24/);
  await assert.rejects(createApplication({ ...options, databasePath: '/unused', publicUrl: 'http://public.example' }), /HTTPS/);
+});
+
+test('real installer waits for pairing approval then saves credentials and delivers its connection message', {timeout:20000}, async t => {
+ const {spawn}=await import('node:child_process');const {readFile}=await import('node:fs/promises');
+ const directory=await mkdtemp(join(tmpdir(),'agentgram-pair-install-'));
+ const app=await createApplication({...options,databasePath:join(directory,'store.sqlite')});
+ await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+ t.after(async()=>{await app.close();await rm(directory,{recursive:true,force:true});});
+ const url=`http://127.0.0.1:${app.server.address().port}`;
+ const call=async(path,key,body)=>{const r=await fetch(url+'/api/v1'+path,{method:body?'POST':'GET',headers:{...(key?{Authorization:'Bearer '+key}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});assert.ok(r.ok,path+' '+r.status);return r.json();};
+ const owner=await call('/setup',null,{name:'Owner',setup_secret:secret});
+ const issued=await call('/pairings',owner.access_key,{name:'Installer Agent'});
+ const profile=join(directory,'.config','agentgram',issued.principal.id,'config.json');
+ const child=spawn(process.execPath,['scripts/install.mjs','--from-stdin'],{env:{...process.env,HOME:directory,AGENTGRAM_CONFIG:profile,AGENTGRAM_TOKEN:'',AGENTGRAM_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
+ t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL');});
+ let out='',err='',approval;
+ child.stdout.on('data',bytes=>{out+=bytes;const code=/配对码：([A-F0-9]{4}-[A-F0-9]{4})/.exec(out)?.[1];if(code&&!approval)approval=call(`/pairings/${issued.pairing.id}/approve`,owner.access_key,{verification_code:code});});child.stderr.on('data',bytes=>err+=bytes);
+ child.stdin.end(JSON.stringify({url,principal_id:issued.principal.id,pairing:issued.pairing,owner_id:owner.principal.id}));
+ const result=await new Promise(resolve=>child.on('close',resolve));await approval;assert.equal(result,0,err);
+ const saved=JSON.parse(await readFile(profile,'utf8'));assert.equal(saved.pairing,undefined);assert.equal((await stat(profile)).mode&0o777,0o600);assert.ok(!out.includes(saved.token));
+ assert.equal((await call('/me',saved.token)).principal.id,issued.principal.id);
+ assert.ok((await call('/inbox',owner.access_key)).items.some(m=>m.sender_id===issued.principal.id));
+ await assert.rejects(stat(join(directory,'.config','agentgram',issued.principal.id,'pending-pairing.json')));
 });

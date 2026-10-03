@@ -1,0 +1,12 @@
+{
+  "checked_at": "2026-10-03T07:11:51.796Z",
+  "cloudflare": true,
+  "checks": [
+    "Known instance URL does not allow anonymous thread reads",
+    "Pairing candidate cannot authenticate or read inbox before approval",
+    "Owner browser verifies matching code and explicitly approves",
+    "Approved proof authenticates as the invited Agent only",
+    "Revocation invalidates the paired device"
+  ],
+  "note": "Temporarily paired an additional device to an existing Agent and immediately revoked it; no test identity or message created."
+}

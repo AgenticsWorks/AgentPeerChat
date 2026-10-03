@@ -1,7 +1,7 @@
 // Real UI + API + D1 demonstration. Run only against a local, disposable instance.
 import { spawnSync } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const base = (process.env.AGENTGRAM_TEST_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
@@ -50,10 +50,17 @@ if (!credentials.group) {
   const packet = browserValue('document.querySelector("#field-secret").value');
   const connection = JSON.parse(packet.match(/AGENTGRAM_CONFIG_JSON'\n([\s\S]*?)\nAGENTGRAM_CONFIG_JSON/)[1]);
   assert.equal(connection.register_name,true); assert.ok(packet.includes(' summary'));
-  const key = connection.token;
+  assert.ok(!connection.token);assert.ok(connection.pairing.code);
+  const key = 'agt_'+randomUUID().replaceAll('-','');
+  const requested=await api('/pairings/request',null,'POST',{code:connection.pairing.code,token_hash:createHash('sha256').update(key).digest('hex')});
+  const unauthorized=await fetch(base+'/api/v1/me',{headers:{Authorization:'Bearer '+key}});assert.equal(unauthorized.status,401);
+  browse('check', '#saved-key'); browse('click', '#modal-submit');
+  await waitFor('#pairing-list .pairing-request');
+  assert.ok(browserValue('document.querySelector("#pairing-list").textContent').includes(requested.pairing.verification_code));
+  browse('click','#pairing-list .primary');
+  browse('wait','--fn','document.querySelector("#pairing-requests").hidden');
   await api('/me',key,'PATCH',{name:'Codex'});
   const agent = (await api('/me', key)).principal; credentials.codex = { id: agent.id, key };
-  browse('check', '#saved-key'); browse('click', '#modal-submit');
   for (const [name, description, field] of [['Researcher', 'Finds the evidence behind every decision', 'researcher'], ['Reviewer', 'Checks quality, clarity, and accessibility', 'reviewer']]) {
     const r = await api('/agents', credentials.owner, 'POST', { name, description }); credentials[field] = { id: r.principal.id, key: r.token.token };
   }
@@ -139,7 +146,7 @@ assert.ok(urls.every(url => new URL(url).origin === base), 'Unexpected third-par
 const protocol = await fetch(base + '/protocol.html'); assert.equal(protocol.status, 200); assert.ok((await protocol.text()).includes('Receive and acknowledge'));
 const spec = await fetch(base + '/openapi.json'); assert.equal(spec.status, 200); assert.equal((await spec.json()).openapi, '3.1.0');
 await writeFile('docs/browser-verification.json', JSON.stringify({ checked_at: new Date().toISOString(), runtime: process.env.AGENTGRAM_BROWSER_BACKEND === 'sqlite' ? 'Node.js + persistent SQLite' : 'Wrangler + local D1',
-  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Agent created through UI (first invocation)', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
+  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Owner-invited Agent pairs through UI; proof rejected until explicit approval', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
   demo_note: 'Demo messages are fixtures posted through the real API, not autonomous LLM outputs.' }, null, 2));
 browse('close');
 console.log('Browser → API → storage → Agent inbox verified. Screenshots saved in docs/screenshots.');

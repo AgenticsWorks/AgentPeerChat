@@ -1,10 +1,10 @@
 {
-  "checked_at": "2026-10-03T06:45:29.508Z",
+  "checked_at": "2026-10-03T07:08:18.125Z",
   "runtime": "Wrangler + local D1",
   "verified": [
     "Owner first-run setup (first invocation)",
     "Human browser session",
-    "Agent created through UI (first invocation)",
+    "Owner-invited Agent pairs through UI; proof rejected until explicit approval",
     "Agent-created group",
     "Agent adds another participant",
     "Human creates group through UI",

@@ -122,3 +122,26 @@ test('summary defaults to a resident stream and stops on revoked access', {timeo
  const result=await execute(['summary'],'',{AGENTGRAM_CONFIG:path});
  assert.equal(result.code,1);assert.ok(result.stderr.includes('listening'));assert.ok(result.stderr.includes('401'));assert.equal(result.stdout,'');
 });
+
+test('pairing client persists a private proof across interruption and never receives access before approval', async t => {
+  const {completePairing,clearPairing}=await import('../scripts/pairing-client.mjs');
+  const directory=await mkdtemp(join(tmpdir(),'agentgram-pair-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+  const config={url:'https://private.example',principal_id:'agt_pair',pairing:{id:'pair_test',code:'agp_private_invitation'}};
+  let savedHash,approved=false,interrupt=true,verificationShown='';
+  const fake=async(url,options)=>{
+    const b=JSON.parse(options.body);
+    if(url.endsWith('/request')){if(savedHash)assert.equal(b.token_hash,savedHash);savedHash=b.token_hash;assert.equal(b.code,config.pairing.code);}
+    else{
+      const {createHash}=await import('node:crypto');assert.equal(createHash('sha256').update(b.token).digest('hex'),savedHash);
+      if(interrupt){interrupt=false;throw new Error('Disconnected');}approved=true;
+    }
+    return new Response(JSON.stringify({principal:{id:'agt_pair'},owner_id:'hum_owner',token_id:'tok_paired',pairing:{id:'pair_test',verification_code:'ABCD-1234',expires_at:new Date(Date.now()+60000).toISOString(),status:approved?'approved':'pending'}}));
+  };
+  const options={fetchImpl:fake,notify:text=>{verificationShown=text;},wait:async()=>{}};
+  await assert.rejects(completePairing(config,directory,options),/Disconnected/);
+  const proof=JSON.parse(await readFile(join(directory,'pending-pairing.json'),'utf8'));assert.equal((await stat(join(directory,'pending-pairing.json'))).mode&0o777,0o600);
+  const result=await completePairing(config,directory,options);assert.equal(result.token,proof.token);assert.equal(result.pairing,undefined);
+  assert.ok(verificationShown.includes('ABCD-1234'));assert.ok(!verificationShown.includes(proof.token));assert.ok(!verificationShown.includes(config.pairing.code));
+  await clearPairing(directory);await assert.rejects(stat(join(directory,'pending-pairing.json')));
+  await assert.rejects(completePairing(config,directory,{...options,fetchImpl:async()=>new Response(JSON.stringify({principal:{id:'agt_pair'},pairing:{id:'pair_test',verification_code:'ABCD-1234',status:'rejected',expires_at:new Date(Date.now()+60000).toISOString()}}))}),/被拒绝/);
+});

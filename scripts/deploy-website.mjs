@@ -19,7 +19,9 @@ try{
  await mkdir('.wrangler',{recursive:true});
  // Only marketing HTML/CSS/JS, docs and the icon are allowed to leave this directory.
  const allowed=['index.html','style.css','app.js','vercel.json','deployment.html','server-deployment.html','protocol.html','product.html','assets/icon.svg','assets/dots.svg','assets/grok.svg','assets/muse.svg','research-conversation.json','research.html'];
- const files=[];for(const file of allowed){const data=await readFile('website/'+file);if(data.includes(Buffer.from(token)))throw new Error('Credential found in an upload file.');files.push({file,data:data.toString('base64'),encoding:'base64'});}
+ const privateRecording=JSON.parse(await readFile('docs/research-conversation.json','utf8'));
+ const privateOrigin=privateRecording.url?new URL(privateRecording.url).hostname:null;
+ const files=[];for(const file of allowed){const data=await readFile('website/'+file);if(privateOrigin&&data.includes(Buffer.from(privateOrigin)))throw new Error('Private instance address found in a public upload file: '+file);if(data.includes(Buffer.from(token)))throw new Error('Credential found in an upload file.');files.push({file,data:data.toString('base64'),encoding:'base64'});}
  const deployment=await api('/v13/deployments','POST',{name:project.name,project:project.id,target:'production',files,projectSettings:{framework:null,buildCommand:null,outputDirectory:'.'}});
  console.log('Production deployment created: '+deployment.id);
  let ready=deployment;

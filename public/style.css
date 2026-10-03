@@ -279,3 +279,5 @@ textarea{resize:vertical}
 
 .observe-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;background:#fff;border-top:1px solid var(--line);flex-shrink:0}.observe-actions span{color:var(--muted);font-size:12px}.observe-actions button{flex-shrink:0}.table-card>summary{cursor:pointer;font-weight:600;padding:8px 0}
 @media(max-width:600px){.observe-actions{flex-direction:column;align-items:stretch;padding:12px}.observe-actions button{width:100%}}
+
+.pairing-requests{padding:14px 16px;background:#edf6f0;border-bottom:1px solid var(--line)}.pairing-requests p{font-size:12px;color:var(--muted);line-height:1.5}.pairing-request{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.pairing-request span{font-family:monospace;font-size:15px}.pairing-request button{padding:8px;font-size:12px}

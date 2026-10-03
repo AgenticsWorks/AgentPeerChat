@@ -1,5 +1,5 @@
 // Agent credentials are generated only for the authenticated owner and copied explicitly.
-export function connectionInstructions({ url, principal, token, ownerId, adapter = 'current' }) {
+export function connectionInstructions({ url, principal, token, pairing, ownerId, adapter = 'current' }) {
   principal = { ...principal, nameRequired: principal.nameRequired || principal.name === '待连接 Agent' };
   if (!['current','codex','claude'].includes(adapter)) throw new Error('Unknown runtime.');
   const base = url.replace(/\/$/, '');
@@ -7,10 +7,10 @@ export function connectionInstructions({ url, principal, token, ownerId, adapter
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Invalid instance URL.');
   const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
   const profile = `\"$HOME/.config/agentgram/${principal.id}\"`;
-  const config = JSON.stringify({ url: base, principal_id: principal.id, token: token.token, token_id: token.id, owner_id: ownerId, register_name: Boolean(principal.nameRequired) }, null, 2);
+  const config = JSON.stringify({ url: base, principal_id: principal.id, ...(pairing ? {pairing} : {token:token.token,token_id:token.id}), owner_id: ownerId, register_name: Boolean(principal.nameRequired) }, null, 2);
   return `请把你${principal.nameRequired ? '（名字由你自己登记）' : `以「${principal.name}」的身份`}加入我的 Agent Gram 私有聊天。你的聊天身份与使用的模型或工具无关。
 
-请运行下方安装指令。它会验证身份、安装客户端、保存私有配置，并向我发一条接入确认。无需公开仓库，也不要把你的接入密钥转发到聊天里。
+请运行下方安装指令。它会安装客户端并显示配对码；请把配对码告诉我，等我在网页核对并允许连接。通过后保存私有配置，并向我发一条接入确认。邀请十分钟内有效，只能绑定一个设备。无需公开仓库，不要转发这份邀请或通信凭据。
 
 \`\`\`sh
 mkdir -p ${profile}

@@ -248,6 +248,52 @@ test('owner connects an unnamed Agent; Agent registers only its own name', async
   assert.equal((await call('/me',{key})).data.principal.id,agentId);
 });
 
+test('pairing requires an owner invitation and approval; candidate proof has no access beforehand', async () => {
+  assert.equal((await call('/pairings', {method:'POST',key:null,body:{}})).status,401);
+  assert.equal((await call('/pairings', {method:'POST',key:a.key,body:{}})).status,403);
+  const issued=await call('/pairings',{method:'POST',body:{name:'Paired device'}});assert.equal(issued.status,201);
+  const invitation=issued.data.pairing,token='agt_'+crypto.randomUUID().replaceAll('-','');
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));
+  const tokenHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  assert.equal(issued.data.principal.active,0);assert.equal(issued.data.token,undefined);
+  assert.equal((await call('/pairings/request',{method:'POST',key:null,body:{code:'wrong',token_hash:tokenHash}})).status,410);
+  const requested=await call('/pairings/request',{method:'POST',key:null,body:{code:invitation.code,token_hash:tokenHash}});assert.equal(requested.status,200);
+  assert.match(requested.data.pairing.verification_code,/^[A-F0-9]{4}-[A-F0-9]{4}$/);
+  assert.equal((await call('/pairings/request',{method:'POST',key:null,body:{code:invitation.code,token_hash:'0'.repeat(64)}})).status,410);
+  assert.equal((await call('/me',{key:token})).status,401);
+  assert.equal((await call('/inbox',{key:token})).status,401);
+  assert.equal((await call('/threads',{key:null})).status,401);
+  const listed=await call('/pairings');assert.ok(listed.data.items.some(p=>p.id===invitation.id));assert.ok(!JSON.stringify(listed.data).includes(tokenHash));
+  assert.equal((await call(`/pairings/${invitation.id}/check`,{method:'POST',key:null,body:{token:'wrong'}})).status,410);
+  assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',key:a.key,body:{verification_code:requested.data.pairing.verification_code}})).status,403);
+  assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',body:{verification_code:'0000-0000'}})).status,400);
+  assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',body:{verification_code:requested.data.pairing.verification_code}})).status,200);
+  assert.equal((await call('/me',{key:token})).data.principal.id,issued.data.principal.id);
+  const checked=await call(`/pairings/${invitation.id}/check`,{method:'POST',key:null,body:{token}});assert.equal(checked.data.pairing.status,'approved');
+  const saved=await db.prepare('SELECT hash FROM tokens WHERE id = ?').bind(checked.data.token_id).first();assert.equal(saved.hash,tokenHash);
+  await call(`/tokens/${checked.data.token_id}`,{method:'DELETE'});assert.equal((await call('/me',{key:token})).status,401);
+});
+
+test('pairing invitation is bounded, single-device, retryable, and denied on expiry/rejection/disable', async () => {
+  const issue=async()=> (await call('/pairings',{method:'POST',body:{principal_id:a.id}})).data.pairing;
+  let invitation=await issue();
+  const hashes=['1'.repeat(64),'2'.repeat(64)];
+  const competed=await Promise.all(hashes.map(token_hash=>call('/pairings/request',{method:'POST',key:null,body:{code:invitation.code,token_hash}})));
+  assert.deepEqual(competed.map(r=>r.status).sort(),[200,410]);
+  const winner=competed.findIndex(r=>r.status===200);
+  assert.equal((await call('/pairings/request',{method:'POST',key:null,body:{code:invitation.code,token_hash:hashes[winner]}})).status,200);
+  assert.equal((await call(`/pairings/${invitation.id}/reject`,{method:'POST',body:{}})).status,200);
+  assert.equal((await call('/pairings/request',{method:'POST',key:null,body:{code:invitation.code,token_hash:hashes[winner]}})).status,410);
+  invitation=await issue();await db.prepare('UPDATE pairings SET expires_at = ? WHERE id = ?').bind('2000-01-01T00:00:00Z',invitation.id).run();
+  assert.equal((await call('/pairings/request',{method:'POST',key:null,body:{code:invitation.code,token_hash:hashes[0]}})).status,410);
+  assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',body:{verification_code:'0000-0000'}})).status,410);
+  invitation=await issue();
+  const pending=await call('/pairings/request',{method:'POST',key:null,body:{code:invitation.code,token_hash:hashes[0]}});
+  await call(`/principals/${a.id}`,{method:'PATCH',body:{active:false}});
+  assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',body:{verification_code:pending.data.pairing.verification_code}})).status,409);
+  await call(`/principals/${a.id}`,{method:'PATCH',body:{active:true}});
+});
+
 test('principal cap is enforced atomically, so the directory never silently truncates new identities', async () => {
   const count = (await db.prepare('SELECT COUNT(*) AS n FROM principals').first()).n;
   const statements = Array.from({ length: 199 - count }, (_, n) => db.prepare("INSERT INTO principals(id, name, kind) VALUES (?, ?, 'agent')").bind(`cap_${n}`, `Capacity ${n}`));

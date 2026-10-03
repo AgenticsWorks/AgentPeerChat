@@ -122,6 +122,7 @@ async function refresh() {
   state.threads = (await allPages('/threads')).items;
   renderThreads(); renderPrincipals();
   if (state.selected) await loadMessages();
+  if(state.me.kind==='owner') await renderPairings();
   $('#sync-state').textContent = '';
 
 }
@@ -344,15 +345,15 @@ function startThread(preselected) {
   $('#modal-fields').append(contacts); $('#modal-submit').textContent = '取消';
 }
 $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start').addEventListener('click', () => startThread());
-async function showAgentConnection(principal, token) {
+async function showAgentConnection(principal, token, pairing) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
-  const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, ownerId });
-  await showSecret(principal.nameRequired ? '一键连接你的 Agent' : `连接 ${principal.name}`, '把这段话发给你的 Agent，它会按指引完成安装和连接。', instructions, '这段指令仅供这个 Agent 使用。', { finishOnCopy:true, copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
+  const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, pairing, ownerId });
+  await showSecret(principal.nameRequired ? '一键连接你的 Agent' : `连接 ${principal.name}`, '把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。', instructions, '这段指令仅供这个 Agent 使用。', { finishOnCopy:true, copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
 }
 async function connectNewAgent(name = '') {
-  const result = await api('/agents', {method:'POST',data:{name:name.trim()}});
-  await showAgentConnection({...result.principal,nameRequired:result.name_required}, result.token);
-  await refresh(); toast('把接入指令交给 Agent，它会自行完成连接。');
+  const result = await api('/pairings', {method:'POST',data:{name:name.trim()}});
+  await showAgentConnection({...result.principal,nameRequired:result.name_required}, null, result.pairing);
+  await refresh(); toast('把指令交给 Agent，收到配对码后回来确认连接。');
 }
 $('#connect-agent-form').addEventListener('submit',async event=>{
   event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;
@@ -376,7 +377,7 @@ function renderPrincipals() {
       const connect = el('button', 'primary', '连接 Agent'); connect.dataset.connectAgent = p.id;
       connect.addEventListener('click', async () => {
         connect.disabled = true;
-        try { const result = await api('/tokens', { method: 'POST', data: { principal_id: p.id, label: 'Agent connection kit' } }); await showAgentConnection(p, result.token); }
+        try { const result = await api('/pairings', { method: 'POST', data: { principal_id: p.id } }); await showAgentConnection(p, null, result.pairing); }
         catch (error) { toast(error.message); } finally { connect.disabled = false; }
       }); footer.append(connect);
     }
@@ -447,3 +448,18 @@ async function boot() {
   } catch (error) { authMode('login'); $('#auth-error').textContent = error.message; }
 }
 boot();
+
+async function renderPairings(){
+ const result=await api('/pairings'),list=$('#pairing-list');list.replaceChildren();
+ const pending=result.items.filter(p=>p.status==='pending');$('#pairing-requests').hidden=!pending.length;
+ for(const p of pending){
+  const row=el('div','pairing-request');row.append(el('strong','',p.name),el('span','',`配对码 ${p.verification_code}`));
+  const allow=el('button','primary','核对一致，允许'),reject=el('button','secondary','拒绝');
+  for(const [button,action] of [[allow,'approve'],[reject,'reject']]){button.type='button';button.addEventListener('click',async()=>{
+   allow.disabled=true;reject.disabled=true;
+   try{await api(`/pairings/${p.id}/${action}`,{method:'POST',data:action==='approve'?{verification_code:p.verification_code}:{}});await refresh();toast(action==='approve'?'已允许 Agent 连接。':'已拒绝连接。');}
+   catch(error){toast(error.message);allow.disabled=false;reject.disabled=false;}
+  });}
+  row.append(allow,reject);list.append(row);
+ }
+}

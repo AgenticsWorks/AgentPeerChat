@@ -53,6 +53,7 @@
         <button id="new-thread" class="new-chat" aria-label="New conversation" title="New conversation">✎</button>
         <div class="list-heading"><span>聊天</span><span id="sync-state"></span></div>
         <form id="connect-agent-form" class="quick-connect owner-only"><label class="sr-only" for="connect-agent-name">Agent 名字（可选）</label><input id="connect-agent-name" maxlength="80" placeholder="Agent 名字（可选）"><button class="primary" type="submit">一键连接你的 Agent</button></form>
+        <section id="pairing-requests" class="pairing-requests owner-only" hidden><strong>确认 Agent 连接</strong><p>请核对 Agent 给你的配对码，再允许连接。</p><div id="pairing-list"></div></section>
         <div id="thread-list" class="thread-list"></div>
         <footer class="panel-footer"><span class="status-dot"></span> Agent Gram</footer>
       </section>

@@ -41,6 +41,13 @@ route('/me', 'get', 'Read the authenticated identity', all, null, obj({ principa
 route('/me', 'patch', 'Register or update your own Agent name', ['agent'], obj({name}), obj({principal:ref('Principal')}));
 route('/principals', 'get', 'Discover instance humans and agents', all, null, obj({ items: arr(ref('Principal')) }));
 route('/agents', 'post', 'Create an Agent and initial access key', owner, obj({ name:s(80,0), description: s(500, 0) }, []), obj({ principal: ref('Principal'), name_required:{type:'boolean'}, token: ref('Token') }), { status: 201 });
+const pairingState = obj({id,status:{enum:['invited','pending','approved','rejected']},verification_code:{type:['string','null']},expires_at:date});
+route('/pairings','post','Create a ten-minute owner-issued device invitation',owner,obj({name:s(80,0),principal_id:id},[]),obj({principal:ref('Principal'),name_required:{type:'boolean'},pairing:obj({id,code:{...s(256),writeOnly:true},expires_at:date})}),{status:201});
+route('/pairings','get','List pending owner pairing approvals',owner,null,obj({items:arr(obj({id,principal_id:id,name,status:s(),verification_code:{type:['string','null']},expires_at:date}))}));
+route('/pairings/request','post','Bind one device proof to an owner-issued invitation',['public'],obj({code:{...s(256),writeOnly:true},token_hash:{type:'string',pattern:'^[a-f0-9]{64}$'}}),obj({principal:ref('Principal'),pairing:pairingState,owner_id:id,token_id:id}),{description:'Requires an unexpired 256-bit invitation. Same proof may retry; different proof cannot reuse it. No API permission until owner approval.'});
+route('/pairings/{id}/check','post','Check approval with the device secret proof',['public'],obj({token:{...s(256),writeOnly:true}}),obj({principal:ref('Principal'),pairing:pairingState,owner_id:id,token_id:id}));
+route('/pairings/{id}/approve','post','Approve the verified Agent device',owner,obj({verification_code:s(20)}),ok);
+route('/pairings/{id}/reject','post','Reject an unapproved pairing',owner,null,ok);
 route('/principals/{id}', 'patch', 'Enable or disable a non-owner identity', owner, obj({ active: { type: 'boolean' } }), obj({ principal: ref('Principal') }));
 route('/tokens', 'get', 'List visible access key metadata', humans, null, obj({ items: arr(obj({ id, principal_id: id, principal_name: name, label: s(80), kind: { const: 'access' }, expires_at: nullableDate, revoked_at: nullableDate, created_at: date })) }));
 route('/tokens', 'post', 'Create an access key', humans, obj({ label: s(80), principal_id: id }, ['label']), obj({ token: ref('Token') }), { status: 201, description: 'Only owner may create a key for another principal.' });

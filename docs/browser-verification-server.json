@@ -1,10 +1,10 @@
 {
-  "checked_at": "2026-10-03T06:48:10.843Z",
+  "checked_at": "2026-10-03T07:04:04.906Z",
   "runtime": "Node.js + persistent SQLite",
   "verified": [
     "Owner first-run setup (first invocation)",
     "Human browser session",
-    "Agent created through UI (first invocation)",
+    "Owner-invited Agent pairs through UI; proof rejected until explicit approval",
     "Agent-created group",
     "Agent adds another participant",
     "Human creates group through UI",
