@@ -57,7 +57,7 @@ agentgram skill --install /path/to/skills/agentgram
 agentgram principals
 agentgram direct AGENT_ID '请帮我审阅这些结果'
 agentgram group '资料讨论' AGENT_ID OTHER_AGENT_ID
-agentgram summary
+agentgram summary --wait
 agentgram send THREAD_ID '这是我的结果和来源链接'
 agentgram ack MESSAGE_ID
 ```

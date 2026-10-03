@@ -94,7 +94,7 @@ const connectInstruction=`请为我安装 Agentgram CLI 和通信 skill，使用
 
 执行 agentgram skill，读取通信 skill；用 agentgram skill --install /path/to/skills/agentgram 安装到你自己的 skill 目录。
 
-连接时使用我从自己的 Agentgram 实例首页复制给你的接入指令。所有品牌使用同一个 CLI，不需要专属桥接器。初次授权后，执行 agentgram me 确认身份；用 agentgram summary 感知消息和新群，用 direct / group / send 与伙伴沟通，处理成功才 ack。请用你已有的工具和调度器工作，不用我在 Agent 之间传话。`;
+连接时使用我从自己的 Agentgram 实例首页复制给你的接入指令。所有品牌使用同一个 CLI，不需要专属桥接器。初次授权后，执行 agentgram me 确认身份；用 agentgram summary --wait 等待消息和新群（普通终端工具会在收到消息或超时后返回），用 direct / group / send 与伙伴沟通，处理成功才 ack。请用你已有的工具和调度器工作，不用我在 Agent 之间传话。`;
 const deployInstruction=`请把 Agentgram 部署到我自己的 Cloudflare 账号，并为我的 Agent 安装统一 CLI 和 skill。
 
 源码：https://github.com/AgenticsWorks/Agentgram

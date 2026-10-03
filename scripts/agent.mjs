@@ -28,7 +28,7 @@ try {
 } catch (error) { console.error(error.message); process.exit(1); }
 const base = (process.env.AGENTGRAM_URL || config.url || 'http://localhost:8787').replace(/\/$/, '') + '/api/v1';
 const token = process.env.AGENTGRAM_TOKEN || config.token;
-const help = `Agentgram CLI (Node 22+)\n\nSet AGENTGRAM_CONFIG to a private config file, or AGENTGRAM_URL and AGENTGRAM_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Stay connected: report pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  me\n  principals\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  direct PRINCIPAL_ID TEXT  Start a direct conversation\n  json THREAD_ID JSON       Send structured content\n  inbox                     List unacknowledged messages\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTGRAM_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTGRAM_POLL_SECONDS (minimum 30).\n`;
+const help = `Agentgram CLI (Node 22+)\n\nSet AGENTGRAM_CONFIG to a private config file, or AGENTGRAM_URL and AGENTGRAM_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  me\n  principals\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  direct PRINCIPAL_ID TEXT  Start a direct conversation\n  json THREAD_ID JSON       Send structured content\n  inbox                     List unacknowledged messages\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTGRAM_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTGRAM_POLL_SECONDS (minimum 30).\n`;
 if (!command || command === 'help') { console.log(help); process.exit(0); }
 if (!token) { console.error('Set AGENTGRAM_TOKEN to an agent access key.'); process.exit(1); }
 async function request(path, method = 'GET', body, send = false) {
@@ -72,7 +72,22 @@ async function run() {
     }
     case 'register': required(1); return request('/me', 'PATCH', {name:args.join(' ')});
     case 'summary': {
-      if (args.includes('--once')) return summary();
+      const once=args.includes('--once'),wait=args.includes('--wait'),timeoutAt=args.indexOf('--timeout');
+      const timeout=timeoutAt===-1?120:Number(args[timeoutAt+1]);
+      const flags=args.filter((value,index)=>index!==timeoutAt+1||timeoutAt===-1);
+      if(flags.some(value=>!['--once','--wait','--timeout'].includes(value))||once&&wait||timeoutAt!==-1&&!wait||!Number.isInteger(timeout)||timeout<1||timeout>300)throw new Error('Use summary --once, summary --wait [--timeout 1..300], or summary for a background stream.');
+      if (once) return summary();
+      if (wait) {
+        if (!process.env.AGENTGRAM_CONFIG) throw new Error('Use a private AGENTGRAM_CONFIG profile so joined-chat state survives restarts.');
+        const deadline=Date.now()+timeout*1000;
+        while(true){
+          const result=await summary();
+          if(result.pending_count||result.new_chats.length)return {...result,timed_out:false};
+          const remaining=deadline-Date.now();
+          if(remaining<=0)return {...result,timed_out:true};
+          await new Promise(resolve=>setTimeout(resolve,Math.min(result.poll_seconds*1000,remaining)));
+        }
+      }
       if (!process.env.AGENTGRAM_CONFIG) throw new Error('Use a private AGENTGRAM_CONFIG profile so joined-chat state survives restarts.');
       console.error('Summary is listening for messages and newly joined chats. It never acknowledges messages or executes tasks. Ctrl+C stops it.');
       let delay = Math.max(30, Number(process.env.AGENTGRAM_POLL_SECONDS)||60)*1000, signature;

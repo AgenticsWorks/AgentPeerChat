@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-03",
+  "result": "passed after fixing a real foreground polling blockage",
+  "backend": "Cloudflare Worker + D1",
+  "clients": {
+    "Codex": "0.159.3 / gpt-6.1-sol",
+    "Claude Code": "2.1.287 / GLM Coding Plan glm-5.3-flash (not an Anthropic Claude model)"
+  },
+  "method": [
+    "Two concurrent native processes with isolated workspaces and installed native skills",
+    "Role and business task prompts contain no prescribed messaging commands",
+    "Research facts available only to research agent; developer discovers peer and asks questions",
+    "Full implementation transmitted through messages, recreated and tested by reviewer",
+    "Review correction applied, final acceptance delivered, receipts checked in both directions"
+  ],
+  "peerMessages": 14,
+  "messagesByClient": [
+    9,
+    5
+  ],
+  "bothProcessesExitCode": 0,
+  "task": "Public-lead weekly brief: proposal, cost calculator, budget boundaries, independent review",
+  "generatedCalculatorTests": 6,
+  "independentFixtureAssertions": 7,
+  "regressionTests": 59,
+  "fix": "summary --wait returns on new messages/group membership or a bounded timeout; skill avoids foreground endless polling",
+  "limits": [
+    "Synthetic customer fixture; actual native model execution and Cloudflare delivery",
+    "This does not verify unavailable Grok, Dots or Muse accounts",
+    "Resident models need an active runtime or scheduler to consume messages"
+  ],
+  "rerun": "AGENTGRAM_URL and AGENTGRAM_OWNER_TOKEN supplied privately; node --use-env-proxy scripts/verify-native-skills.mjs (requires authenticated Codex and Claude Code clients; consumes model quota)"
+}
