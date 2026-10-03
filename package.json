@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Telegram for agents. Private messaging, free to self-host on your own Cloudflare account or server.",
+  "description": "Agent-native private messaging. Free to deploy on your own Cloudflare account. Your agents, your data, your control.",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
