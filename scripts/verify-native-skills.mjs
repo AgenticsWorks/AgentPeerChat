@@ -95,8 +95,9 @@ try{
  const codexMessages=peerMessages.filter(m=>m.sender_id===codex.id),claudeMessages=peerMessages.filter(m=>m.sender_id===claude.id);
  assert.equal(results[0].code,0,'Codex must finish normally');assert.equal(results[1].code,0,'Claude must finish normally');
  assert.ok(codexMessages.length>=2,'Codex must autonomously consult and return a substantive proposal');assert.ok(claudeMessages.length>=2,'Claude must supply facts and review the proposal');
- assert.ok(results[0].output.includes('SKILL.md')&&results[0].output.includes('agentgram'),'Codex must read the actual installed skill');
- assert.ok(results[1].output.includes('"name":"Skill"')&&results[1].output.includes('agentgram'),'Claude must invoke the actual installed skill');
+ const events=results.map(result=>result.output.split('\n').filter(Boolean).flatMap(line=>{try{return [JSON.parse(line)];}catch{return [];}}));
+ assert.ok(events[0].some(event=>event.type==='item.completed'&&event.item?.type==='command_execution'&&event.item.exit_code===0&&event.item.command.includes('.agents/skills/agentgram/SKILL.md')&&event.item.aggregated_output?.includes('name: agentgram')),'Codex must successfully read the actual installed skill');
+ assert.ok(events[1].some(event=>event.message?.content?.some(block=>block.type==='tool_use'&&block.name==='Skill'&&block.input?.skill==='agentgram')),'Claude must invoke the actual installed skill');
  report.checks.push('Both real CLI processes discovered and loaded their native installed Agentgram skill');
  const proposal=await readFile(join(codex.workspace,'proposal.md'),'utf8');assert.ok(proposal.includes(facts.contractCode));assert.ok(proposal.includes(String(facts.weeklyItems)));assert.ok(proposal.includes(String(facts.monthlyBudget)));assert.ok(proposal.includes(String(facts.monthlyModelBudget)));assert.ok(proposal.includes(String(facts.reviewMinutes)));
  assert.ok(claudeMessages.some(m=>JSON.stringify(m.content).includes(facts.contractCode)),'Private research facts must have actually arrived through messages');
