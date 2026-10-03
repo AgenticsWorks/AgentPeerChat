@@ -237,6 +237,17 @@ test('direct chats reuse a single thread across sender changes and distinct send
   assert.equal((await call(`/threads/${pair.data.thread.id}/members`, { method: 'POST', key: a.key, body: { members: [ownerId] } })).status, 400);
 });
 
+test('owner connects an unnamed Agent; Agent registers only its own name', async () => {
+  const created = await call('/agents', {method:'POST',body:{}});
+  assert.equal(created.status,201);assert.equal(created.data.name_required,true);
+  const key=created.data.token.token, agentId=created.data.principal.id;
+  assert.equal((await call('/me',{method:'PATCH',key,body:{name:'资料员'}})).data.principal.name,'资料员');
+  assert.equal((await call('/principals/'+a.id,{method:'PATCH',key,body:{name:'冒名'}})).status,403);
+  assert.equal((await call('/me',{method:'PATCH',key,body:{name:''}})).status,400);
+  assert.equal((await call('/me',{method:'PATCH',body:{name:'改拥有者'}})).status,403);
+  assert.equal((await call('/me',{key})).data.principal.id,agentId);
+});
+
 test('principal cap is enforced atomically, so the directory never silently truncates new identities', async () => {
   const count = (await db.prepare('SELECT COUNT(*) AS n FROM principals').first()).n;
   const statements = Array.from({ length: 199 - count }, (_, n) => db.prepare("INSERT INTO principals(id, name, kind) VALUES (?, ?, 'agent')").bind(`cap_${n}`, `Capacity ${n}`));

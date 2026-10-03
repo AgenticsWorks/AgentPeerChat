@@ -100,7 +100,7 @@ function showSecret(title, description, value, extra = '', options = {}) {
       label.append(select); $('#modal-fields').prepend(label);
     }
     const copy = el('button', 'secondary', options.copyLabel ?? 'Copy to clipboard'); copy.type = 'button';
-    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? '接入指令已复制，可以交给对应 Agent。' : 'Copied. Save it somewhere safe.'); } catch { box.select(); toast('Select and copy the key manually.'); } });
+    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? '接入指令已复制，可以交给对应 Agent。' : 'Copied. Save it somewhere safe.'); if(options.finishOnCopy){state.secretOpen=false;$('#modal').close();resolve();} } catch { box.select(); toast('Select and copy the key manually.'); } });
     $('#modal-fields').append(copy);
     if (extra) $('#modal-fields').append(el('p', 'key-hint', extra));
     const label = el('label', 'check-list'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.id = 'saved-key'; checkbox.required = true;
@@ -387,19 +387,26 @@ function renderPerspectives() {
   }
   select.value = [...select.options].some(option => option.value === selected) ? selected : 'all';
 }
-$('#chat-perspective').addEventListener('change', renderThreads);
+$('#chat-perspective').addEventListener('change',()=>{renderThreads();toast('只切换查看范围；发言身份仍然是你。');});
 async function showAgentConnection(principal, token) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
   const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, ownerId });
-  await showSecret(`连接 ${principal.name}`, '把这段话发给你的 Agent，它会按指引完成安装和连接。', instructions, '这段指令仅供这个 Agent 使用。', { adapt: adapter => connectionInstructions({ url: location.origin + appBase, principal, token, ownerId, adapter }), copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
+  await showSecret(principal.nameRequired ? '一键连接你的 Agent' : `连接 ${principal.name}`, '把这段话发给你的 Agent，它会按指引完成安装和连接。', instructions, '这段指令仅供这个 Agent 使用。', { finishOnCopy:true, copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
 }
+async function connectNewAgent(name = '') {
+  const result = await api('/agents', {method:'POST',data:{name:name.trim()}});
+  await showAgentConnection({...result.principal,nameRequired:result.name_required}, result.token);
+  await refresh(); toast('把接入指令交给 Agent，它会自行完成连接。');
+}
+$('#connect-agent-form').addEventListener('submit',async event=>{
+  event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;
+  try {await connectNewAgent($('#connect-agent-name').value);$('#connect-agent-name').value='';}
+  catch(error){toast(error.message);}finally{button.disabled=false;}
+});
 $('#create-agent').addEventListener('click', () => {
-  openModal('添加 Agent', '给它起个名字。身份与它使用的模型或工具无关。', async data => {
-    const result = await api('/agents', { method: 'POST', data: { name: data.get('name'), description: data.get('description') } });
-    await showAgentConnection(result.principal, result.token);
-    await refresh(); toast('Agent 已添加。现在可以给它发消息了。');
-  });
-  field('名字', 'name', '例如：小舟、研究员'); field('简介', 'description', '例如：帮我安排工作、查资料').required = false;
+  openModal('一键连接你的 Agent', '名字可选；不填时，Agent 会在 CLI 登记自己的名字。', async data => { await connectNewAgent(data.get('name') || ''); });
+  field('名字（可选）', 'name', '留空，让 Agent 自己登记').required=false;
+  $('#modal-submit').textContent='生成接入指令';
 });
 $('#show-disabled').addEventListener('change', renderPrincipals);
 function renderPrincipals() {

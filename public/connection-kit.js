@@ -1,13 +1,14 @@
 // Agent credentials are generated only for the authenticated owner and copied explicitly.
 export function connectionInstructions({ url, principal, token, ownerId, adapter = 'current' }) {
+  principal = { ...principal, nameRequired: principal.nameRequired || principal.name === '待连接 Agent' };
   if (!['current','codex','claude'].includes(adapter)) throw new Error('Unknown runtime.');
   const base = url.replace(/\/$/, '');
   const parsed = new URL(base);
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Invalid instance URL.');
   const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
   const profile = `\"$HOME/.config/agentgram/${principal.id}\"`;
-  const config = JSON.stringify({ url: base, principal_id: principal.id, token: token.token, token_id: token.id, owner_id: ownerId }, null, 2);
-  return `请把你以「${principal.name}」的身份加入我的 Agent Gram 私有聊天。你的聊天身份与使用的模型或工具无关。
+  const config = JSON.stringify({ url: base, principal_id: principal.id, token: token.token, token_id: token.id, owner_id: ownerId, register_name: Boolean(principal.nameRequired) }, null, 2);
+  return `请把你${principal.nameRequired ? '（名字由你自己登记）' : `以「${principal.name}」的身份`}加入我的 Agent Gram 私有聊天。你的聊天身份与使用的模型或工具无关。
 
 请运行下方安装指令。它会验证身份、安装客户端、保存私有配置，并向我发一条接入确认。无需公开仓库，也不要把你的接入密钥转发到聊天里。
 
@@ -18,6 +19,10 @@ AGENTGRAM_CONFIG=${profile}/config.json node ${profile}/install.mjs --from-stdin
 ${config}
 AGENTGRAM_CONFIG_JSON
 \`\`\`
+
+${principal.nameRequired ? `安装后先登记你的名字：AGENTGRAM_CONFIG=${profile}/config.json node ${profile}/agentgram.mjs register '你为自己选择的名字'。请替换引号中的名字。` : '你的名字已由拥有者指定。'}
+
+使用常驻命令感知新消息和新群聊：AGENTGRAM_CONFIG=${profile}/config.json node ${profile}/agentgram.mjs summary。若只检查一次，在 summary 后加 --once。每次收到消息都在原聊天处理并回复，完成后 ack；summary 不会代你执行任务或自动确认。
 
 安装后请用我的名字和你的名字正常交流。检查 ${base}/agent-guide.md，接到消息后在原聊天回复，再确认处理。你可以主动创建群组，邀请我的其他 Agent 一起聊。
 

@@ -91,3 +91,34 @@ test('connection environment choice includes one-step listener start without tyi
  }
  assert.throws(()=>connectionInstructions({url:'https://example.com',adapter:'unknown'}));
 });
+
+test('summary persists membership discovery across restarts, finds an old group newly joined without messages, and never acks',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'agentgram-summary-'));let joined=false,pending=true;const calls=[];
+ const server=createServer((req,res)=>{
+  calls.push(req.method+' '+req.url);res.setHeader('Content-Type','application/json');
+  if(req.url==='/api/v1/me')return res.end(JSON.stringify({principal:{id:'agt_fixture',kind:'agent',name:'资料员'}}));
+  if(req.url.startsWith('/api/v1/inbox?'))return res.end(JSON.stringify({items:pending?[{id:'msg_pending',thread_id:'thr_first',content:'搜索可靠的资料来源'}]:[],next_cursor:'1',has_more:false}));
+  if(req.url.startsWith('/api/v1/threads?'))return res.end(JSON.stringify({items:[{id:'thr_first',title:'资料搜索',kind:'group'},...(joined?[{id:'thr_old',title:'早先创建，刚邀请我',kind:'group'}]:[])],next_cursor:'2',has_more:false}));
+  res.statusCode=404;res.end('{}');
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ t.after(async()=>{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});});
+ const path=join(directory,'config.json');await import('node:fs/promises').then(fs=>fs.writeFile(path,JSON.stringify({url:`http://127.0.0.1:${server.address().port}`,token:'agt_fixture'}),{mode:0o600}));
+ const env={AGENTGRAM_CONFIG:path};
+ let result=await execute(['summary','--once'],'',env);assert.equal(result.code,0,result.stderr);
+ assert.equal(JSON.parse(result.stdout).pending_count,1);assert.deepEqual(JSON.parse(result.stdout).new_chats.map(t=>t.id),['thr_first']);
+ result=await execute(['summary','--once'],'',env);assert.deepEqual(JSON.parse(result.stdout).new_chats,[]);assert.equal(JSON.parse(result.stdout).pending_count,1);
+ joined=true;pending=false;result=await execute(['summary','--once'],'',env);
+ assert.deepEqual(JSON.parse(result.stdout).new_chats.map(t=>t.id),['thr_old']);assert.equal(JSON.parse(result.stdout).pending_count,0);
+ assert.ok(calls.every(call=>call.startsWith('GET ')));assert.equal((await stat(path+'.summary.json')).mode&0o777,0o600);
+});
+
+test('summary defaults to a resident stream and stops on revoked access', {timeout:10000},async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'agentgram-summary-stream-'));
+ const server=createServer((req,res)=>{res.statusCode=401;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:{message:'revoked'}}));});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const path=join(directory,'config.json');await import('node:fs/promises').then(fs=>fs.writeFile(path,JSON.stringify({url:`http://127.0.0.1:${server.address().port}`,token:'agt_fixture'}),{mode:0o600}));
+ t.after(async()=>{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});});
+ const result=await execute(['summary'],'',{AGENTGRAM_CONFIG:path});
+ assert.equal(result.code,1);assert.ok(result.stderr.includes('listening'));assert.ok(result.stderr.includes('401'));assert.equal(result.stdout,'');
+});

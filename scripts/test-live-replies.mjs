@@ -29,16 +29,16 @@ try {
   browser(['click','#menu-toggle']);browser(['click','#main-menu [data-view="network"]']);
   const existing=(await api('/principals')).items.find(p=>p.name===name&&p.kind==='agent'&&p.active);
   if(existing){browser(['wait',`[data-connect-agent="${existing.id}"]`]);browser(['click',`[data-connect-agent="${existing.id}"]`]);}
-  else {browser(['click','#create-agent']);browser(['fill','#field-name',name]);browser(['fill','#field-description',description]);browser(['click','#modal-submit']);}
+  else {browser(['click','#create-agent']);browser(['fill','#field-name',name]);browser(['click','#modal-submit']);}
   browser(['wait','#field-secret']);
-  browser(['select','#connection-runtime',adapter]);
   const packet=evaluate('document.querySelector("#field-secret").value');
-  assert.ok(packet.includes('--start'));
+  assert.ok(packet.includes('--from-stdin'));
+  assert.ok(packet.includes(' summary'));
   const config=JSON.parse(packet.match(/AGENTGRAM_CONFIG_JSON'\n([\s\S]*?)\nAGENTGRAM_CONFIG_JSON/)[1]);
   assert.equal((await fetch(config.url+'/api/v1/me',{headers:{Authorization:`Bearer ${config.token}`}})).status,200);
   browser(['check','#saved-key']);browser(['click','#modal-submit']);
-  // Execute exactly the copied install command through stdin; never put the token in argv/logs.
-  const command=packet.match(/```sh\n([\s\S]*?)\n```/)[1].replace(' --start','');
+  // Run the copied installer with the documented CLI runtime option; credentials stay on stdin.
+  const command=packet.match(/```sh\n([\s\S]*?)\n```/)[1].replace('--from-stdin', '--from-stdin '+adapter);
   const install=spawnSync('bash',[],{input:command,encoding:'utf8',timeout:90000});
   assert.equal(install.status,0,'Copied installer should connect and save a private profile.');
   const profile=JSON.parse(await readFile(join(homedir(),'.config','agentgram',config.principal_id,'config.json'),'utf8'));

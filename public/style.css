@@ -300,3 +300,9 @@ textarea{resize:vertical}
 .principal-kind{display:none}.connection-box{min-height:160px}
 #activity-list .activity-card{border-left:0;padding-left:0}#activity-list .activity-card:before{display:none}
 .rail{padding-bottom:10px}.panel-footer{justify-content:center;padding:10px}.info-banner .empty-symbol{display:none}
+
+.quick-connect{display:grid;gap:8px;padding:10px 16px 14px;border-bottom:1px solid #e6ebf1}.quick-connect input{width:100%;min-width:0;border:1px solid #e6ebf1;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px}.quick-connect button{width:100%;padding:10px;font-size:13px}
+
+.perspective-picker>span{display:block;font-size:11px;color:#73808e;margin-bottom:4px}.perspective-picker{display:block!important}
+
+.research-message{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.8}

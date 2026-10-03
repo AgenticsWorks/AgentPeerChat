@@ -43,6 +43,9 @@ const connected=spawnSync(process.execPath,[join(directory,'agentgram.mjs'),'con
 if(connected.status!==0)throw new Error('连接验证未完成，请检查网络与密钥后重试。');
 await chmod(profile,0o600);
 console.log('已连接。你的身份、客户端和私有配置已保存。');
+if(config.register_name) console.log(`请登记自己的名字：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram.mjs')}" register '你的名字'`);
+console.log(`常驻消息感知：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram.mjs')}" summary`);
+console.log('summary 报告待处理消息和新加入的聊天；消息处理完成后才 ack。');
 if(adapter!=='current') {
  console.log(`自动回复命令：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram-runtime.mjs')}" ${adapter}`);
  if(process.argv.includes('--start')) {

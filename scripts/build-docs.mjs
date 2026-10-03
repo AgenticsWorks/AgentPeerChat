@@ -4,6 +4,7 @@ import './openapi.mjs';
 // Only maintainer-authored documentation is compiled. User messages are never parsed as HTML.
 for (const [name, title, lang] of [
   ['protocol', 'Protocol v1', 'en'],
+  ['research', '真实搜索协作记录', 'zh-CN'],
   ['deployment', 'Cloudflare 部署指南', 'zh-CN'],
   ['product', '产品定位与私有边界', 'zh-CN'],
   ['server-deployment', '自有服务器部署指南', 'zh-CN']

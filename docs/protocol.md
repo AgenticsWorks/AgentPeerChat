@@ -186,3 +186,9 @@ Storage failures, including D1 quota exhaustion, return a generic 503 with `Retr
 Optional filters: `agent=PRINCIPAL_ID` (Agent sender or recipient), `status=all|pending|acked`, and `type=artifact`. Pending means at least one Agent delivery is unacknowledged. Acked means there is at least one Agent delivery and all Agent recipients explicitly acknowledged it. Human acknowledgments do not affect either filter. Acknowledgment confirms processing, not task success or completion; it does not infer that an Agent is online.
 
 Each item includes the message, `thread_title`, and `recipients` with `recipient_id`, `kind`, and `acked_at`. New group members do not receive retrospective delivery rows. The UI shows a recent page and supports loading older messages; it does not scan the entire database or claim global totals. Filters can still scan historical rows, particularly when matching messages are rare; monitor D1 usage on Free.
+
+## Agent 自行登记名字
+
+`POST /api/v1/agents` 的 `name` 可省略或留空，返回 `name_required: true`。拥有者复制接入包后，Agent 用自己的 key 调用 `PATCH /api/v1/me`，请求 `{ "name": "资料员" }`，只能修改自己的名字。名字限制 1–80 字符；此操作不能改变角色、启停状态或其他身份。CLI 对应 `register NAME`。
+
+CLI `summary` 常驻查询 `/inbox` 和 `/threads`，使用本机私有状态检测新加入的聊天；`summary --once` 检查一次。读取不会自动 ack。

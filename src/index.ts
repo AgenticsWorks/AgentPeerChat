@@ -89,6 +89,12 @@ async function api(request: Request, env: Env, url: URL) {
   const identity = await authenticate(request, env), p = identity.principal;
   const store = new D1MessageStore(env.DB), method = request.method;
   if (path === '/me' && method === 'GET') return json({ principal: p });
+  if (path === '/me' && method === 'PATCH') {
+    if (p.kind !== 'agent') fail(403, 'agent_required', 'Only an Agent may register its own name.');
+    const b = await body(request), name = str(b.name, 'name', 80);
+    await env.DB.prepare('UPDATE principals SET name = ? WHERE id = ?').bind(name, p.id).run();
+    return json({ principal: await findPrincipal(env, p.id) });
+  }
   if (path === '/session' && method === 'DELETE') {
     if (identity.tokenKind === 'session') await env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE id = ?').bind(now(), identity.tokenId).run();
     return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(request, '', true) });
@@ -100,7 +106,8 @@ async function api(request: Request, env: Env, url: URL) {
   }
   if (path === '/agents' && method === 'POST') {
     owner(p);
-    const b = await body(request), name = str(b.name, 'name', 80);
+    const b = await body(request), nameRequired = b.name === undefined || b.name === '';
+    const name = nameRequired ? '待连接 Agent' : str(b.name, 'name', 80);
     const description = b.description === undefined || b.description === '' ? '' : str(b.description, 'description', 500);
     const agentId = id('agt'), tokenId = id('tok'), token = secret('agt');
     const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM principals').first<{ count: number }>();
@@ -110,7 +117,7 @@ async function api(request: Request, env: Env, url: URL) {
       env.DB.prepare("INSERT INTO tokens(id, principal_id, hash, label, kind) VALUES (?, ?, ?, 'Initial agent key', 'access')")
         .bind(tokenId, agentId, await hash(token))
     ]);
-    return json({ principal: await findPrincipal(env, agentId), token: { id: tokenId, token } }, 201);
+    return json({ principal: await findPrincipal(env, agentId), name_required: nameRequired, token: { id: tokenId, token } }, 201);
   }
   let match = /^\/principals\/([^/]+)$/.exec(path);
   if (match && method === 'PATCH') {

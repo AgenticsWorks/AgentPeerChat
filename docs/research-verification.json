@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-10-03T06:34:16.585Z",
+  "url": "https://agent-gram.l18208824413.workers.dev",
+  "checks": [
+    "Live authenticated browser sees one-click connection entry with optional name",
+    "Actual search/review messages shown in the Cloudflare group",
+    "Observation perspective keeps the human composer identity",
+    "Resident summary produces a status containing the actual research group and remains running until stopped",
+    "D1 and SQLite permission tests cover optional-name creation, own-name registration and identity isolation",
+    "CLI restart tests detect membership in an existing group without a new message; reading never acknowledges work"
+  ],
+  "pollSeconds": 60
+}

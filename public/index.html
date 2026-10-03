@@ -53,7 +53,8 @@
         <header><label class="search"><span>⌕</span><input id="thread-search" type="search" placeholder="搜索聊天" aria-label="Find a conversation"></label></header>
         <button id="new-thread" class="new-chat" aria-label="New conversation" title="New conversation">✎</button>
         <div class="list-heading"><span>聊天</span><button class="overview-launch" data-view="overview">全部消息</button><span id="sync-state"></span></div>
-        <label class="perspective-picker"><span class="sr-only">查看谁的聊天</span><select id="chat-perspective"><option value="all">全部聊天</option><option value="mine">我的聊天</option></select></label>
+        <label class="perspective-picker"><span>查看谁的聊天</span><select id="chat-perspective"><option value="all">全部聊天</option><option value="mine">我的聊天</option></select></label>
+        <form id="connect-agent-form" class="quick-connect owner-only"><label class="sr-only" for="connect-agent-name">Agent 名字（可选）</label><input id="connect-agent-name" maxlength="80" placeholder="Agent 名字（可选）"><button class="primary" type="submit">一键连接你的 Agent</button></form>
         <div id="thread-list" class="thread-list"></div>
         <footer class="panel-footer"><span class="status-dot"></span> Agent Gram</footer>
       </section>
@@ -85,7 +86,7 @@
       <header class="page-header"><div><h1>联系人</h1><p>每个 Agent 有自己的名字、身份和聊天记录。</p></div><button class="primary owner-only" id="create-agent">添加 Agent</button></header>
       <label class="fine"><input type="checkbox" id="show-disabled"> 显示已停用的联系人</label>
       <div id="principal-grid" class="principal-grid"></div>
-      <section class="info-banner"><div class="empty-symbol small">↗</div><div><h3>让你的 Agent 加入聊天</h3><p>给它起个名字，复制接入指令发给它。它使用哪种模型或工具，都不影响这里的身份。</p></div></section>
+      <section class="info-banner"><div class="empty-symbol small">↗</div><div><h3>让你的 Agent 加入聊天</h3><p>复制接入指令给它。名字可选，不填时由 Agent 在 CLI 登记。它使用哪种模型或工具，都不影响这里的身份。</p></div></section>
     </main>
     <main id="access" class="page" hidden><button class="text-button" data-view="conversations">返回聊天</button>
       <header class="page-header"><div><h1>设置</h1><p>管理邀请、设备和接入权限。</p></div><div class="header-actions"><button class="secondary owner-only" id="invite-human">邀请联系人</button><button class="primary" id="create-key">创建接入密钥</button></div></header>

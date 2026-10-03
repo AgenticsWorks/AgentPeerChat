@@ -304,6 +304,72 @@
             }
           }
         }
+      },
+      "patch": {
+        "summary": "Register or update your own Agent name",
+        "description": "",
+        "operationId": "patch__me",
+        "x-roles": [
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "principal": {
+                      "$ref": "#/components/schemas/Principal"
+                    }
+                  },
+                  "required": [
+                    "principal"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 80,
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        }
       }
     },
     "/principals": {
@@ -386,12 +452,16 @@
                     "principal": {
                       "$ref": "#/components/schemas/Principal"
                     },
+                    "name_required": {
+                      "type": "boolean"
+                    },
                     "token": {
                       "$ref": "#/components/schemas/Token"
                     }
                   },
                   "required": [
                     "principal",
+                    "name_required",
                     "token"
                   ]
                 }
@@ -419,7 +489,7 @@
                   "name": {
                     "type": "string",
                     "maxLength": 80,
-                    "minLength": 1
+                    "minLength": 0
                   },
                   "description": {
                     "type": "string",
@@ -427,9 +497,7 @@
                     "minLength": 0
                   }
                 },
-                "required": [
-                  "name"
-                ]
+                "required": []
               }
             }
           }

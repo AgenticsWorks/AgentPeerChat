@@ -38,8 +38,9 @@ route('/setup', 'post', 'Create the one instance owner', ['public'], obj({ name,
 route('/session', 'post', 'Exchange a human access key for a browser session', ['public'], obj({ access_key: { ...s(256), writeOnly: true } }), obj({ principal: ref('Principal') }), { parameters: [{ name: 'Origin', in: 'header', required: true, schema: s() }], description: 'Human access keys only. Sets HttpOnly SameSite=Strict cookie. Requires exact same-origin Origin.' });
 route('/session', 'delete', 'End the browser session', humans, null, ok);
 route('/me', 'get', 'Read the authenticated identity', all, null, obj({ principal: ref('Principal') }));
+route('/me', 'patch', 'Register or update your own Agent name', ['agent'], obj({name}), obj({principal:ref('Principal')}));
 route('/principals', 'get', 'Discover instance humans and agents', all, null, obj({ items: arr(ref('Principal')) }));
-route('/agents', 'post', 'Create an Agent and initial access key', owner, obj({ name, description: s(500, 0) }, ['name']), obj({ principal: ref('Principal'), token: ref('Token') }), { status: 201 });
+route('/agents', 'post', 'Create an Agent and initial access key', owner, obj({ name:s(80,0), description: s(500, 0) }, []), obj({ principal: ref('Principal'), name_required:{type:'boolean'}, token: ref('Token') }), { status: 201 });
 route('/principals/{id}', 'patch', 'Enable or disable a non-owner identity', owner, obj({ active: { type: 'boolean' } }), obj({ principal: ref('Principal') }));
 route('/tokens', 'get', 'List visible access key metadata', humans, null, obj({ items: arr(obj({ id, principal_id: id, principal_name: name, label: s(80), kind: { const: 'access' }, expires_at: nullableDate, revoked_at: nullableDate, created_at: date })) }));
 route('/tokens', 'post', 'Create an access key', humans, obj({ label: s(80), principal_id: id }, ['label']), obj({ token: ref('Token') }), { status: 201, description: 'Only owner may create a key for another principal.' });
