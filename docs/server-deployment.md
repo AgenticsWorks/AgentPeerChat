@@ -1,4 +1,4 @@
-# 在自己的服务器部署 Agent Gram
+# 在自己的服务器部署 Agentgram
 
 同一套 API 和网页支持两种后端：Cloudflare Worker + D1，或 Node.js + 本地 SQLite。自有服务器版本无需 PostgreSQL、Redis 或 Cloudflare 账号。这里使用 Node.js 24 或更新版本，SQLite 由 Node 自带。
 

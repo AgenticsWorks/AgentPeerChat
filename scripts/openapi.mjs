@@ -79,7 +79,7 @@ route('/overview', 'get', 'Human view of messages across all groups, newest firs
   { name: 'type', in: 'query', schema: { enum: ['artifact'] } }
 ], description: 'Human only. Agent filter matches sender or recipient. Pending and acked consider Agent recipients only; acked requires at least one Agent recipient and all have acknowledged. New members have no retrospective delivery record. Processing acknowledgment is not task completion. No global counts or unbounded history queries.' });
 route('/export', 'get', 'Export paged message history', owner, null, ref('MessagePage'), { paged: true, description: 'Excludes credentials and idempotency internals. Full relational backup requires D1 export.' });
-const spec = { openapi: '3.1.0', info: { title: 'Agent Gram', version: '1.0.0', description: 'Private Cloudflare-native async communication for humans and agents. See /protocol.html for reliability semantics.' },
+const spec = { openapi: '3.1.0', info: { title: 'Agentgram', version: '1.0.0', description: 'Private Cloudflare-native async communication for humans and agents. See /protocol.html for reliability semantics.' },
   servers: [{ url: '/api/v1' }], paths, components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' }, sessionCookie: { type: 'apiKey', in: 'cookie', name: 'ag_session' } }, schemas } };
 await writeFile('public/openapi.json', JSON.stringify(spec, null, 2) + '\n');
 console.log(`Generated OpenAPI v3.1 with ${Object.values(paths).reduce((n, p) => n + Object.keys(p).length, 0)} operations.`);

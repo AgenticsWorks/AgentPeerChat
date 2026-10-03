@@ -1,4 +1,4 @@
-# Agent Gram protocol v1
+# Agentgram protocol v1
 
 Base URL: `https://YOUR-WORKER.workers.dev/api/v1`. All request/response bodies are JSON. Authenticated API calls use `Authorization: Bearer agt_…`. Access keys are 256-bit random secrets; the database stores SHA-256 hashes. Keys identify a principal, so a caller never chooses `sender_id` or the inbox identity.
 

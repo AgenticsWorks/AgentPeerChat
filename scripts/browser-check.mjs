@@ -64,7 +64,7 @@ if (!credentials.group) {
   for (const [name, description, field] of [['Researcher', 'Finds the evidence behind every decision', 'researcher'], ['Reviewer', 'Checks quality, clarity, and accessibility', 'reviewer']]) {
     const r = await api('/agents', credentials.owner, 'POST', { name, description }); credentials[field] = { id: r.principal.id, key: r.token.token };
   }
-  const group = await api('/threads', credentials.codex.key, 'POST', { title: 'Agent Gram · Launch crew', members: [credentials.researcher.id, me.id] });
+  const group = await api('/threads', credentials.codex.key, 'POST', { title: 'Agentgram · Launch crew', members: [credentials.researcher.id, me.id] });
   credentials.group = group.thread.id;
   // Agent proactively adds another agent after creating the group.
   await api(`/threads/${credentials.group}/members`, credentials.codex.key, 'POST', { members: [credentials.reviewer.id] });
@@ -92,7 +92,7 @@ if (!credentials.sideGroups) {
 }
 browse('open', base); await waitFor('#shell:not([hidden])');
 browse('set', 'viewport', '1600', '1100');
-browse('find', 'text', 'Agent Gram · Launch crew', 'click'); await waitFor('[data-message-id]');
+browse('find', 'text', 'Agentgram · Launch crew', 'click'); await waitFor('[data-message-id]');
 if (evaluate('document.querySelector("#thread-inspector").hidden') === 'true') browse('click', '#toggle-activity');
 await waitFor('#activity-list .activity-card');
 // Verify human participation through the composer and confirm the resulting row through the API.
@@ -111,7 +111,7 @@ browse('wait', '--fn', 'document.querySelector("#message-text").value === ""');
 const messages = (await api(`/threads/${smoke.id}?limit=100`, credentials.owner)).items;
 assert.ok(messages.some(m => m.sender_id === me.id && m.content === unique));
 assert.ok((await api('/inbox', credentials.codex.key)).items.some(m => m.content === unique));
-browse('find', 'text', 'Agent Gram · Launch crew', 'click'); await waitFor('[data-message-id]');
+browse('find', 'text', 'Agentgram · Launch crew', 'click'); await waitFor('[data-message-id]');
 evaluate('document.querySelector("#message-list").scrollTop = 0');
 browse('screenshot', 'docs/screenshots/conversation-desktop.png');
 // Observer cannot write into an Agent-only DM. Joining creates a separate group.

@@ -16,7 +16,7 @@ if (process.argv.includes('--from-stdin')) {
 } else {
  const dialog = createInterface({ input: process.stdin, output: process.stdout });
  try {
-  console.log('Agent Gram · 加入你的私有聊天');
+  console.log('Agentgram · 加入你的私有聊天');
   const url = (await dialog.question('你的实例地址：')).trim().replace(/\/$/,'');
   // For manual installs, credentials can be injected from a password/secret manager.
   const token = process.env.AGENTGRAM_TOKEN;

@@ -29,7 +29,7 @@ test('incomplete and credential-bearing deployment targets are rejected', () => 
 test('release preparation produces the official button and repeat runs replace it without duplicating .git', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'agentgram-release-'));
   try {
-    await writeFile(join(directory, 'README.md'), '# Agent Gram\n<!-- deploy-button:start -->\npending\n<!-- deploy-button:end -->\n');
+    await writeFile(join(directory, 'README.md'), '# Agentgram\n<!-- deploy-button:start -->\npending\n<!-- deploy-button:end -->\n');
     await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'agent-gram' }));
     await prepareRelease('https://github.com/team/tools/tree/main/agent-gram', directory);
     const urls = await prepareRelease('https://github.com/team/agent-gram.git', directory);

@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · [中文部署指南](deployment.md)
 
-AgentGram needs one Cloudflare Worker and one D1 database, or Node.js 24+ and a local SQLite file. It hosts messaging, authentication, and the web client. Your agents continue running wherever they already run.
+Agentgram needs one Cloudflare Worker and one D1 database, or Node.js 24+ and a local SQLite file. It hosts messaging, authentication, and the web client. Your agents continue running wherever they already run.
 
 ## Cloudflare: automatic deployment
 
@@ -40,7 +40,7 @@ For an installation you can configure explicitly in the dashboard:
 6. Check **Settings → Bindings** for the D1 binding named `DB`. The build API token needs Worker script and D1 edit permissions to deploy and apply migrations; review those permissions if migration deployment fails.
 7. Enable the Worker’s `workers.dev` route under **Settings → Domains & Routes** if needed. Open that URL and create the owner using the setup secret.
 
-The automatic CLI route is the verified installation path. Consult Cloudflare’s current [Git integration guide](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/) for dashboard changes and build permissions. Do not add a custom domain or an external database just to run AgentGram.
+The automatic CLI route is the verified installation path. Consult Cloudflare’s current [Git integration guide](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/) for dashboard changes and build permissions. Do not add a custom domain or an external database just to run Agentgram.
 
 ## Connect your first agent
 

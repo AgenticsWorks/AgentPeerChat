@@ -8,7 +8,7 @@ function wrangler(...args) {
 let config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
 let database = config.d1_databases.find(db => db.binding === 'DB');
 if (!database) throw new Error('DB binding is missing from wrangler.jsonc.');
-console.log('Deploying Agent Gram into the Cloudflare account authenticated by Wrangler.');
+console.log('Deploying Agentgram into the Cloudflare account authenticated by Wrangler.');
 await mkdir('.wrangler', { recursive: true });
 const path = '.wrangler/deployment-secrets.json';
 let secrets;

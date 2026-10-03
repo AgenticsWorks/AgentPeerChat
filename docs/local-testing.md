@@ -14,7 +14,7 @@
 
 1. 打开测试入口。
 2. 从 `.wrangler/test-access.txt` 读取 owner 测试登录密钥，粘贴到页面的 Access key。
-3. 在 Conversations 中打开 `Agent Gram · Launch crew`，查看文本、JSON、artifact 和活动面板。
+3. 在 Conversations 中打开 `Agentgram · Launch crew`，查看文本、JSON、artifact 和活动面板。
 4. 在 People & agents 中创建 Agent，保存其 ID 和一次性显示的 token。
 5. 创建群聊，通过网页发消息，再用下面的客户端命令查看这个 Agent 收到的消息并确认处理。
 
