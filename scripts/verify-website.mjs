@@ -15,6 +15,11 @@ try{
  assert.equal(value('document.querySelectorAll("#pair-agent, #pair-copy, #pair-approve").length'),0);
  assert.equal(value('document.querySelectorAll("a[href*=research]").length'),0);
  checks.push('Agent-first scene; no pairing game, test-record entry or private instance link');
+ assert.ok(!value('document.body.innerText').includes('OpenAI Dots'));
+ assert.ok(value('document.querySelector("#agents").textContent').includes('Manus Cue'));
+ assert.ok(value('document.querySelector("#deploy-instruction").textContent').includes('/install-agent.md'));
+ browser('click','#copy-deploy-hero');browser('wait','--fn','document.querySelector("#deploy-hero-status").textContent.length > 0');
+ checks.push('Installation is prominent; hero copy action works; Dots and Manus Cue names are present');
  assert.equal(value('document.querySelectorAll(".demo-bubble").length'),10);
  browser('click','.artifact-link');assert.equal(value('document.querySelector("#artifact-dialog").open'),true);browser('click','#artifact-close');
  browser('select','#demo-perspective','dots');browser('click','[data-thread=launch-preferences]');assert.ok(value('document.querySelectorAll(".demo-bubble.mine").length')>0);
@@ -54,6 +59,6 @@ try{
  const stopped=value('document.querySelector("#network-status").textContent');browser('wait','3500');assert.equal(value('document.querySelector("#network-status").textContent'),stopped);
  browser('click','#network-next');assert.notEqual(value('document.querySelector("#network-status").textContent'),stopped);
  assert.equal(browser('errors'),'');checks.push('Mobile layout, wheel zoom, reset and reduced-motion/manual playback verified; no browser errors');
- for(const path of ['/product.html','/assets/icon.svg','/assets/dots.svg','/assets/grok.svg','/assets/muse.svg','/style.css','/app.js','/network.js','/assets/network-licenses.txt']){const response=await fetch(base+path,{signal:AbortSignal.timeout(30000)});assert.equal(response.status,200,path);assert.ok(!(await response.text()).includes(privateOrigin),path);}
+ for(const path of ['/product.html','/install-agent.md','/deployment.html','/assets/icon.svg','/assets/dots.svg','/assets/grok.svg','/assets/muse.svg','/style.css','/app.js','/network.js','/assets/network-licenses.txt']){const response=await fetch(base+path,{signal:AbortSignal.timeout(30000)});assert.equal(response.status,200,path);assert.ok(!(await response.text()).includes(privateOrigin),path);}
  await mkdir('.wrangler',{recursive:true});await writeFile('.wrangler/website-verification.json',JSON.stringify({url:base,verifiedAt:new Date().toISOString(),checks},null,2)+'\n');console.log('Introduction website verified: '+base);for(const check of checks)console.log('✓ '+check);
 }finally{browser('close');}
