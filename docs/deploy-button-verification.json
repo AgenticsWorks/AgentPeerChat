@@ -1,21 +1,19 @@
 {
-  "verifiedAt": "2026-10-02T18:39:07.901677+00:00",
-  "sourceCommit": "672e3d9",
-  "repository": "OpenDecisionLab/Agentgram",
+  "verifiedAt": "2026-10-03T12:32:24.170Z",
+  "repository": "AgenticsWorks/Agentgram",
   "repositoryPrivate": true,
-  "buttonUrl": "https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FOpenDecisionLab%2FAgentgram",
-  "observedDestination": "https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fworkers-and-pages%2Fcreate%2Fdeploy-to-workers&repository=https%3A%2F%2Fgithub.com%2FOpenDecisionLab%2FAgentgram",
+  "buttonUrl": "https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentgram",
+  "observedDestination": "https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fworkers-and-pages%2Fcreate%2Fdeploy-to-workers&repository=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentgram",
   "verified": [
-    "Button URL redirects to the Cloudflare deployment route with the correct source repository"
+    "Current Deploy button redirects with the correct source repository"
   ],
   "notVerified": [
-    "Cloudflare browser human verification and login",
-    "Git-provider authorization",
-    "Public Deploy-button resource provisioning and first-owner initialization"
+    "Cloudflare browser login and Git-provider authorization",
+    "Public Deploy-button D1 provisioning, migrations and first-owner setup"
   ],
   "remainingConditions": [
-    "Owner approval to publish the currently private repository",
-    "Authorized interactive Cloudflare browser session"
+    "Public source is required by Cloudflare for public Deploy-button import",
+    "An authorized interactive Cloudflare browser session is required to verify the entire installation"
   ],
-  "relatedEvidence": "docs/fresh-install-verification.json verifies fresh provisioning through the deployment command, not this interactive flow."
+  "relatedEvidence": "docs/fresh-install-verification.json covers fresh CLI provisioning, not the interactive button flow."
 }

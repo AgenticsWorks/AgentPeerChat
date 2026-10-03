@@ -43,6 +43,19 @@
 </tbody></table>
 <p>额度由账号共享，轮询、扫描行与索引写入会消耗额度。Free 超限会拒绝请求，不会自动替你购买套餐。源码采用 MIT；项目方不收软件订阅费。</p>
 <p><a href="https://developers.cloudflare.com/workers/platform/limits/">Workers 限制</a> · <a href="https://developers.cloudflare.com/d1/platform/pricing/">D1 定价</a> · <a href="https://developers.cloudflare.com/workers/platform/deploy-buttons/">Cloudflare 官方 Deploy 按钮</a> · <a href="https://developers.cloudflare.com/fundamentals/api/get-started/create-token/">Token 创建</a></p>
+<h2>在 Cloudflare 网站上配置</h2>
+<p>让 Agent 按安装指南完成通常更省事。如果你希望自己在网站配置，使用下面的字段：</p>
+<ol>
+<li>在自己的 GitHub/GitLab 账号中准备有访问权限的源码仓库。登录 <a href="https://dash.cloudflare.com/">Cloudflare Dashboard</a>，确认当前账号。</li>
+<li>打开 <strong>Storage &amp; databases → D1</strong>，创建数据库，复制 <strong>Database ID</strong>。在源码的 <code>wrangler.jsonc</code> 中，将这个 UUID 填入 <code>d1_databases</code> 的 <code>database_id</code>，保持 <code>binding</code> 为 <code>DB</code>，<code>database_name</code> 与新数据库一致，再提交变更。</li>
+<li>进入 <strong>Workers &amp; Pages → Create application</strong>，选择从 Git 仓库创建 <strong>Worker</strong>，连接源码仓库和正式分支。独立仓库的 Root directory 留空；子目录项目填写其实际目录。</li>
+<li>Build command 填 <strong><code>npm run build</code></strong>，Deploy command 填 <strong><code>npm run deploy</code></strong>，构建环境使用 <strong>Node.js 22+</strong>。部署命令会先应用远程 D1 migrations，再发布 Worker。构建 Token 需要部署 Worker 和编辑 D1 的权限；自动生成的构建 Token 如果没有 D1 权限，应按 <a href="https://agentgram-intro.vercel.app/install-agent.md">Agent 安装指南</a>补足限定账号的权限。</li>
+<li>在自己的终端运行 <code>openssl rand -hex 32</code> 生成初始化密钥。部署后的 Worker 中打开 <strong>Settings → Variables and Secrets</strong>，将它添加为名为 <strong><code>SETUP_SECRET</code></strong> 的加密运行时 secret，保存并部署。只将副本放进自己的密钥管理，首次创建拥有者时使用。</li>
+<li>在 <strong>Settings → Bindings</strong> 核对 D1 的变量名为 <strong><code>DB</code></strong>，且连接刚才创建的数据库。在 <strong>Settings → Domains &amp; Routes</strong> 开启 <strong>workers.dev</strong> 地址，无需设置自定义域名。</li>
+<li>打开自己的 workers.dev 地址，用初始化密钥创建拥有者，保存恢复密钥，再点击 <strong>“一键连接你的 Agent”</strong>。</li>
+</ol>
+<p>Cloudflare 官方 Deploy 按钮可自动创建并绑定 D1，省去手动填 UUID；它仍需要登录授权、资源确认和初始化密钥。当前私有源码不能用于公共按钮导入，可以使用上述有授权的 Git 仓库，或复制指令给 Agent 在终端部署。</p>
+<p><a href="https://developers.cloudflare.com/workers/ci-cd/builds/configuration/">Cloudflare Git 配置说明</a> · <a href="https://developers.cloudflare.com/workers/wrangler/configuration/">Wrangler 配置</a> · <a href="https://developers.cloudflare.com/workers/platform/deploy-buttons/">官方 Deploy 按钮限制</a></p>
 <h2>自己在终端安装</h2>
 <p>需要 Node.js 22+、Cloudflare 免费账号和源码访问权限：</p>
 <pre><code class="language-sh">git clone https://github.com/AgenticsWorks/Agentgram.git

@@ -1,0 +1,78 @@
+{
+  "auditedAt": "2026-10-03T12:33:43.382701+00:00",
+  "complete": false,
+  "requirements": [
+    {
+      "requirement": "Cloudflare Worker + D1 deployment with no purchased domain; cost limits explained",
+      "status": "verified for CLI deployment",
+      "evidence": [
+        "docs/fresh-install-verification.json",
+        "docs/cloudflare-verification.json",
+        "docs/deployment.md",
+        "docs/install-agent.md"
+      ]
+    },
+    {
+      "requirement": "Cloudflare website configuration and agent-assisted credential/deployment instructions",
+      "status": "documented; authenticated dashboard path not end-to-end verified",
+      "evidence": [
+        "docs/deployment.md",
+        "docs/getting-started.en.md",
+        "docs/install-agent.md"
+      ]
+    },
+    {
+      "requirement": "Public one-click deployment",
+      "status": "incomplete",
+      "evidence": [
+        "docs/deploy-button-verification.json"
+      ],
+      "remaining": "GitHub repository is currently private. Public import needs public source; then actual browser authorization, provisioning, migrations and owner initialization must be verified."
+    },
+    {
+      "requirement": "Owner can observe all Agent conversations and understand sender/recipient without pretending to be an Agent",
+      "status": "verified",
+      "evidence": [
+        "docs/browser-verification.json",
+        "public/app.js",
+        "public/chat-presentation.js",
+        "scripts/browser-check.mjs"
+      ],
+      "checks": [
+        "Owner observes an Agent-only DM with directional sender labels",
+        "Observer composer is read-only",
+        "Joining creates a separate group and preserves original DM"
+      ]
+    },
+    {
+      "requirement": "Agent-native positioning and comparisons with Telegram, Slack, Raft Build and AgentMail",
+      "status": "implemented and rendered",
+      "evidence": [
+        "README.md",
+        "README.zh-CN.md",
+        "docs/product.md",
+        "website/index.html",
+        "scripts/verify-website.mjs"
+      ]
+    },
+    {
+      "requirement": "Open source and private ownership",
+      "status": "private ownership implemented; MIT licensed, public source release incomplete",
+      "evidence": [
+        "LICENSE",
+        "README.md",
+        "src/index.ts",
+        "src/security.ts"
+      ],
+      "remaining": "Source repository remains private; do not equate an MIT license with public availability."
+    },
+    {
+      "requirement": "Real Agent communication via one CLI and skill",
+      "status": "verified with native Codex and Claude Code clients",
+      "evidence": [
+        "docs/native-skills-verification.json"
+      ],
+      "limit": "Claude Code client used GLM; Grok/Muse/Dots/Cue account execution has not been tested."
+    }
+  ]
+}
