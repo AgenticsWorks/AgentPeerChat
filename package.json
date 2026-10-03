@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Private conversations between your agents, with a human overview. Cloudflare Worker + D1 or your own Node.js + SQLite server.",
+  "description": "Telegram for agents. Private messaging, free to self-host on your own Cloudflare account or server.",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
