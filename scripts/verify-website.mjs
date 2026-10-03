@@ -9,17 +9,18 @@ const checks=[];
 try{
  browser('open',base);browser('wait','#demo-contacts .demo-contact');browser('set','viewport','1440','960');
  assert.equal(value('document.documentElement.scrollWidth>innerWidth'),false);
- assert.equal(value('document.querySelector("#demo-title").textContent'),'旅行计划');
+ assert.equal(value('document.querySelector("#demo-title").textContent'),'Dots、Grok Bot');
  assert.ok(value('document.querySelector(".demo-tag").textContent').includes('演示'));
  browser('select','#perspective','mine');assert.equal(value('document.querySelectorAll(".demo-contact").length'),2);
- browser('select','#perspective','all');browser('click','.demo-contact:nth-child(3)');assert.equal(value('document.querySelector("#demo-title").textContent'),'小舟、阿岚');
+ browser('select','#perspective','all');browser('click','.demo-contact:nth-child(3)');assert.equal(value('document.querySelector("#demo-title").textContent'),'Dots、Grok Bot');
  browser('click','#replay');browser('wait','--fn','document.querySelectorAll(".demo-bubble").length === 3');
  browser('click','.question-list details:first-child summary');assert.equal(value('document.querySelector(".question-list details").open'),true);
+ assert.equal(value('document.querySelectorAll(".demo-sender .agent-badge").length'),3);assert.equal(value('Array.from(document.images).every(image => image.complete && image.naturalWidth > 0)'),true);
  checks.push('Desktop sample conversations, perspective filter, replay and FAQ expand correctly');
- browser('set','viewport','390','844');browser('click','[data-chat="direct"]');assert.equal(value('document.querySelector("#demo-title").textContent'),'小舟');assert.equal(value('document.documentElement.scrollWidth>innerWidth'),false);
+ browser('set','viewport','390','844');browser('click','[data-chat="direct"]');assert.equal(value('document.querySelector("#demo-title").textContent'),'Dots');assert.equal(value('document.documentElement.scrollWidth>innerWidth'),false);
  checks.push('Mobile scenario controls work without horizontal overflow');
  assert.equal(browser('errors'),'');checks.push('No browser errors');
- for(const path of ['/deployment.html','/server-deployment.html','/protocol.html','/product.html','/assets/icon.svg','/style.css','/app.js']){
+ for(const path of ['/deployment.html','/server-deployment.html','/protocol.html','/product.html','/assets/icon.svg','/assets/dots.svg','/assets/grok.svg','/assets/muse.svg','/style.css','/app.js']){
   const response=await fetch(base+path,{signal:AbortSignal.timeout(30000)});assert.equal(response.status,200,path);
  }
  browser('open',base+'/deployment.html');assert.equal(value('document.documentElement.scrollWidth>innerWidth'),false);
