@@ -107,16 +107,25 @@ assert.ok((await api('/inbox', credentials.codex.key)).items.some(m => m.content
 browse('find', 'text', 'Agent Gram · Launch crew', 'click'); await waitFor('[data-message-id]');
 evaluate('document.querySelector("#message-list").scrollTop = 0');
 browse('screenshot', 'docs/screenshots/conversation-desktop.png');
-navigate('overview'); await waitFor('.overview-card');
-browse('wait', '--fn', 'document.querySelector("#overview-feed").getAttribute("aria-busy") === "false"');
-assert.equal(evaluate('document.querySelector("#overview-error").textContent'), '""');
-browse('select', '#overview-type', 'artifact');
-browse('wait', '--fn', 'document.querySelector("#overview-feed").getAttribute("aria-busy") === "false"');
-assert.ok(browserValue('document.querySelectorAll(".overview-content a").length') > 0);
-browse('select', '#overview-type', '');
-browse('wait', '--fn', 'document.querySelector("#overview-feed").getAttribute("aria-busy") === "false"');
-browse('screenshot', 'docs/screenshots/overview-desktop.png');
-browse('click', '.overview-card .text-button'); await waitFor('#message-list .spotlight');
+// Observer cannot write into an Agent-only DM. Joining creates a separate group.
+const dm = await api('/threads', credentials.codex.key, 'POST', {kind:'direct',members:[credentials.researcher.id]});
+await api('/messages',credentials.codex.key,'POST',{thread_id:dm.thread.id,type:'text',content:'Compare the deployment options and check the daily request budget.'},true);
+browse('open',base);await waitFor('#shell:not([hidden])');
+browse('wait','--fn',`Array.from(document.querySelectorAll('.thread-item')).some(b => b.textContent.includes('Compare the deployment options'))`);
+browse('find','text','Compare the deployment options','click');await waitFor('#observe-actions:not([hidden])');
+assert.equal(browserValue('document.querySelector("#message-text").disabled'),true);
+assert.ok(browserValue('document.querySelector(".message-meta").textContent').includes('Codex → Researcher'));
+browse('screenshot','docs/screenshots/private-conversation-desktop.png');
+browse('click','#join-discussion');await waitFor('#compose-form:not([hidden])');
+assert.equal(browserValue('document.querySelector("#message-text").disabled'),false);
+const joinedTitle=browserValue('document.querySelector("#chat-title").textContent');
+const joined=(await api('/threads',credentials.owner)).items.find(t=>t.title===joinedTitle);
+assert.ok(joined && joined.id!==dm.thread.id);assert.equal(joined.kind,'group');
+const detail=await api(`/threads/${joined.id}`,credentials.owner);assert.equal(detail.thread.members.length,3);
+browse('fill','#message-text','Please include the free-tier limits and explain what changes on paid plans.');browse('click','#send-button');
+browse('wait','--fn',`document.querySelector('#message-list').textContent.includes('Please include the free-tier limits')`);
+for(const agent of [credentials.codex,credentials.researcher]) assert.ok((await api('/inbox',agent.key)).items.some(m=>m.thread_id===joined.id&&m.sender_id===me.id));
+const original=await api(`/threads/${dm.thread.id}`,credentials.owner);assert.equal(original.thread.members.length,2);assert.equal(original.items.length,1);
 navigate('network'); browse('screenshot', 'docs/screenshots/network-desktop.png');
 navigate('conversations');
 browse('set', 'viewport', '390', '844');
@@ -130,7 +139,7 @@ assert.ok(urls.every(url => new URL(url).origin === base), 'Unexpected third-par
 const protocol = await fetch(base + '/protocol.html'); assert.equal(protocol.status, 200); assert.ok((await protocol.text()).includes('Receive and acknowledge'));
 const spec = await fetch(base + '/openapi.json'); assert.equal(spec.status, 200); assert.equal((await spec.json()).openapi, '3.1.0');
 await writeFile('docs/browser-verification.json', JSON.stringify({ checked_at: new Date().toISOString(), runtime: process.env.AGENTGRAM_BROWSER_BACKEND === 'sqlite' ? 'Node.js + persistent SQLite' : 'Wrangler + local D1',
-  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Agent created through UI (first invocation)', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Human cross-group overview and deliverable filter', 'Overview message jump to original conversation', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
+  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Agent created through UI (first invocation)', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
   demo_note: 'Demo messages are fixtures posted through the real API, not autonomous LLM outputs.' }, null, 2));
 browse('close');
 console.log('Browser → API → storage → Agent inbox verified. Screenshots saved in docs/screenshots.');

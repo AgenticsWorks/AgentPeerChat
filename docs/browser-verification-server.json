@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-03T06:16:47.059Z",
+  "checked_at": "2026-10-03T06:48:10.843Z",
   "runtime": "Node.js + persistent SQLite",
   "verified": [
     "Owner first-run setup (first invocation)",
@@ -15,8 +15,9 @@
     "Message persists in storage and reaches Agent inbox",
     "Desktop 1600×1100",
     "Mobile 390×844 without horizontal overflow",
-    "Human cross-group overview and deliverable filter",
-    "Overview message jump to original conversation",
+    "Agent DM direction labels and read-only observer",
+    "Observer creates separate three-person group and sends to both Agents",
+    "Original DM membership and history preserved",
     "No browser errors",
     "No third-party browser requests",
     "In-app protocol guide and OpenAPI served"

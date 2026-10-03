@@ -1,8 +1,8 @@
-import { chatName, chatsForPerspective } from './chat-presentation.js';
+import { chatName, messageDirection } from './chat-presentation.js';
 import { connectionInstructions } from './connection-kit.js';
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, overview: [], overviewCursor: null, overviewRequest: 0 };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -122,9 +122,8 @@ async function refresh() {
   state.threads = (await allPages('/threads')).items;
   renderThreads(); renderPrincipals();
   if (state.selected) await loadMessages();
-  if (state.view === 'overview') { renderOverviewAgents(); await loadOverview(); }
   $('#sync-state').textContent = '';
-  renderPerspectives();
+
 }
 function schedulePoll() {
   clearTimeout(state.timer);
@@ -140,68 +139,18 @@ function schedulePoll() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state.me) { state.pollDelay = 30000; schedulePoll(); } });
 $('#logout').addEventListener('click', async () => {
-  try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; state.overviewRequest++; state.overview = []; $('#overview-feed').replaceChildren(); clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
+  try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => {
   state.view = button.dataset.view; toggleMenu(false);
-  for (const view of ['conversations', 'overview', 'network', 'access']) $(`#${view}`).hidden = view !== state.view;
+  for (const view of ['conversations', 'network', 'access']) $(`#${view}`).hidden = view !== state.view;
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === state.view));
-  if (state.view === 'overview') { renderOverviewAgents(); await loadOverview(); }
   if (state.view === 'access') try { await loadAccess(); } catch (error) { toast(error.message); }
 }));
-function renderOverviewAgents() {
-  const select = $('#overview-agent'), value = select.value;
-  select.replaceChildren(el('option', '', '所有 Agent')); select.firstChild.value = '';
-  for (const p of state.principals.filter(p => p.kind === 'agent')) { const option = el('option', '', p.name); option.value = p.id; select.append(option); }
-  select.value = value;
-}
-async function loadOverview(more = false) {
-  const request = ++state.overviewRequest, principalId = state.me?.id;
-  const params = new URLSearchParams({ limit: '50', status: $('#overview-status').value });
-  if ($('#overview-agent').value) params.set('agent', $('#overview-agent').value);
-  if ($('#overview-type').value) params.set('type', $('#overview-type').value);
-  if (more && state.overviewCursor) params.set('before', state.overviewCursor);
-  $('#overview-error').textContent = ''; $('#overview-more').disabled = true; $('#overview-feed').setAttribute('aria-busy', 'true');
-  try {
-    const result = await api(`/overview?${params}`);
-    if (request !== state.overviewRequest || state.me?.id !== principalId) return;
-    state.overview = more ? [...state.overview, ...result.items] : result.items;
-    state.overviewCursor = result.next_cursor;
-    $('#overview-more').hidden = !result.has_more;
-    renderOverview();
-  } catch (error) { if (request === state.overviewRequest) $('#overview-error').textContent = error.message; }
-  finally { if (request === state.overviewRequest) { $('#overview-more').disabled = false; $('#overview-feed').setAttribute('aria-busy', 'false'); } }
-}
-function renderOverview() {
-  const feed = $('#overview-feed'); feed.replaceChildren();
-  $('#overview-caption').textContent = `${state.overview.length} 条消息 · 最新消息在前`;
-  if (!state.overview.length) feed.append(el('p', 'empty-list', '没有符合条件的消息。'));
-  for (const message of state.overview) {
-    const card = el('article', 'overview-card'), header = el('header'), identity = el('div', 'overview-identity');
-    const avatar = el('div', 'avatar', humanName(message.sender_id).slice(0, 1).toUpperCase()); colorAvatar(avatar, humanName(message.sender_id));
-    const names = el('div'); names.append(el('strong', '', humanName(message.sender_id)), el('small', '', message.thread_title));
-    identity.append(avatar, names); header.append(identity, el('time', '', `${date(message.created_at)} · ${time(message.created_at)}`)); card.append(header);
-    const content = el('div', 'overview-content');
-    if (message.type === 'text') content.textContent = message.content;
-    else if (message.type === 'json') { content.append(el('span', 'eyebrow', '内容'), el('pre', '', JSON.stringify(message.content, null, 2))); }
-    else { const link = el('a', '', message.type === 'artifact' ? `↗ ${message.content.name ?? 'Deliverable'}` : message.content); link.href = message.type === 'artifact' ? message.content.url : message.content; link.target = '_blank'; link.rel = 'noopener noreferrer'; content.append(link); }
-    card.append(content);
-    const recipients = message.recipients.filter(r => r.kind === 'agent'), pending = recipients.filter(r => !r.acked_at);
-    const footer = el('footer'), summary = el('span', pending.length ? 'processing-state pending' : 'processing-state');
-    summary.textContent = pending.length ? `待处理：${pending.map(r => humanName(r.recipient_id)).join('、')}` : recipients.length ? '✓ 已处理' : '';
-    summary.title = message.recipients.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? 'acknowledged' : 'awaiting acknowledgment'}`).join('\n');
-    const jump = el('button', 'text-button', '打开聊天');
-    jump.addEventListener('click', async () => { $('[data-view="conversations"]').click(); await selectThread(message.thread_id); const target = $(`[data-message-id="${message.id}"]`); if (target) { target.scrollIntoView({ block: 'center' }); target.classList.add('spotlight'); setTimeout(() => target.classList.remove('spotlight'), 2000); } });
-    footer.append(summary, jump); card.append(footer); feed.append(card);
-  }
-}
-for (const selector of ['#overview-agent', '#overview-status', '#overview-type']) $(selector).addEventListener('change', () => loadOverview());
-$('#overview-refresh').addEventListener('click', () => loadOverview());
-$('#overview-more').addEventListener('click', () => loadOverview(true));
 $('#thread-search').addEventListener('input', renderThreads);
 function renderThreads() {
   $('#thread-count').textContent = String(state.threads.length);
-  const filtered = chatsForPerspective(state.threads, $('#chat-perspective').value, state.me.id).filter(t => chatName(t, state.me.id).toLowerCase().includes($('#thread-search').value.toLowerCase()));
+  const filtered = state.threads.filter(t => chatName(t, state.me.id).toLowerCase().includes($('#thread-search').value.toLowerCase()));
   $('#thread-list').replaceChildren();
   if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? '没有找到聊天。' : '选择联系人，开始第一段聊天。'));
   for (const thread of [...filtered].sort((a, b) => (b.last_message_seq ?? 0) - (a.last_message_seq ?? 0))) {
@@ -209,7 +158,7 @@ function renderThreads() {
     const copy = el('div', 'thread-copy');
     const last = thread.last_message;
     const preview = !last ? '还没有消息' : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? '内容' : last.content;
-    copy.append(el('strong', '', chatName(thread, state.me.id)), el('small', '', last ? `${humanName(last.sender_id)}: ${preview}` : preview));
+    copy.append(el('strong', '', chatName(thread, state.me.id)), el('small', '', last ? `${messageDirection(thread, last.sender_id, humanName(last.sender_id))}: ${preview}` : preview));
     const avatar = el('div', 'avatar thread-avatar', chatName(thread, state.me.id).slice(0, 2).toUpperCase()); colorAvatar(avatar, chatName(thread, state.me.id));
     button.append(avatar, copy, el('time', '', last?.created_at ? time(last.created_at) : date(thread.created_at)));
     button.addEventListener('click', () => selectThread(thread.id)); $('#thread-list').append(button);
@@ -217,7 +166,8 @@ function renderThreads() {
 }
 async function selectThread(threadId) {
   $('#conversations').classList.add('chat-open');
-  state.selected = threadId; state.messages = []; state.cursor = '0';
+  state.selected = threadId; state.currentThread = null; state.messages = []; state.cursor = '0';
+  $('#observe-actions').hidden = true; $('#message-text').disabled = true; $('#send-button').disabled = true;
   $('#compose-error').textContent = ''; $('#message-text').value = ''; $('#compose-form').dataset.pendingKey = ''; $('#compose-form').dataset.pendingSignature = '';
   $('#chat-empty').hidden = true; $('#chat-active').hidden = false; renderThreads(); $('#message-list').replaceChildren();
   try { await loadMessages(true); } catch (error) { toast(error.message); }
@@ -229,8 +179,9 @@ async function loadMessages(forceScroll = false) {
   $('#chat-title').textContent = chatName(result.last.thread, state.me.id);
   $('#chat-members').textContent = result.last.thread.kind === 'direct' ? '私聊' : `${result.last.thread.members.length} 位成员`;
   $('#chat-avatar').textContent = chatName(result.last.thread, state.me.id).slice(0, 2).toUpperCase(); colorAvatar($('#chat-avatar'), chatName(result.last.thread, state.me.id));
-  state.members = result.last.thread.members;
+  state.members = result.last.thread.members; state.currentThread = result.last.thread;
   const observing = result.last.thread.kind === 'direct' && !state.members.some(p => p.id === state.me.id);
+  $('#observe-actions').hidden = !observing; $('#compose-form').hidden = observing;
   $('#message-text').disabled = observing; $('#send-button').disabled = observing;
   $('#message-text').placeholder = observing ? '正在查看这段私聊' : '消息';
   $('#add-members').hidden = result.last.thread.kind === 'direct';
@@ -241,6 +192,20 @@ async function loadMessages(forceScroll = false) {
   }
   await loadActivity(threadId);
 }
+$('#join-discussion').addEventListener('click', async () => {
+  const source = state.currentThread;
+  if (!source || source.kind !== 'direct' || source.members.some(p => p.id === state.me.id)) return;
+  const button = $('#join-discussion'); button.disabled = true;
+  try {
+    const result = await api('/threads', { method: 'POST', data: {
+      title: `${source.members.map(p => p.name).join('、')} · 一起聊`.slice(0, 120),
+      members: source.members.map(p => p.id)
+    } });
+    await refresh(); await selectThread(result.thread.id);
+    toast('已邀请你和两位联系人进入新群，原私聊保留。');
+  } catch (error) { toast(error.message); }
+  finally { button.disabled = false; }
+});
 function renderMembers() {
   $('#thread-inspector').hidden = !state.selected || !state.inspector;
   $('#toggle-activity').setAttribute('aria-expanded', String(state.inspector)); $('#group-info').setAttribute('aria-expanded', String(state.inspector));
@@ -294,7 +259,7 @@ function renderMessages(forceScroll = false) {
     const name = principal?.name ?? message.sender_id;
     const avatar = el('div', `avatar ${principal?.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, name.slice(0, 1).toUpperCase()); colorAvatar(avatar, name); article.append(avatar);
     const content = el('div', 'message-body'), meta = el('div', 'message-meta');
-    meta.append(el('strong', '', name));
+    meta.append(el('strong', '', messageDirection(state.currentThread, message.sender_id, name)));
     const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(); timestamp.dateTime = message.created_at;
     const bubble = el('div', 'bubble');
     if (message.type === 'text') bubble.textContent = message.content;
@@ -379,15 +344,6 @@ function startThread(preselected) {
   $('#modal-fields').append(contacts); $('#modal-submit').textContent = '取消';
 }
 $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start').addEventListener('click', () => startThread());
-function renderPerspectives() {
-  const select = $('#chat-perspective'), selected = select.value;
-  select.replaceChildren();
-  for (const [value, name] of [['all', '全部聊天'], ['mine', '我的聊天'], ...state.principals.filter(p => p.kind === 'agent' && p.active).map(p => [p.id, `${p.name}的聊天`])]) {
-    const option = el('option', '', name); option.value = value; select.append(option);
-  }
-  select.value = [...select.options].some(option => option.value === selected) ? selected : 'all';
-}
-$('#chat-perspective').addEventListener('change',()=>{renderThreads();toast('只切换查看范围；发言身份仍然是你。');});
 async function showAgentConnection(principal, token) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
   const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, ownerId });

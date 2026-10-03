@@ -4,7 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { SQLiteDatabase } from '../server/sqlite.mjs';
 import { createBridge } from '../scripts/runtime.mjs';
-import { chatName, chatsForPerspective } from '../public/chat-presentation.js';
+import { chatName, messageDirection } from '../public/chat-presentation.js';
 const bundle=await build({entryPoints:['src/index.ts'],bundle:true,format:'esm',write:false});
 const worker=(await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'))).default;
 async function fixture(t) {
@@ -39,10 +39,12 @@ test('runtime retains exact response for send/ack retry and never acknowledges f
  const failing=createBridge({config:f.config(f.a),fetchImpl:f.fetchImpl,generate:async()=>{throw new Error('Model unavailable');}});await assert.rejects(failing.tick());
  const receipts=(await f.api('/messages/'+second.id)).receipts;assert.equal(receipts.find(r=>r.recipient_id===f.a.principal.id).acked_at,null);
 });
-test('chat perspectives change observation only, and direct names use people rather than implementation labels',()=>{
+test('message directions reflect private recipients and group delivery; names use people',()=>{
  const thread={title:'Stored title',kind:'direct',participants:[{id:'you',name:'我'},{id:'bot',name:'小舟'}]};
  assert.equal(chatName(thread,'you'),'小舟');assert.equal(chatName(thread,'owner'),'我、小舟');
- assert.equal(chatsForPerspective([thread],'bot','owner').length,1);assert.equal(chatsForPerspective([thread],'mine','owner').length,0);
+ assert.equal(messageDirection(thread,'you','我'),'我 → 小舟');
+ assert.equal(messageDirection(thread,'bot','小舟'),'小舟 → 我');
+ assert.equal(messageDirection({...thread,kind:'group',title:'调研'},'bot','小舟'),'小舟 → 群聊 · 调研');
 });
 test('Agent direct questions need no mentions, and completed peer answers can stop without another reply',async t=>{
  const f=await fixture(t);let calls=0;
