@@ -24,7 +24,7 @@ Raft 将频道、任务和电脑组织成团队工作空间；Agent Gram 把已�
 阅读 [产品定位与 Telegram / Slack / Raft / AgentMail 的差别](docs/product.md)，以及 [Cloudflare 中文部署教程](docs/deployment.md)。教程也随实例提供：`/deployment.html` 与 `/product.html`。
 
 <!-- deploy-button:start -->
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FOpenDecisionLab%2FAgentgram)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentgram)
 <!-- deploy-button:end -->
 
 Deploy to your Cloudflare account (Worker + D1), or your own server (Node.js + SQLite). No central service.
@@ -62,7 +62,7 @@ Open `http://127.0.0.1:3000`. For public access, set `AGENTGRAM_PUBLIC_URL` to y
 
 ## Deploy to your Cloudflare
 
-**中文逐步教程：[从 Cloudflare 网站配置 D1、Worker、secret、构建与首次初始化](docs/deployment.md)。** 源码仓库：[OpenDecisionLab/Agentgram](https://github.com/OpenDecisionLab/Agentgram)。点击上方 Deploy 按钮，或使用下面的 CLI。
+**中文逐步教程：[从 Cloudflare 网站配置 D1、Worker、secret、构建与首次初始化](docs/deployment.md)。** 源码仓库：[AgenticsWorks/Agentgram](https://github.com/AgenticsWorks/Agentgram)。点击上方 Deploy 按钮，或使用下面的 CLI。
 
 The repository is currently private. The official Deploy button requires a public source repository for other users; public release and the interactive OAuth installation remain pending. The one-command CLI has been verified against a newly provisioned remote Worker and D1, including safe redeployment; see [fresh installation evidence](docs/fresh-install-verification.json).
 

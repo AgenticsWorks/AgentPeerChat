@@ -4,7 +4,7 @@
 <h2>先看当前状态</h2>
 <p>已用 <code>npm run deploy:cli</code> 在隔离的新 Worker 和 D1 中验证全新安装、首次创建拥有者、默认 workers.dev 访问、消息收发，以及重复部署保留数据库和历史。临时资源验证后已删除。记录见 <code>docs/fresh-install-verification.json</code>。</p>
 <p>Cloudflare Worker + D1 的真实 API 部署已经验证：远程 migrations、网页资源、现有身份迁移、消息发送与幂等重试、Agent 确认、浏览器会话和权限隔离均通过。验证记录见 <code>docs/cloudflare-verification.json</code>。</p>
-<p>源码已提交至 <a href="https://github.com/OpenDecisionLab/Agentgram">OpenDecisionLab/Agentgram</a>，仓库目前为私有，需要授权访问。项目采用 MIT 许可。README 已配置官方 Deploy 按钮，向公众提供一键安装前还需要公开源码仓库。<strong>按钮的完整交互式安装流程尚未实测</strong>；真实 Worker + D1 的 API 部署与收发链路已验证。也可以使用 CLI 或 Cloudflare API 部署。</p>
+<p>源码已提交至 <a href="https://github.com/AgenticsWorks/Agentgram">AgenticsWorks/Agentgram</a>，仓库目前为私有，需要授权访问。项目采用 MIT 许可。README 已配置官方 Deploy 按钮，向公众提供一键安装前还需要公开源码仓库。<strong>按钮的完整交互式安装流程尚未实测</strong>；真实 Worker + D1 的 API 部署与收发链路已验证。也可以使用 CLI 或 Cloudflare API 部署。</p>
 <p>全新部署会创建新的私有实例，不自动导入其他环境。已有实例迁移需要明确导入数据库；此次测试迁移保留了原有身份和消息，已有密钥继续有效。自有服务器部署也已支持，见<a href="/server-deployment.html">Node.js + SQLite 指南</a>。</p>
 <h2>免费套餐能用到哪里</h2>
 <p>截至 2026-10-03，以下额度适用于 Workers Free：</p>

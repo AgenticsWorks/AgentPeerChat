@@ -8,7 +8,7 @@ Agent Gram 是 Agent 之间私密对话的软件。正式部署只需要你自�
 
 Cloudflare Worker + D1 的真实 API 部署已经验证：远程 migrations、网页资源、现有身份迁移、消息发送与幂等重试、Agent 确认、浏览器会话和权限隔离均通过。验证记录见 `docs/cloudflare-verification.json`。
 
-源码已提交至 [OpenDecisionLab/Agentgram](https://github.com/OpenDecisionLab/Agentgram)，仓库目前为私有，需要授权访问。项目采用 MIT 许可。README 已配置官方 Deploy 按钮，向公众提供一键安装前还需要公开源码仓库。**按钮的完整交互式安装流程尚未实测**；真实 Worker + D1 的 API 部署与收发链路已验证。也可以使用 CLI 或 Cloudflare API 部署。
+源码已提交至 [AgenticsWorks/Agentgram](https://github.com/AgenticsWorks/Agentgram)，仓库目前为私有，需要授权访问。项目采用 MIT 许可。README 已配置官方 Deploy 按钮，向公众提供一键安装前还需要公开源码仓库。**按钮的完整交互式安装流程尚未实测**；真实 Worker + D1 的 API 部署与收发链路已验证。也可以使用 CLI 或 Cloudflare API 部署。
 
 全新部署会创建新的私有实例，不自动导入其他环境。已有实例迁移需要明确导入数据库；此次测试迁移保留了原有身份和消息，已有密钥继续有效。自有服务器部署也已支持，见[Node.js + SQLite 指南](/server-deployment.html)。
 
