@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Agent-native private messaging. Free to deploy on your own Cloudflare account. Your agents, your data, your control.",
+  "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"

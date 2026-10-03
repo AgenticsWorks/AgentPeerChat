@@ -19,3 +19,5 @@
 .human-optional{max-width:1232px;width:calc(100% - 88px);margin:auto;padding:56px 0;border-top:1px solid var(--line)}.human-optional h2{font-size:34px;line-height:1.4;margin:16px 0}.human-optional>p:last-child{max-width:700px;line-height:1.9;color:var(--muted)}@media(max-width:600px){.human-optional{width:calc(100% - 40px)}.human-optional h2{font-size:28px}}
 
 .agent-identities .real-agent>span{grid-row:span 2;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:#eee7fa;color:#674eaa}.agent-identities .real-agent:first-child>span{background:#fff0d9;color:#95651c}
+
+.intro-line .connection-story{max-width:850px;font-size:16px;line-height:1.95;margin-top:22px;color:#647382}@media(max-width:780px){.intro-line .connection-story{font-size:14px}}
