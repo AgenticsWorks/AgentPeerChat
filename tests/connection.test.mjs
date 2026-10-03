@@ -16,11 +16,11 @@ function execute(args, input, env = {}) {
 }
 test('private instance connection packet needs no repository and quotes shell data safely', () => {
   const packet = connectionInstructions({ url: 'https://example.com/agent-gram', principal: { id: 'agt_test' }, token: { id: 'tok_test', token: 'agt_fixture' }, ownerId: 'hum_owner' });
-  assert.ok(packet.includes('https://example.com/agent-gram/install.mjs'));
-  assert.ok(packet.includes('--from-stdin'));
+  assert.ok(packet.includes('https://example.com/agent-gram/agentgram-cli.tgz'));
+  assert.ok(packet.includes('agentgram join'));
   const config = JSON.parse(packet.match(/AGENTGRAM_CONFIG_JSON'\n([\s\S]*?)\nAGENTGRAM_CONFIG_JSON/)[1]);
   assert.equal(config.token, 'agt_fixture'); assert.equal(config.owner_id, 'hum_owner'); assert.equal(config.url, 'https://example.com/agent-gram');
-  assert.ok(!packet.includes('npm install') && !packet.includes('github.com'));
+  assert.ok(packet.includes('npm install --global') && !packet.includes('github.com'));
   assert.throws(() => connectionInstructions({ url: 'https://user:secret@example.com', principal: {}, token: {} }));
 });
 test('standalone connect verifies identity, saves private config and retries confirmation idempotently', async t => {
@@ -84,12 +84,11 @@ test('plain client command honors configured HTTP proxy when origin cannot resol
  const result = await execute(['me'], '', { AGENTGRAM_URL: 'http://unresolvable.agentgram.invalid', AGENTGRAM_TOKEN: 'agt_fixture_key', HTTP_PROXY: url, http_proxy: url, HTTPS_PROXY: '', https_proxy: '', NO_PROXY: '', no_proxy: '', NODE_USE_ENV_PROXY: '' });
  assert.equal(result.code, 0, result.stderr); assert.equal(JSON.parse(result.stdout).principal.id, 'agt_proxy'); assert.equal(requests, 1); assert.equal(tunnels, 1);
 });
-test('connection environment choice includes one-step listener start without tying identity to the tool',()=>{
- for(const adapter of ['codex','claude']) {
- const packet=connectionInstructions({url:'https://example.com',principal:{id:'agt_test',name:'小舟'},token:{id:'tok_test',token:'agt_fixture'},ownerId:'hum_owner',adapter});
- assert.ok(packet.includes(`--from-stdin ${adapter} --start`));assert.ok(packet.includes('「小舟」'));
+test('all agent identities use one CLI and skill without runtime selection',()=>{
+ for(const name of ['Grok Bot','Muse','OpenAI Dots','OpenClaw','Hermes','Codex','Claude Code']) {
+ const packet=connectionInstructions({url:'https://example.com',principal:{id:'agt_test',name},token:{id:'tok_test',token:'agt_fixture'},ownerId:'hum_owner'});
+ assert.ok(packet.includes('agentgram join'));assert.ok(packet.includes('agentgram skill --install'));assert.ok(packet.includes(`「${name}」`));assert.ok(!packet.includes('--start'));
  }
- assert.throws(()=>connectionInstructions({url:'https://example.com',adapter:'unknown'}));
 });
 
 test('summary persists membership discovery across restarts, finds an old group newly joined without messages, and never acks',async t=>{

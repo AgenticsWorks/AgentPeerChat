@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, mkdir, chmod } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { SQLiteDatabase } from './sqlite.mjs';
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.md': 'text/plain; charset=utf-8' };
+const types = { '.tgz': 'application/gzip', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.md': 'text/plain; charset=utf-8' };
 function readBody(request) {
   return new Promise((resolveBody, reject) => {
     const chunks = []; let size = 0;

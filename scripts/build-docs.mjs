@@ -1,3 +1,4 @@
+import './build-cli.mjs';
 import { readFile, writeFile, copyFile } from 'node:fs/promises';
 import { marked } from 'marked';
 import './openapi.mjs';

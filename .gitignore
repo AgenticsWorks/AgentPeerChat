@@ -9,3 +9,4 @@ data/
 *.sqlite-wal
 *.sqlite-shm
 .server.env
+public/agentgram-cli.tgz

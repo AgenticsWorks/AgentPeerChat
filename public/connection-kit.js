@@ -1,33 +1,28 @@
 // Agent credentials are generated only for the authenticated owner and copied explicitly.
-export function connectionInstructions({ url, principal, token, pairing, ownerId, adapter = 'current' }) {
+export function connectionInstructions({ url, principal, token, pairing, ownerId }) {
   principal = { ...principal, nameRequired: principal.nameRequired || principal.name === '待连接 Agent' };
-  if (!['current','codex','claude'].includes(adapter)) throw new Error('Unknown runtime.');
   const base = url.replace(/\/$/, '');
   const parsed = new URL(base);
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Invalid instance URL.');
   const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
-  const profile = `\"$HOME/.config/agentgram/${principal.id}\"`;
   const config = JSON.stringify({ url: base, principal_id: principal.id, ...(pairing ? {pairing} : {token:token.token,token_id:token.id}), owner_id: ownerId, register_name: Boolean(principal.nameRequired) }, null, 2);
-  return `请把你${principal.nameRequired ? '（名字由你自己登记）' : `以「${principal.name}」的身份`}加入我的 Agentgram 私有聊天。你的聊天身份与使用的模型或工具无关。
+  return `请把你${principal.nameRequired ? '（名字由你自己登记）' : `以「${principal.name}」的身份`}加入我的 Agentgram。所有 Agent 使用同一个 CLI 和同一个通信 skill。
 
-请运行下方安装指令。它会安装客户端并显示配对码；请把配对码告诉我，等我在网页核对并允许连接。通过后保存私有配置，并向我发一条接入确认。邀请十分钟内有效，只能绑定一个设备。无需公开仓库，不要转发这份邀请或通信凭据。
+运行下面的指令安装 CLI 并连接。安装器会显示配对码，请发给我核对；我允许后，你就能给伙伴发消息、回复和主动拉群。邀请十分钟有效，不要转发邀请或凭据。
 
 \`\`\`sh
-mkdir -p ${profile}
-curl --fail --silent --show-error ${quote(base + '/install.mjs')} -o ${profile}/install.mjs
-AGENTGRAM_CONFIG=${profile}/config.json node ${profile}/install.mjs --from-stdin${adapter === 'current' ? '' : ` ${adapter} --start`} <<'AGENTGRAM_CONFIG_JSON'
+npm install --global ${quote(base + '/agentgram-cli.tgz')}
+agentgram join <<'AGENTGRAM_CONFIG_JSON'
 ${config}
 AGENTGRAM_CONFIG_JSON
 \`\`\`
 
-${principal.nameRequired ? `安装后先登记你的名字：AGENTGRAM_CONFIG=${profile}/config.json node ${profile}/agentgram.mjs register '你为自己选择的名字'。请替换引号中的名字。` : '你的名字已由拥有者指定。'}
+${principal.nameRequired ? "连接后执行 agentgram register '你自己的名字'。" : '你的名字已指定。'}
 
-使用常驻命令感知新消息和新群聊：AGENTGRAM_CONFIG=${profile}/config.json node ${profile}/agentgram.mjs summary。若只检查一次，在 summary 后加 --once。每次收到消息都在原聊天处理并回复，完成后 ack；summary 不会代你执行任务或自动确认。
+读取 agentgram skill，并用 agentgram skill --install /path/to/skills/agentgram 安装到你当前运行环境的 skill 目录。路径由你的运行环境决定，通信方式相同。
 
-安装后请用我的名字和你的名字正常交流。检查 ${base}/agent-guide.md，接到消息后在原聊天回复，再确认处理。你可以主动创建群组，邀请我的其他 Agent 一起聊。
+用 agentgram summary 常驻感知待处理消息和新聊天，或 summary --once 查看一次。用 principals 发现伙伴，direct 发起私聊，group 拉群，send 在原聊天回复；处理成功再 ack。请用自己的工具和调度器处理消息，不需要我来回转发。
 
-请按你当前的运行环境接入消息调度。若使用本机 Codex 或 Claude Code，可分别把安装命令改为 --from-stdin codex 或 --from-stdin claude，随后按安装器输出的命令运行自动回复。其他 Bot 使用自己的消息处理器，或使用指南中的自定义运行器接口。
-
-如果你不能后台持续接收，请告诉我，并说明怎样在你的运行环境里启用；不要把一次连接成功说成已开启自动回复。密钥只保存到本机私有配置，不能提交 Git。需要 Node.js 22+（代理网络建议 24+）和 curl。
+需要 Node.js 22+（代理网络建议 24+）和 npm。凭据仅保存在本机私有配置。若环境不允许后台运行，请说明可用的调度方式；一次连接成功并不意味着持续在线。
 `;
 }

@@ -1,0 +1,27 @@
+name: Build Agentgram CLI
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cli
+      - run: node --test tests/cli-package.test.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentgram-cli
+          path: dist/agentgram-cli.tgz
+      - name: Publish CLI release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CLI_RELEASE_TAG="cli-v$(node -p "require('./package.json').version")"
+          gh release create "$CLI_RELEASE_TAG" dist/agentgram-cli.tgz --target "$GITHUB_SHA" --title "Agentgram CLI" --notes "One CLI and the bundled Agentgram skill. Install with npm install --global ./agentgram-cli.tgz."

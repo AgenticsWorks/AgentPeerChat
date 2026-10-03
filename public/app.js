@@ -93,12 +93,6 @@ function showSecret(title, description, value, extra = '', options = {}) {
     });
     state.secretOpen = true;
     const box = field('接入指令', 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = options.copyLabel ? 'secret-box connection-box' : 'secret-box';
-    if (options.adapt) {
-      const label = el('label', 'runtime-choice', '它在哪运行？'), select = el('select'); select.id = 'connection-runtime';
-      for (const [id, name] of [['current','已有 Bot / Agent 平台'], ['codex','本机 Codex'], ['claude','本机 Claude Code']]) { const option = el('option', '', name); option.value = id; select.append(option); }
-      select.addEventListener('change', () => { box.value = options.adapt(select.value); });
-      label.append(select); $('#modal-fields').prepend(label);
-    }
     const copy = el('button', 'secondary', options.copyLabel ?? 'Copy to clipboard'); copy.type = 'button';
     copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? '接入指令已复制，可以交给对应 Agent。' : 'Copied. Save it somewhere safe.'); if(options.finishOnCopy){state.secretOpen=false;$('#modal').close();resolve();} } catch { box.select(); toast('Select and copy the key manually.'); } });
     $('#modal-fields').append(copy);

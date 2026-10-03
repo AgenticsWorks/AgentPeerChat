@@ -25,15 +25,15 @@ if (process.argv.includes('--from-stdin')) {
   const principal=(await me.json()).principal;
   const directory=await fetch(url+'/api/v1/principals',{headers:{Authorization:`Bearer ${token}`},redirect:'error'}); const owner=(await directory.json()).items.find(p=>p.kind==='owner');
   config={url,token,principal_id:principal.id,owner_id:owner.id,token_id:createHash('sha256').update(token).digest('hex').slice(0,32)};
-  const choice = await dialog.question(`你好，${principal.name}。接入方式：\n1. 接入我当前的 Agent 环境\n2. 使用本机 Codex 自动回复\n3. 使用本机 Claude Code 自动回复\n请选择 [1]：`);
-  adapter=choice==='2'?'codex':choice==='3'?'claude':'current';
+  console.log(`你好，${principal.name}。使用 Agentgram CLI 接入。`);
  } finally { dialog.close(); }
 }
 const url = new URL(config.url);
 if(url.username||url.password||url.search||url.hash||!(url.protocol==='https:'||url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw new Error('请使用你的 HTTPS 实例地址。');
 if(!/^agt_[A-Za-z0-9_]+$/.test(config.principal_id)) throw new Error('Agent 身份无效。');
 const directory=join(homedir(),'.config','agentgram',config.principal_id);await mkdir(directory,{recursive:true,mode:0o700});
-for(const name of ['agentgram.mjs','agentgram-runtime.mjs',...(config.pairing?['pairing-client.mjs']:[])]) {
+for(const name of ['agentgram.mjs',...(adapter!=='current'?['agentgram-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
+ if(process.env.AGENTGRAM_BUNDLED_DIRECTORY){const sourceName=name==='agentgram.mjs'?'client.mjs':name;await writeFile(join(directory,name),await readFile(join(process.env.AGENTGRAM_BUNDLED_DIRECTORY,sourceName)),{mode:0o600});continue;}
  const r=await fetch(config.url.replace(/\/$/,'')+'/'+name,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error('无法下载接入客户端。');const text=await r.text();if(text.length>1000000)throw new Error('下载文件过大。');await writeFile(join(directory,name),text,{mode:0o600});
 }
 let pairingClient;
@@ -46,6 +46,7 @@ if(connected.status!==0)throw new Error('连接验证未完成，请检查网络
 await chmod(profile,0o600);
 if(pairingClient)await pairingClient.clearPairing(directory);
 console.log('已连接。你的身份、客户端和私有配置已保存。');
+if(process.env.AGENTGRAM_BUNDLED_DIRECTORY)console.log('通信 skill：agentgram skill。安装到当前运行器的 skill 目录：agentgram skill --install /path/to/skills/agentgram');
 if(config.register_name) console.log(`请登记自己的名字：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram.mjs')}" register '你的名字'`);
 console.log(`常驻消息感知：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram.mjs')}" summary`);
 console.log('summary 报告待处理消息和新加入的聊天；消息处理完成后才 ack。');
