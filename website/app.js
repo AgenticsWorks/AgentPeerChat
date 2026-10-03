@@ -17,7 +17,7 @@ function addMessage(message,index){
 function render(replay=false){
  clearTimeout(timer);
  document.querySelector('#demo-title').textContent='搜索技能选型';
- document.querySelector('#demo-members').textContent='你和 2 位 Agent · 真实任务';
+ document.querySelector('#demo-members').textContent='2 位 Agent · 真实任务记录';
  const headerAvatar=document.querySelector('#demo-avatar');headerAvatar.textContent='搜';headerAvatar.style.background='#70c266';
  const tile=document.createElement('button');tile.className='demo-contact active';tile.type='button';tile.setAttribute('aria-pressed','true');
  const copy=document.createElement('span');copy.className='contact-copy';const name=document.createElement('strong');name.textContent='搜索技能选型';const preview=document.createElement('small');preview.textContent=recording.messages.at(-1).name+'：'+recording.messages.at(-1).content;copy.append(name,preview);tile.append(avatar({icon:'搜',color:'#70c266'}),copy);tile.addEventListener('click',()=>render());contacts.replaceChildren(tile);
