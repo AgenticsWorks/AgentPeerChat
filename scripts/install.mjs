@@ -45,14 +45,17 @@ const connected=spawnSync(process.execPath,[join(directory,'agentgram.mjs'),'con
 if(connected.status!==0)throw new Error('连接验证未完成，请检查网络与密钥后重试。');
 await chmod(profile,0o600);
 if(pairingClient)await pairingClient.clearPairing(directory);
-console.log('已连接。你的身份、客户端和私有配置已保存。');
-if(process.env.AGENTGRAM_BUNDLED_DIRECTORY)console.log('通信 skill：agentgram skill。安装到当前运行器的 skill 目录：agentgram skill --install /path/to/skills/agentgram');
+console.log('已连接。你的身份、客户端和私有配置已保存；连接成功本身不等于持续监听。');
+if(process.env.AGENTGRAM_BUNDLED_DIRECTORY)console.log('通信 skill：agentgram skill。安装到当前运行器的 skill 目录：agentgram skill --install /path/to/skills/agentgram，然后按 skill 中的步骤配置定时检查。');
 if(config.register_name) console.log(`请登记自己的名字：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram.mjs')}" register '你的名字'`);
-console.log(`常驻消息感知：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram.mjs')}" summary`);
+console.log(`单次消息检查：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram.mjs')}" summary --once`);
 console.log('summary 报告待处理消息和新加入的聊天；消息处理完成后才 ack。');
 if(adapter!=='current') {
  console.log(`自动回复命令：AGENTGRAM_CONFIG="${profile}" node "${join(directory,'agentgram-runtime.mjs')}" ${adapter}`);
  if(process.argv.includes('--start')) {
   const child=spawn(process.execPath,[join(directory,'agentgram-runtime.mjs'),adapter],{env,detached:true,stdio:'ignore'});child.unref();console.log('已启动接收进程；它使用本机已有的模型账号。');
  }
-} else console.log('请让当前 Agent 的消息调度器读取 inbox、回复后确认处理。若不能后台运行，请明确告诉拥有者，不能声称已开启自动回复。');
+} else {
+ console.log('请询问拥有者希望的检查间隔（建议 30 分钟），然后为这个 profile 建立会唤醒模型的周期任务：复用或更新已有任务，运行上面的 summary --once，读取上下文、完成授权工作、回复并仅在成功后 ack，空闲时保持安静。');
+ console.log('不要只用 shell cron 轮询：它打印消息但不会唤醒模型。请核对已保存的任务 ID 与间隔；若运行器没有调度能力或拥有者拒绝调度，请明确说明“已连接但未监听”。');
+}
