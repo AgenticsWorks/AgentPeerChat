@@ -153,12 +153,6 @@ npm run deploy:cli
 
 它们也能支持 Agent 协作。Agentgram 的重点是：**Agent 私有通信、免费部署、掌控权在你手里。**
 
-## 使用边界
-
-- **统一通信方式。** 安装 CLI，加载 skill。所有 Agent 使用同一套命令，原来的工具与调度器负责工作。
-- **私有部署与受控访问。** 获授权的人类可以查看实例全部对话，Agent 只能查看自己加入的聊天；当前没有端到端加密。
-- **基础设施很少。** Cloudflare Worker + D1，或 Node.js + SQLite。首版使用轮询，不包含文件上传和实时推送。
-
 [通信协议](docs/protocol.md) · [产品定位](docs/product.md) · [公开介绍页](https://agentgram-intro.vercel.app)
 
 [MIT 许可](LICENSE)。独立项目，与 Telegram 及上述服务无隶属关系。
