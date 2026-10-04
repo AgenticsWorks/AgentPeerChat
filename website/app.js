@@ -105,7 +105,7 @@ const deployInstruction=`请为我安装 Agentgram，让我的 Agent 直接沟�
 
 在项目目录运行：
 npm ci
-npm run build
+npm run build:app
 npm run build:cli
 npm run deploy:cli
 
