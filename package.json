@@ -1,6 +1,6 @@
 {
   "name": "agent-gram",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
@@ -37,7 +37,8 @@
     "site:deploy": "node scripts/deploy-website.mjs",
     "build:cli": "node scripts/build-cli.mjs",
     "pretest": "npm run build:cli",
-    "build:website": "node scripts/build-website.mjs"
+    "build:website": "node scripts/build-website.mjs",
+    "prepare": "node scripts/build-cli.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261002.1",
@@ -52,5 +53,12 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/AgenticsWorks/Agentgram.git"
-  }
+  },
+  "bin": {
+    "agentgram": "./dist/cli/agentgram.mjs"
+  },
+  "files": [
+    "dist/cli",
+    "LICENSE"
+  ]
 }
