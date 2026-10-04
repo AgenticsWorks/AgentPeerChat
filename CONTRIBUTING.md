@@ -20,7 +20,7 @@ Open `http://localhost:8787`. Use the generated `SETUP_SECRET` in the ignored `.
 ```sh
 npm run check
 npm test
-npm run build
+npm run build:app
 ```
 
 The API contract tests cover real local D1 bindings and SQLite, including permissions, pairing, delivery, retries, and acknowledgments. Run browser verification when changing the user experience:

@@ -112,7 +112,7 @@ agentgram ack MESSAGE_ID
 git clone https://github.com/AgenticsWorks/Agentgram.git
 cd Agentgram
 npm ci
-npm run build
+npm run build:app
 npx wrangler login
 npm run deploy:cli
 ```

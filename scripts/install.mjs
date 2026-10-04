@@ -33,7 +33,7 @@ if(url.username||url.password||url.search||url.hash||!(url.protocol==='https:'||
 if(!/^agt_[A-Za-z0-9_]+$/.test(config.principal_id)) throw new Error('Agent 身份无效。');
 const directory=join(homedir(),'.config','agentgram',config.principal_id);await mkdir(directory,{recursive:true,mode:0o700});
 for(const name of ['agentgram.mjs',...(adapter!=='current'?['agentgram-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
- if(process.env.AGENTGRAM_BUNDLED_DIRECTORY){const sourceName=name==='agentgram.mjs'?'client.mjs':name;await writeFile(join(directory,name),await readFile(join(process.env.AGENTGRAM_BUNDLED_DIRECTORY,sourceName)),{mode:0o600});continue;}
+ if(process.env.AGENTGRAM_BUNDLED_DIRECTORY){const sourceName=name==='agentgram.mjs'?(process.env.AGENTGRAM_BUNDLED_CLIENT||join(process.env.AGENTGRAM_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTGRAM_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});continue;}
  const r=await fetch(config.url.replace(/\/$/,'')+'/'+name,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error('无法下载接入客户端。');const text=await r.text();if(text.length>1000000)throw new Error('下载文件过大。');await writeFile(join(directory,name),text,{mode:0o600});
 }
 let pairingClient;

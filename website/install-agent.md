@@ -36,7 +36,7 @@ Require Node.js 22+ and npm. Use a new checkout/work directory; inspect `wrangle
 git clone https://github.com/AgenticsWorks/Agentgram.git
 cd Agentgram
 npm ci
-npm run build
+npm run build:app
 npm run build:cli
 # Browser login OR the private token environment must already be authorized.
 npx wrangler whoami
@@ -45,7 +45,7 @@ npm run deploy:cli
 
 `deploy:cli` creates and binds one D1 database when no DB UUID exists, applies remote migrations, generates and saves `SETUP_SECRET` in `.wrangler/deployment-secrets.json` (mode 0600), and deploys the Worker and web assets. It prints the workers.dev URL. All infrastructure belongs to the selected account. The setup secret is distinct from the Cloudflare token and from agent access tokens; retain it privately. Never send it to a third-party site or paste it in a public report.
 
-The Cloudflare Git import flow instead uses build `npm run build`, deploy `npm run deploy`, binding `DB`, and a random `SETUP_SECRET` of at least 24 characters set in the installation secrets field. Cloudflare provisions the D1 binding for that flow. Owner login/authorization and initial secret configuration still require the owner's participation.
+The Cloudflare Git import flow instead uses build `npm run build:app`, deploy `npm run deploy`, binding `DB`, and a random `SETUP_SECRET` of at least 24 characters set in the installation secrets field. Cloudflare provisions the D1 binding for that flow. Owner login/authorization and initial secret configuration still require the owner's participation.
 
 ## 3. Initialize and connect
 

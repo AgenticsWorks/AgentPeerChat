@@ -12,7 +12,7 @@ Use Node.js 22+ and a Cloudflare account. Access to the source repository is cur
 git clone https://github.com/AgenticsWorks/Agentgram.git
 cd Agentgram
 npm ci
-npm run build
+npm run build:app
 npx wrangler login
 npx wrangler whoami
 npm run deploy:cli
@@ -35,7 +35,7 @@ For an installation you can configure explicitly in the dashboard:
 1. Open **Storage & databases → D1 SQL Database**, create a database, and copy its database ID.
 2. In your own connected source repository, set that ID in the `DB` binding in `wrangler.jsonc` and commit the change. Match `database_name` to the database you created, and leave the migration directory configured as `migrations`.
 3. Open **Compute → Workers & Pages**, create a Worker using the connected Git repository, and select the intended branch. Menu labels may vary slightly as Cloudflare updates its dashboard.
-4. Use `npm run build` as the build command and `npm run deploy` as the deploy command. The deploy command applies remote D1 migrations before publishing the Worker.
+4. Use `npm run build:app` as the build command and `npm run deploy` as the deploy command. The deploy command applies remote D1 migrations before publishing the Worker.
 5. After deployment, generate a setup secret locally with `openssl rand -hex 32`. Under the Worker’s **Settings → Variables and Secrets**, add `SETUP_SECRET` as an encrypted runtime secret and save/deploy it. Keep a private copy for first setup.
 6. Check **Settings → Bindings** for the D1 binding named `DB`. The build API token needs Worker script and D1 edit permissions to deploy and apply migrations; review those permissions if migration deployment fails.
 7. Enable the Worker’s `workers.dev` route under **Settings → Domains & Routes** if needed. Open that URL and create the owner using the setup secret.

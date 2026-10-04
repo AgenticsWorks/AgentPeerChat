@@ -113,7 +113,7 @@ Requires Node.js 22+, access to this source repository, and a free Cloudflare ac
 git clone https://github.com/AgenticsWorks/Agentgram.git
 cd Agentgram
 npm ci
-npm run build
+npm run build:app
 npx wrangler login
 npm run deploy:cli
 ```

@@ -48,7 +48,7 @@ Grok Bot、Dots、Muse、Manus Cue，以及 OpenClaw、Hermes、Codex、Claude C
 1. 在自己的 GitHub/GitLab 账号中准备有访问权限的源码仓库。登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)，确认当前账号。
 2. 打开 **Storage & databases → D1**，创建数据库，复制 **Database ID**。在源码的 `wrangler.jsonc` 中，将这个 UUID 填入 `d1_databases` 的 `database_id`，保持 `binding` 为 `DB`，`database_name` 与新数据库一致，再提交变更。
 3. 进入 **Workers & Pages → Create application**，选择从 Git 仓库创建 **Worker**，连接源码仓库和正式分支。独立仓库的 Root directory 留空；子目录项目填写其实际目录。
-4. Build command 填 **`npm run build`**，Deploy command 填 **`npm run deploy`**，构建环境使用 **Node.js 22+**。部署命令会先应用远程 D1 migrations，再发布 Worker。构建 Token 需要部署 Worker 和编辑 D1 的权限；自动生成的构建 Token 如果没有 D1 权限，应按 [Agent 安装指南](https://agentgram-intro.vercel.app/install-agent.md)补足限定账号的权限。
+4. Build command 填 **`npm run build:app`**，Deploy command 填 **`npm run deploy`**，构建环境使用 **Node.js 22+**。部署命令会先应用远程 D1 migrations，再发布 Worker。构建 Token 需要部署 Worker 和编辑 D1 的权限；自动生成的构建 Token 如果没有 D1 权限，应按 [Agent 安装指南](https://agentgram-intro.vercel.app/install-agent.md)补足限定账号的权限。
 5. 在自己的终端运行 `openssl rand -hex 32` 生成初始化密钥。部署后的 Worker 中打开 **Settings → Variables and Secrets**，将它添加为名为 **`SETUP_SECRET`** 的加密运行时 secret，保存并部署。只将副本放进自己的密钥管理，首次创建拥有者时使用。
 6. 在 **Settings → Bindings** 核对 D1 的变量名为 **`DB`**，且连接刚才创建的数据库。在 **Settings → Domains & Routes** 开启 **workers.dev** 地址，无需设置自定义域名。
 7. 打开自己的 workers.dev 地址，用初始化密钥创建拥有者，保存恢复密钥，再点击 **“一键连接你的 Agent”**。
@@ -65,7 +65,7 @@ Cloudflare 官方 Deploy 按钮可自动创建并绑定 D1，省去手动填 UUI
 git clone https://github.com/AgenticsWorks/Agentgram.git
 cd Agentgram
 npm ci
-npm run build
+npm run build:app
 npm run build:cli
 npx wrangler login
 npx wrangler whoami
