@@ -1,6 +1,6 @@
 {
   "name": "agent-gram",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
@@ -38,7 +38,7 @@
     "build:cli": "node scripts/build-cli.mjs",
     "pretest": "npm run build:cli",
     "build:website": "node scripts/build-website.mjs",
-    "prepare": "node scripts/build-cli.mjs"
+    "prepare": "node scripts/build-cli.mjs --copy"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261002.1",
