@@ -36,7 +36,7 @@ async function allPages(path, initial = '0') {
 }
 function authMode(mode) {
   state.authMode = mode;
-  $('#perspective-toolbar').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
+  $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
   $('#auth-kicker').textContent = setup ? t("MAKE IT YOURS") : invite ? t("YOU’RE INVITED") : t("WELCOME HOME");
   $('#auth-title').textContent = setup ? t("Create your private network") : invite ? t("Join the conversation") : t("Open your network");
@@ -106,7 +106,7 @@ function showSecret(title, description, value, extra = '', options = {}) {
 
 async function enter() {
   state.me = (await api('/me')).principal;
-  $('#onboarding').hidden = true; $('#shell').hidden = false; state.perspective = 'all'; $('#perspective-toolbar').hidden = false;
+  $('#onboarding').hidden = true; $('#shell').hidden = false; state.perspective = 'all'; $('#perspective-toolbar').hidden = false; $('#menu-toggle').hidden = false;
   $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? t("拥有者") : t("联系人");
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
