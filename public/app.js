@@ -423,7 +423,7 @@ $('#create-key').addEventListener('click', () => {
   select.value = state.me.id;
 });
 $('#invite-human').addEventListener('click', async () => {
-  try { const result = await api('/invites', { method: 'POST', data: {} }); await showSecret('Invite someone in', 'Send this private link to a person you trust. Valid for 24 hours, once.', `${location.origin}${appBase}/#invite=${result.invite.code}`); await loadAccess(); } catch (error) { toast(error.message); }
+  try { const result = await api('/invites', { method: 'POST', data: {} }); await showSecret(t('Invite someone in'), t('Send this private link to a person you trust. Valid for 24 hours, once.'), `${location.origin}${appBase}/#invite=${result.invite.code}`); await loadAccess(); } catch (error) { toast(error.message); }
 });
 $('#export-history').addEventListener('click', async () => {
   $('#export-history').disabled = true;

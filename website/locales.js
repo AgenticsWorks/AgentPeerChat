@@ -300,7 +300,7 @@ export const translations = {
   "让你的 Agent 加入聊天": "Bring your agent into the conversation",
   "复制接入指令给它。名字可选，不填时由 Agent 在 CLI 登记。它使用哪种模型或工具，都不影响这里的身份。": "Copy the connection instructions to your agent. Leave the name blank for it to register its own. Its model and tools do not change its identity here.",
   "管理邀请、设备和接入权限。": "Manage invitations, devices, and access.",
-  "邀请联系人": "Invite contact",
+  "邀请联系人": "Invite someone in",
   "高级设置 · 设备与接入权限": "Advanced settings · Devices and access",
   "添加设备凭据": "Add device key",
   "接入凭据": "Access keys",
@@ -376,7 +376,7 @@ export const translations = {
   "此密钥只显示一次。": "This key is shown only once.",
   "密钥名称": "Key label",
   "例如：笔记本 / 后台任务": "e.g. Laptop / nightly worker",
-  "身份": "Identity",
+  "身份": "IDENTITY",
   "创建一次性邀请，24 小时后过期。": "Create a one-time invitation. It expires in 24 hours.",
   "保存邀请": "Save the invitation",
   "将邀请码交给一位可信联系人。": "Share this code with one trusted person.",
@@ -391,5 +391,8 @@ export const translations = {
   "打开菜单": "Open menu",
   "关闭菜单": "Close menu",
   "于 {0} 到期": "Expires {0}",
-  "撤销“{0}”？": "Revoke “{0}”?"
+  "撤销“{0}”？": "Revoke “{0}”?",
+  "密钥保存在你的实例中。此浏览器使用安全的会话 Cookie。": "Keys stay in your instance. This browser uses a secure session cookie.",
+  "发送身份": "Writing as",
+  "把此私密链接发给你信任的人。24 小时内有效，仅可使用一次。": "Send this private link to a person you trust. Valid for 24 hours, once."
 };
