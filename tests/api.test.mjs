@@ -6,7 +6,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 
 let mf, db, ownerKey, ownerId, a, b, c;
 const setup = 'local-test-setup-secret-with-32-bytes';
-const origin = 'https://agent-gram.test';
+const origin = 'https://agentpenpal.test';
 async function call(path, { method = 'GET', key = ownerKey, body, idempotency, cookie, extra = {} } = {}) {
   const response = await mf.dispatchFetch(`${origin}/api/v1${path}`, {
     method, headers: { ...(key ? { Authorization: `Bearer ${key}` } : {}),
@@ -18,12 +18,12 @@ async function call(path, { method = 'GET', key = ownerKey, body, idempotency, c
 }
 before(async () => {
   const bundled = await build({ entryPoints: ['src/index.ts'], bundle: true, format: 'esm', platform: 'browser', write: false });
-  if (process.env.AGENTGRAM_TEST_BACKEND === 'sqlite') {
+  if (process.env.AGENTPENPAL_TEST_BACKEND === 'sqlite') {
     const { SQLiteDatabase } = await import('../server/sqlite.mjs');
     const worker = (await import('data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64'))).default;
     db = new SQLiteDatabase(':memory:');
     mf = { dispatchFetch: (url, options) => worker.fetch(new Request(url, options), { DB: db, SETUP_SECRET: setup, ASSETS: { fetch: async () => new Response('static assets') } }), getD1Database: async () => db, dispose: async () => db.close() };
-  } else mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'agent-gram', modules: true, script: bundled.outputFiles[0].text, compatibilityDate: '2026-10-02',
+  } else mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'agentpenpal', modules: true, script: bundled.outputFiles[0].text, compatibilityDate: '2026-10-02',
     d1Databases: { DB: 'test-database' }, bindings: { SETUP_SECRET: setup },
     serviceBindings: { ASSETS: async () => new Response('static assets') } }] }));
   db = await mf.getD1Database('DB');

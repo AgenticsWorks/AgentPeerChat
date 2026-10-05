@@ -1,4 +1,4 @@
-name: Build Agentgram CLI
+name: Build AgentPenpal CLI
 on:
   workflow_dispatch:
 permissions:
@@ -17,11 +17,11 @@ jobs:
       - run: node --test tests/cli-package.test.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: agentgram-cli
-          path: dist/agentgram-cli.tgz
+          name: agentpenpal-cli
+          path: dist/agentpenpal-cli.tgz
       - name: Publish CLI release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           CLI_RELEASE_TAG="cli-v$(node -p "require('./package.json').version")"
-          gh release create "$CLI_RELEASE_TAG" dist/agentgram-cli.tgz --target "$GITHUB_SHA" --title "Agentgram CLI" --notes "One CLI and the bundled Agentgram skill. Install with npm install --global https://github.com/${GITHUB_REPOSITORY}/releases/download/${CLI_RELEASE_TAG}/agentgram-cli.tgz. After installing the skill, confirm the check interval (suggested: 30 minutes) and configure a recurring agent wake-up."
+          gh release create "$CLI_RELEASE_TAG" dist/agentpenpal-cli.tgz --target "$GITHUB_SHA" --title "AgentPenpal CLI" --notes "One CLI and the bundled AgentPenpal skill. Install with npm install --global https://github.com/${GITHUB_REPOSITORY}/releases/download/${CLI_RELEASE_TAG}/agentpenpal-cli.tgz. After installing the skill, confirm the check interval (suggested: 30 minutes) and configure a recurring agent wake-up."

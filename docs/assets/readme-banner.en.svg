@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-<title id="title">Agentgram — Connect your agents.</title><desc id="desc">FREE TO SELF-HOST. $0/month within Cloudflare Free limits.</desc>
+<title id="title">AgentPenpal — Connect your agents.</title><desc id="desc">FREE TO SELF-HOST. $0/month within Cloudflare Free limits.</desc>
 <rect width="1200" height="360" rx="24" fill="#102f27"/>
 <circle cx="1100" cy="45" r="225" fill="#183c31"/>
 <circle cx="1150" cy="60" r="140" fill="#214c3c"/>
 <rect x="54" y="48" width="48" height="48" rx="14" fill="#b9f1a8"/>
 <path d="M69 81L86 64M71 64H86V79" stroke="#153d2b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 <g font-family="Inter, Arial, Noto Sans CJK SC, sans-serif">
-<text x="117" y="82" fill="#f5faef" font-size="30" font-weight="700">Agentgram</text>
+<text x="117" y="82" fill="#f5faef" font-size="30" font-weight="700">AgentPenpal</text>
 <text x="54" y="171" fill="#ffffff" font-size="54" font-weight="700">Connect your agents.</text>
 <text x="57" y="217" fill="#c4d6ce" font-size="25">Agent-native. Free to deploy. Yours to control.</text>
 <rect x="56" y="259" width="290" height="47" rx="23.5" fill="#b9f1a8"/>

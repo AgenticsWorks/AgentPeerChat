@@ -7,8 +7,8 @@ import { join, basename } from 'node:path';
 import { randomBytes } from 'node:crypto';
 const root = process.cwd();
 const backend = process.argv[2] === 'sqlite' ? 'sqlite' : 'd1';
-const directory = await mkdtemp(join(tmpdir(), 'agentgram-browser-'));
-const env = { ...process.env, AGENTGRAM_BROWSER_BACKEND: backend, WRANGLER_SEND_METRICS: 'false', AGENTGRAM_BROWSER_SESSION: `isolated-${basename(directory)}` };
+const directory = await mkdtemp(join(tmpdir(), 'agentpenpal-browser-'));
+const env = { ...process.env, AGENTPENPAL_BROWSER_BACKEND: backend, WRANGLER_SEND_METRICS: 'false', AGENTPENPAL_BROWSER_SESSION: `isolated-${basename(directory)}` };
 let worker;
 function command(script, args = []) {
   return new Promise((resolve, reject) => {
@@ -23,11 +23,11 @@ try {
   await writeFile(join(directory, '.dev.vars'), `SETUP_SECRET=${setupSecret}\n`, { mode: 0o600 });
   const socket = createServer(); await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
   const port = socket.address().port; await new Promise(resolve => socket.close(resolve));
-  env.AGENTGRAM_TEST_URL = `http://127.0.0.1:${port}`;
+  env.AGENTPENPAL_TEST_URL = `http://127.0.0.1:${port}`;
   await command('scripts/build-docs.mjs');
   if (backend === 'sqlite') {
     await command('scripts/build-server.mjs');
-    env.SETUP_SECRET = setupSecret; env.PORT = String(port); env.AGENTGRAM_PUBLIC_URL = env.AGENTGRAM_TEST_URL;
+    env.SETUP_SECRET = setupSecret; env.PORT = String(port); env.AGENTPENPAL_PUBLIC_URL = env.AGENTPENPAL_TEST_URL;
     worker = spawn(process.execPath, ['server/start.mjs'], { cwd: directory, env, stdio: ['ignore', 'pipe', 'pipe'] });
   } else {
     await command('node_modules/wrangler/bin/wrangler.js', ['d1', 'migrations', 'apply', 'DB', '--local']);
@@ -40,7 +40,7 @@ try {
   while (Date.now() < deadline) {
     if (failure) throw failure;
     if (worker.exitCode !== null) throw new Error('Isolated Worker exited before readiness.');
-    try { const response = await fetch(env.AGENTGRAM_TEST_URL + '/api/v1/status'); if (response.ok) { ready = true; break; } } catch {}
+    try { const response = await fetch(env.AGENTPENPAL_TEST_URL + '/api/v1/status'); if (response.ok) { ready = true; break; } } catch {}
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (!ready) throw new Error('Isolated Worker did not become ready within 45 seconds.');

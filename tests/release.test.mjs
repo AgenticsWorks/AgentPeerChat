@@ -7,11 +7,11 @@ import { releaseUrls, prepareRelease } from '../scripts/prepare-release.mjs';
 
 test('release URLs preserve deployment subdirectories while clone metadata points to the repository', () => {
   const cases = [
-    ['https://github.com/team/agent-gram', 'https://github.com/team/agent-gram.git', 'https://github.com/team/agent-gram'],
-    ['https://github.com/team/agent-gram.git/', 'https://github.com/team/agent-gram.git', 'https://github.com/team/agent-gram'],
-    ['https://github.com/team/tools/tree/main/agent-gram', 'https://github.com/team/tools.git', 'https://github.com/team/tools/tree/main/agent-gram'],
-    ['https://gitlab.com/team/subteam/agent-gram', 'https://gitlab.com/team/subteam/agent-gram.git', 'https://gitlab.com/team/subteam/agent-gram'],
-    ['https://gitlab.com/team/subteam/tools/-/tree/main/agent-gram', 'https://gitlab.com/team/subteam/tools.git', 'https://gitlab.com/team/subteam/tools/-/tree/main/agent-gram']
+    ['https://github.com/team/agentpenpal', 'https://github.com/team/agentpenpal.git', 'https://github.com/team/agentpenpal'],
+    ['https://github.com/team/agentpenpal.git/', 'https://github.com/team/agentpenpal.git', 'https://github.com/team/agentpenpal'],
+    ['https://github.com/team/tools/tree/main/agentpenpal', 'https://github.com/team/tools.git', 'https://github.com/team/tools/tree/main/agentpenpal'],
+    ['https://gitlab.com/team/subteam/agentpenpal', 'https://gitlab.com/team/subteam/agentpenpal.git', 'https://gitlab.com/team/subteam/agentpenpal'],
+    ['https://gitlab.com/team/subteam/tools/-/tree/main/agentpenpal', 'https://gitlab.com/team/subteam/tools.git', 'https://gitlab.com/team/subteam/tools/-/tree/main/agentpenpal']
   ];
   for (const [input, cloneUrl, sourceUrl] of cases) {
     const result = releaseUrls(input);
@@ -27,27 +27,27 @@ test('incomplete and credential-bearing deployment targets are rejected', () => 
 });
 
 test('release preparation produces the official button and repeat runs replace it without duplicating .git', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'agentgram-release-'));
+  const directory = await mkdtemp(join(tmpdir(), 'agentpenpal-release-'));
   try {
-    await writeFile(join(directory, 'README.md'), '# Agentgram\n<!-- deploy-button:start -->\npending\n<!-- deploy-button:end -->\n');
-    await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'agent-gram' }));
-    await prepareRelease('https://github.com/team/tools/tree/main/agent-gram', directory);
-    const urls = await prepareRelease('https://github.com/team/agent-gram.git', directory);
+    await writeFile(join(directory, 'README.md'), '# AgentPenpal\n<!-- deploy-button:start -->\npending\n<!-- deploy-button:end -->\n');
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'agentpenpal' }));
+    await prepareRelease('https://github.com/team/tools/tree/main/agentpenpal', directory);
+    const urls = await prepareRelease('https://github.com/team/agentpenpal.git', directory);
     const readme = await readFile(join(directory, 'README.md'), 'utf8');
     assert.equal(readme.split('https://deploy.workers.cloudflare.com/button').length - 1, 1);
     assert.ok(readme.includes(urls.deployUrl));
     const pkg = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
-    assert.equal(pkg.repository.url, 'https://github.com/team/agent-gram.git');
+    assert.equal(pkg.repository.url, 'https://github.com/team/agentpenpal.git');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('invalid README markers or package JSON do not partially rewrite release files', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'agentgram-release-'));
+  const directory = await mkdtemp(join(tmpdir(), 'agentpenpal-release-'));
   try {
-    for (const [readme, pkg] of [['# No deploy marker\n', '{"name":"agent-gram"}'], ['<!-- deploy-button:start --><!-- deploy-button:end -->', '{invalid']]) {
+    for (const [readme, pkg] of [['# No deploy marker\n', '{"name":"agentpenpal"}'], ['<!-- deploy-button:start --><!-- deploy-button:end -->', '{invalid']]) {
       await writeFile(join(directory, 'README.md'), readme);
       await writeFile(join(directory, 'package.json'), pkg);
-      await assert.rejects(() => prepareRelease('https://github.com/team/agent-gram', directory));
+      await assert.rejects(() => prepareRelease('https://github.com/team/agentpenpal', directory));
       assert.equal(await readFile(join(directory, 'README.md'), 'utf8'), readme);
       assert.equal(await readFile(join(directory, 'package.json'), 'utf8'), pkg);
     }

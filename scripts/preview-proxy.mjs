@@ -2,10 +2,10 @@
 // Keeps Wrangler's local explorer/debug endpoints off the shared preview route.
 import http from 'node:http';
 const upstream = 'http://127.0.0.1:8787';
-const prefix = (process.env.AGENTGRAM_PREVIEW_PREFIX ?? '/agent-gram').replace(/\/$/, '');
-const publicOrigin = process.env.AGENTGRAM_PREVIEW_ORIGIN;
-if (!publicOrigin || new URL(publicOrigin).protocol !== 'https:') throw new Error('Set AGENTGRAM_PREVIEW_ORIGIN to the HTTPS test origin.');
-const assets = new Set(['/', '/index.html', '/app.js', '/connection-kit.js', '/chat-presentation.js', '/agentgram-runtime.mjs', '/install.mjs', '/pairing-client.mjs', '/agentgram.mjs', '/agent-guide.md', '/style.css', '/fonts.css', '/icon.svg', '/protocol.html', '/deployment.html', '/product.html', '/protocol', '/deployment', '/product', '/server-deployment.html', '/server-deployment', '/openapi.json']);
+const prefix = (process.env.AGENTPENPAL_PREVIEW_PREFIX ?? '/agentpenpal').replace(/\/$/, '');
+const publicOrigin = process.env.AGENTPENPAL_PREVIEW_ORIGIN;
+if (!publicOrigin || new URL(publicOrigin).protocol !== 'https:') throw new Error('Set AGENTPENPAL_PREVIEW_ORIGIN to the HTTPS test origin.');
+const assets = new Set(['/', '/index.html', '/app.js', '/connection-kit.js', '/chat-presentation.js', '/agentpenpal-runtime.mjs', '/install.mjs', '/pairing-client.mjs', '/agentpenpal.mjs', '/agent-guide.md', '/style.css', '/fonts.css', '/icon.svg', '/protocol.html', '/deployment.html', '/product.html', '/protocol', '/deployment', '/product', '/server-deployment.html', '/server-deployment', '/openapi.json']);
 const server = http.createServer(async (req, res) => {
   try {
     const requested = new URL(req.url, publicOrigin);
@@ -33,7 +33,7 @@ const server = http.createServer(async (req, res) => {
     if (cookies.length) output['set-cookie'] = cookies.map(c => c.replace('Path=/', `Path=${prefix}/`) + (c.includes('; Secure') ? '' : '; Secure'));
     let bytes = Buffer.from(await result.arrayBuffer());
     const type = result.headers.get('content-type') ?? '';
-    if (type.includes('text/html')) bytes = Buffer.from(bytes.toString().replace('<head>', `<head><meta name="agentgram-base" content="${prefix}">`).replace(/(\b(?:href|src)=["'])\/(?!\/)/g, `$1${prefix}/`));
+    if (type.includes('text/html')) bytes = Buffer.from(bytes.toString().replace('<head>', `<head><meta name="agentpenpal-base" content="${prefix}">`).replace(/(\b(?:href|src)=["'])\/(?!\/)/g, `$1${prefix}/`));
     else if (path === '/style.css') bytes = Buffer.from(bytes.toString().replace(/url\((['"]?)\//g, `url($1${prefix}/`));
     else if (path === '/openapi.json') { const spec = JSON.parse(bytes.toString()); spec.servers = [{ url: `${prefix}/api/v1` }]; bytes = Buffer.from(JSON.stringify(spec)); }
     res.writeHead(result.status, output); res.end(bytes);

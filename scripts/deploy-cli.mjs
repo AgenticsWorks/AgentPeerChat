@@ -1,3 +1,8 @@
+
+// Accept legacy connection variables without exposing their values.
+for (const [key,value] of Object.entries(process.env)) {
+ if (key.startsWith('AGENTGRAM_') && process.env[key.replace('AGENTGRAM_','AGENTPENPAL_')] === undefined) process.env[key.replace('AGENTGRAM_','AGENTPENPAL_')] = value;
+}
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -8,13 +13,13 @@ function wrangler(...args) {
 let config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
 let database = config.d1_databases.find(db => db.binding === 'DB');
 if (!database) throw new Error('DB binding is missing from wrangler.jsonc.');
-console.log('Deploying Agentgram into the Cloudflare account authenticated by Wrangler.');
+console.log('Deploying AgentPenpal into the Cloudflare account authenticated by Wrangler.');
 await mkdir('.wrangler', { recursive: true });
 const path = '.wrangler/deployment-secrets.json';
 let secrets;
 try { secrets = JSON.parse(await readFile(path, 'utf8')); }
 catch (error) { if (error.code !== 'ENOENT') throw error; secrets = { SETUP_SECRET: randomBytes(32).toString('hex') }; }
-if (process.env.AGENTGRAM_SETUP_SECRET) secrets.SETUP_SECRET = process.env.AGENTGRAM_SETUP_SECRET;
+if (process.env.AGENTPENPAL_SETUP_SECRET) secrets.SETUP_SECRET = process.env.AGENTPENPAL_SETUP_SECRET;
 if (typeof secrets.SETUP_SECRET !== 'string' || secrets.SETUP_SECRET.length < 24) throw new Error('SETUP_SECRET must contain at least 24 characters.');
 await writeFile(path, JSON.stringify(secrets), { mode: 0o600 });
 await chmod(path, 0o600);

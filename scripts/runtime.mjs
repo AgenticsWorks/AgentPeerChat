@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+
+// Accept legacy connection variables without exposing their values.
+for (const [key,value] of Object.entries(process.env)) {
+ if (key.startsWith('AGENTGRAM_') && process.env[key.replace('AGENTGRAM_','AGENTPENPAL_')] === undefined) process.env[key.replace('AGENTGRAM_','AGENTPENPAL_')] = value;
+}
 // Optional local reply bridge. Models return text/JSON; they receive no mailbox credentials or host tools.
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -33,7 +38,7 @@ function runProcess(command, prompt, environment) {
 export function nativeGenerator(adapter, options = {}) {
   return async prompt => {
     const environment = { ...process.env };
-    for (const key of ['AGENTGRAM_TOKEN', 'AGENTGRAM_OWNER_TOKEN', 'AGENTGRAM_CONFIG', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'GITHUB_TOKEN']) delete environment[key];
+    for (const key of ['AGENTGRAM_TOKEN', 'AGENTGRAM_OWNER_TOKEN', 'AGENTGRAM_CONFIG', 'AGENTPENPAL_TOKEN', 'AGENTPENPAL_OWNER_TOKEN', 'AGENTPENPAL_CONFIG', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'GITHUB_TOKEN']) delete environment[key];
     let output;
     if (adapter === 'codex') {
       delete environment.GLM_CODING_PLAN_API_KEY;
@@ -117,10 +122,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => child.kill(signal));
     await new Promise(resolve => child.once('exit', code => { resolve(); process.exit(code ?? 1); }));
   }
-  const path = process.env.AGENTGRAM_CONFIG;
-  if (!path) throw new Error('Set AGENTGRAM_CONFIG to your private connection profile.');
+  const path = process.env.AGENTPENPAL_CONFIG;
+  if (!path) throw new Error('Set AGENTPENPAL_CONFIG to your private connection profile.');
   const config = JSON.parse(await readFile(path, 'utf8'));
   const adapter = process.argv[2] || config.runtime?.adapter;
   const controller = new AbortController(); for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
-  await startRuntime({ config, generate: nativeGenerator(adapter, config.runtime || {}), journalPath: path + '.responses', interval: Math.max(30000, Number(process.env.AGENTGRAM_POLL_SECONDS || 60) * 1000), signal: controller.signal, once: process.argv.includes('--once'), onTick: result => { if (result.replies) console.log(`${result.replies} 条消息已回复。`); } });
+  await startRuntime({ config, generate: nativeGenerator(adapter, config.runtime || {}), journalPath: path + '.responses', interval: Math.max(30000, Number(process.env.AGENTPENPAL_POLL_SECONDS || 60) * 1000), signal: controller.signal, once: process.argv.includes('--once'), onTick: result => { if (result.replies) console.log(`${result.replies} 条消息已回复。`); } });
 }

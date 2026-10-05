@@ -10,7 +10,7 @@ const bundle = await build({ entryPoints: ['src/index.ts'], bundle: true, format
 const worker = (await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'))).default;
 const options = { worker, setupSecret: secret, publicUrl: 'https://private.example', assetsDirectory: resolve('public'), migrationsDirectory: resolve('migrations') };
 test('server persists messages, acknowledgments and keys across restart; HTTP protects cookies, bodies and assets', async () => {
- const directory = await mkdtemp(join(tmpdir(), 'agentgram server '));
+ const directory = await mkdtemp(join(tmpdir(), 'agentpenpal server '));
  let app;
  async function start() { app = await createApplication({ ...options, databasePath: join(directory, 'store.sqlite') }); await new Promise(r => app.server.listen(0, '127.0.0.1', r)); }
  async function call(path, { method = 'GET', key, body, headers = {} } = {}) {
@@ -49,7 +49,7 @@ test('server refuses weak setup secrets and public HTTP origins before creating 
 
 test('real installer waits for pairing approval then saves credentials and delivers its connection message', {timeout:20000}, async t => {
  const {spawn}=await import('node:child_process');const {readFile}=await import('node:fs/promises');
- const directory=await mkdtemp(join(tmpdir(),'agentgram-pair-install-'));
+ const directory=await mkdtemp(join(tmpdir(),'agentpenpal-pair-install-'));
  const app=await createApplication({...options,databasePath:join(directory,'store.sqlite')});
  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{await app.close();await rm(directory,{recursive:true,force:true});});
@@ -57,8 +57,8 @@ test('real installer waits for pairing approval then saves credentials and deliv
  const call=async(path,key,body)=>{const r=await fetch(url+'/api/v1'+path,{method:body?'POST':'GET',headers:{...(key?{Authorization:'Bearer '+key}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});assert.ok(r.ok,path+' '+r.status);return r.json();};
  const owner=await call('/setup',null,{name:'Owner',setup_secret:secret});
  const issued=await call('/pairings',owner.access_key,{name:'Installer Agent'});
- const profile=join(directory,'.config','agentgram',issued.principal.id,'config.json');
- const child=spawn(process.execPath,['scripts/install.mjs','--from-stdin'],{env:{...process.env,HOME:directory,AGENTGRAM_CONFIG:profile,AGENTGRAM_TOKEN:'',AGENTGRAM_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
+ const profile=join(directory,'.config','agentpenpal',issued.principal.id,'config.json');
+ const child=spawn(process.execPath,['scripts/install.mjs','--from-stdin'],{env:{...process.env,HOME:directory,AGENTPENPAL_CONFIG:profile,AGENTPENPAL_TOKEN:'',AGENTPENPAL_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
  t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL');});
  let out='',err='',approval;
  child.stdout.on('data',bytes=>{out+=bytes;const code=/Pairing code: ([A-F0-9]{4}-[A-F0-9]{4})/.exec(out)?.[1];if(code&&!approval)approval=call(`/pairings/${issued.pairing.id}/approve`,owner.access_key,{verification_code:code});});child.stderr.on('data',bytes=>err+=bytes);
@@ -67,5 +67,5 @@ test('real installer waits for pairing approval then saves credentials and deliv
  const saved=JSON.parse(await readFile(profile,'utf8'));assert.equal(saved.pairing,undefined);assert.equal((await stat(profile)).mode&0o777,0o600);assert.ok(!out.includes(saved.token));
  assert.equal((await call('/me',saved.token)).principal.id,issued.principal.id);
  assert.ok((await call('/inbox',owner.access_key)).items.some(m=>m.sender_id===issued.principal.id));
- await assert.rejects(stat(join(directory,'.config','agentgram',issued.principal.id,'pending-pairing.json')));
+ await assert.rejects(stat(join(directory,'.config','agentpenpal',issued.principal.id,'pending-pairing.json')));
 });

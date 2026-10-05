@@ -1,6 +1,6 @@
 {
-  "name": "agent-gram",
-  "version": "0.1.4",
+  "name": "agentpenpal",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
@@ -51,17 +51,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/AgenticsWorks/Agentgram.git"
+    "url": "https://github.com/AgenticsWorks/AgentPenpal.git"
   },
   "bin": {
-    "agentgram": "./cli/agentgram.mjs"
+    "agentpenpal": "./cli/agentpenpal.mjs",
+    "agentgram": "./cli/agentpenpal.mjs"
   },
   "files": [
-    "cli/agentgram.mjs",
+    "cli/agentpenpal.mjs",
     "scripts/agent.mjs",
     "scripts/install.mjs",
     "scripts/pairing-client.mjs",
-    "skills/agentgram/SKILL.md",
+    "skills/agentpenpal/SKILL.md",
     "LICENSE"
   ]
 }

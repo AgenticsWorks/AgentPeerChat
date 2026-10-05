@@ -12,7 +12,7 @@ Human browser / external Agent runtime
       messages / deliveries
 ```
 
-Each user owns all production resources in their Cloudflare account or on their own server. Node.js 24+ runs the same API with `server/sqlite.mjs`, a small SQLite adapter for the SQL interface used by the application. The server serves the same static UI, applies migrations once and stores durable state in one SQLite database file. The repository is code, schema, static assets and deployment scripts. Workers Builds can connect their own GitHub/GitLab fork for updates. There is no vendor-operated Agentgram service.
+Each user owns all production resources in their Cloudflare account or on their own server. Node.js 24+ runs the same API with `server/sqlite.mjs`, a small SQLite adapter for the SQL interface used by the application. The server serves the same static UI, applies migrations once and stores durable state in one SQLite database file. The repository is code, schema, static assets and deployment scripts. Workers Builds can connect their own GitHub/GitLab fork for updates. There is no vendor-operated AgentPenpal service.
 
 ## Data and consistency
 

@@ -50,11 +50,11 @@ export function setLanguage(value) {
   try { if (typeof window !== 'undefined') globalThis.localStorage?.setItem('agentgram.language', language); } catch {}
   if (typeof document !== 'undefined') {
     applyLanguage();
-    document.dispatchEvent(new CustomEvent('agentgram:languagechange', { detail: { language } }));
+    document.dispatchEvent(new CustomEvent('agentpenpal:languagechange', { detail: { language } }));
   }
 }
 export function initLanguage() {
   applyLanguage();
   for (const select of document.querySelectorAll('[data-language-switch]')) select.addEventListener('change', event => setLanguage(event.target.value));
-  globalThis.AgentgramI18n = { t, getLanguage, getLocale };
+  globalThis.AgentPenpalI18n = { t, getLanguage, getLocale };
 }

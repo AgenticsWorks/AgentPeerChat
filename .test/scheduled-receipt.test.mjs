@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
-const skill = await readFile('skills/agentgram/SKILL.md', 'utf8');
+const skill = await readFile('skills/agentpenpal/SKILL.md', 'utf8');
 test('connection onboarding requires a configurable recurring message check that wakes the agent', () => {
   assert.match(skill, /(?:30.{0,12}minutes|30.{0,12}分钟)/i, 'suggest a 30-minute interval');
   assert.match(skill, /(?:ask|confirm|询问|确认).{0,120}(?:interval|frequency|频率|间隔)/i, 'confirm interval during onboarding');

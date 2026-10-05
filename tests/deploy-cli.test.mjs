@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 const script = resolve('scripts/deploy-cli.mjs');
 async function fixture(t) {
-  const directory = await mkdtemp(join(tmpdir(), 'agentgram-deploy-'));
+  const directory = await mkdtemp(join(tmpdir(), 'agentpenpal-deploy-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await mkdir(join(directory, 'node_modules/wrangler/bin'), { recursive: true });
   await writeFile(join(directory, 'wrangler.jsonc'), JSON.stringify({ d1_databases: [{ binding: 'DB', database_name: 'fixture', database_id: '' }] }));
@@ -25,7 +25,7 @@ if (args[0] === 'd1' && args[1] === 'migrations' && process.env.FAIL_MIGRATION) 
 }
 function run(directory, extra = {}) {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env, AGENTGRAM_SETUP_SECRET: '', FAIL_MIGRATION: '', ...extra };
+    const env = { ...process.env, AGENTPENPAL_SETUP_SECRET: '', FAIL_MIGRATION: '', ...extra };
     const child = spawn(process.execPath, [script], { cwd: directory, env });
     let stdout = '', stderr = ''; child.stdout.on('data', d => stdout += d); child.stderr.on('data', d => stderr += d);
     child.on('error', reject); child.on('close', code => resolve({ code, stdout, stderr }));
@@ -37,7 +37,7 @@ async function calls(directory) {
 }
 test('invalid setup secrets are rejected before provisioning any cloud resources', async t => {
   const directory = await fixture(t);
-  let result = await run(directory, { AGENTGRAM_SETUP_SECRET: 'too-short' });
+  let result = await run(directory, { AGENTPENPAL_SETUP_SECRET: 'too-short' });
   assert.notEqual(result.code, 0); assert.deepEqual(await calls(directory), []);
   await mkdir(join(directory, '.wrangler'), { recursive: true });
   for (const secret of [null, 123, 'short']) {

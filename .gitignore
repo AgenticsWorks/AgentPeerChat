@@ -11,4 +11,6 @@ data/
 *.sqlite-wal
 *.sqlite-shm
 .server.env
+public/agentpenpal-cli.tgz
+
 public/agentgram-cli.tgz

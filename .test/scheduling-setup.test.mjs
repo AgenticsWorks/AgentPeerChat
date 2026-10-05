@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 
-const cli = await readFile('cli/agentgram.mjs', 'utf8');
+const cli = await readFile('cli/agentpenpal.mjs', 'utf8');
 const installer = await readFile('scripts/install.mjs', 'utf8');
 const website = await readFile('website/install-agent.md', 'utf8');
 const docs = await readFile('docs/install-agent.md', 'utf8');
-const skill = await readFile('skills/agentgram/SKILL.md', 'utf8');
-const installedSkill = await readFile('public/agentgram-skill.md', 'utf8');
+const skill = await readFile('skills/agentpenpal/SKILL.md', 'utf8');
+const installedSkill = await readFile('public/agentpenpal-skill.md', 'utf8');
 
 test('CLI skill installation points to the required scheduled wake-up instead of stopping at the skill file', () => {
   assert.match(cli, /skill installed/i);

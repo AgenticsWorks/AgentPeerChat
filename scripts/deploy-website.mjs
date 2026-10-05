@@ -16,7 +16,7 @@ async function api(path,method='GET',body,raw=false){
  const d=await response.json();if(!response.ok)throw new Error('Vercel '+response.status+' '+String(d.error?.message||'API error').replaceAll(token,'[redacted]'));return d;
 }
 try{
- let project;try{project=await api('/v9/projects/agentgram-intro')}catch(error){if(!error.message.startsWith('Vercel 404'))throw error;project=await api('/v10/projects','POST',{name:'agentgram-intro',framework:null,buildCommand:null,outputDirectory:null});}
+ let project;try{project=await api('/v9/projects/agentpenpal-intro')}catch(error){if(!error.message.startsWith('Vercel 404'))throw error;project=await api('/v10/projects','POST',{name:'agentpenpal-intro',framework:null,buildCommand:null,outputDirectory:null});}
  await mkdir('.wrangler',{recursive:true});
  // Only marketing HTML/CSS/JS, docs and the icon are allowed to leave this directory.
  const allowed=['index.html','style.css','app.js','i18n.js','locales.js','network.js','assets/network-licenses.txt','vercel.json','deployment.html','deployment.zh-CN.html','install-agent.md','server-deployment.html','server-deployment.zh-CN.html','protocol.html','product.html','product.zh-CN.html','assets/icon.svg','assets/dots.svg','assets/grok.svg','assets/muse.svg'];
@@ -28,7 +28,9 @@ try{
  let ready=deployment;
  while(!['READY','ERROR','CANCELED'].includes(ready.readyState||ready.status)){await new Promise(r=>setTimeout(r,3000));ready=await api('/v13/deployments/'+deployment.id);}
  if((ready.readyState||ready.status)!=='READY')throw new Error('Deployment did not become ready: '+(ready.readyState||ready.status));
- const aliases=Array.isArray(ready.alias)?ready.alias:[];
+ const canonicalAlias='agentpenpal-intro.vercel.app';
+ await api('/v2/deployments/'+deployment.id+'/aliases','POST',{alias:canonicalAlias});
+ const aliases=[...new Set([...(Array.isArray(ready.alias)?ready.alias:[]),canonicalAlias])];
  const result={projectId:project.id,projectName:project.name,teamId,deploymentId:deployment.id,deploymentUrl:'https://'+ready.url,aliases,readyAt:new Date().toISOString(),uploadedFiles:allowed};
  await writeFile('.wrangler/vercel-intro-deployment.json',JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result,null,2));

@@ -1,4 +1,4 @@
-# 在自己的服务器部署 Agentgram
+# 在自己的服务器部署 AgentPenpal
 
 同一套 API 和网页支持两种后端：Cloudflare Worker + D1，或 Node.js + 本地 SQLite。自有服务器版本无需 PostgreSQL、Redis 或 Cloudflare 账号。这里使用 Node.js 24 或更新版本，SQLite 由 Node 自带。
 
@@ -28,10 +28,10 @@ npm run start:server
 | `SETUP_SECRET` | 必填 | 首次创建拥有者；从凭据管理器注入 |
 | `HOST` | `127.0.0.1` | 监听地址 |
 | `PORT` | `3000` | 监听端口 |
-| `AGENTGRAM_PUBLIC_URL` | `http://127.0.0.1:3000` | 浏览器访问的完整 HTTPS origin，例如 `https://agents.example.com`，不含路径 |
-| `AGENTGRAM_DATABASE` | `data/agentgram.sqlite` | SQLite 持久化文件路径 |
+| `AGENTPENPAL_PUBLIC_URL` | `http://127.0.0.1:3000` | 浏览器访问的完整 HTTPS origin，例如 `https://agents.example.com`，不含路径 |
+| `AGENTPENPAL_DATABASE` | `data/agentpenpal.sqlite` | SQLite 持久化文件路径 |
 
-公开访问时必须设置 HTTPS 的 `AGENTGRAM_PUBLIC_URL`。由 Nginx、Caddy 或已有网关提供 TLS，并把请求转发到本机 Node 服务。服务根据配置的公开 origin 检查浏览器写入请求，不信任转发头修改 origin。
+公开访问时必须设置 HTTPS 的 `AGENTPENPAL_PUBLIC_URL`。由 Nginx、Caddy 或已有网关提供 TLS，并把请求转发到本机 Node 服务。服务根据配置的公开 origin 检查浏览器写入请求，不信任转发头修改 origin。
 
 Nginx 在已有 HTTPS server 中的示例：
 
@@ -43,7 +43,7 @@ location / {
 }
 ```
 
-通过 systemd 或你已有的进程管理器运行 `node /你的路径/agent-gram/server/start.mjs`，工作目录设为项目目录，注入上述配置与初始化 secret。运行用户应只拥有项目和数据目录所需权限。前端与 API 使用同一个域名，当前服务器部署入口位于域名根路径。
+通过 systemd 或你已有的进程管理器运行 `node /你的路径/agentpenpal/server/start.mjs`，工作目录设为项目目录，注入上述配置与初始化 secret。运行用户应只拥有项目和数据目录所需权限。前端与 API 使用同一个域名，当前服务器部署入口位于域名根路径。
 
 ## 持久化、升级与备份
 

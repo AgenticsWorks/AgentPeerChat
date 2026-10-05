@@ -9,17 +9,17 @@ import { join } from 'node:path';
 import { connectionInstructions } from '../public/connection-kit.js';
 function execute(args, input, env = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['scripts/agent.mjs', ...args], { env: { ...process.env, AGENTGRAM_URL: '', AGENTGRAM_TOKEN: '', ...env } });
+    const child = spawn(process.execPath, ['scripts/agent.mjs', ...args], { env: { ...process.env, AGENTPENPAL_URL: '', AGENTPENPAL_TOKEN: '', ...env } });
     let stdout = '', stderr = ''; child.stdout.on('data', d => stdout += d); child.stderr.on('data', d => stderr += d);
     child.on('error', reject); child.on('close', code => resolve({ code, stdout, stderr })); child.stdin.end(input);
   });
 }
 test('private instance connection packet needs no repository and quotes shell data safely', () => {
-  const packet = connectionInstructions({ url: 'https://example.com/agent-gram', principal: { id: 'agt_test' }, token: { id: 'tok_test', token: 'agt_fixture' }, ownerId: 'hum_owner' });
-  assert.ok(packet.includes('https://example.com/agent-gram/agentgram-cli.tgz'));
-  assert.ok(packet.includes('agentgram join'));
-  const config = JSON.parse(packet.match(/AGENTGRAM_CONFIG_JSON'\n([\s\S]*?)\nAGENTGRAM_CONFIG_JSON/)[1]);
-  assert.equal(config.token, 'agt_fixture'); assert.equal(config.owner_id, 'hum_owner'); assert.equal(config.url, 'https://example.com/agent-gram');
+  const packet = connectionInstructions({ url: 'https://example.com/agentpenpal', principal: { id: 'agt_test' }, token: { id: 'tok_test', token: 'agt_fixture' }, ownerId: 'hum_owner' });
+  assert.ok(packet.includes('https://example.com/agentpenpal/agentpenpal-cli.tgz'));
+  assert.ok(packet.includes('agentpenpal join'));
+  const config = JSON.parse(packet.match(/AGENTPENPAL_CONFIG_JSON'\n([\s\S]*?)\nAGENTPENPAL_CONFIG_JSON/)[1]);
+  assert.equal(config.token, 'agt_fixture'); assert.equal(config.owner_id, 'hum_owner'); assert.equal(config.url, 'https://example.com/agentpenpal');
   assert.ok(packet.includes('npm install --global') && !packet.includes('github.com'));
   assert.throws(() => connectionInstructions({ url: 'https://user:secret@example.com', principal: {}, token: {} }));
 });
@@ -44,16 +44,16 @@ test('standalone connect verifies identity, saves private config and retries con
   t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
   const config = { url: `http://127.0.0.1:${server.address().port}/private`, principal_id: identityId, token: 'agt_fixture_key', token_id: 'tok_fixture', owner_id: 'hum_owner' };
   const path = join(directory, 'profile', 'config.json');
-  let result = await execute(['connect'], JSON.stringify(config), { AGENTGRAM_CONFIG: path });
+  let result = await execute(['connect'], JSON.stringify(config), { AGENTPENPAL_CONFIG: path });
   assert.equal(result.code, 0, result.stderr); assert.equal(JSON.parse(result.stdout).connected, true);
   assert.equal((await stat(path)).mode & 0o777, 0o600); assert.equal(JSON.parse(await readFile(path, 'utf8')).token, config.token);
-  result = await execute(['connect'], JSON.stringify(config), { AGENTGRAM_CONFIG: path });
+  result = await execute(['connect'], JSON.stringify(config), { AGENTPENPAL_CONFIG: path });
   assert.equal(result.code, 0); assert.deepEqual(keys, ['agentgram-connect-tok_fixture', 'agentgram-connect-tok_fixture']);
-  result = await execute(['inbox'], '', { AGENTGRAM_CONFIG: path }); assert.equal(result.code, 0); assert.deepEqual(JSON.parse(result.stdout), []);
+  result = await execute(['inbox'], '', { AGENTPENPAL_CONFIG: path }); assert.equal(result.code, 0); assert.deepEqual(JSON.parse(result.stdout), []);
   for (const wrong of ['human', 'other-agent']) {
     kind = wrong === 'human' ? 'owner' : 'agent'; identityId = wrong === 'human' ? config.principal_id : 'agt_other';
     const missing = join(directory, wrong, 'config.json');
-    result = await execute(['connect'], JSON.stringify(config), { AGENTGRAM_CONFIG: missing });
+    result = await execute(['connect'], JSON.stringify(config), { AGENTPENPAL_CONFIG: missing });
     assert.equal(result.code, 1); await assert.rejects(stat(missing));
   }
   assert.equal(sends, 2);
@@ -70,7 +70,7 @@ test('plain client command honors configured HTTP proxy when origin cannot resol
  await new Promise(resolve => target.listen(0, '127.0.0.1', resolve));
  const proxy = createServer();
  proxy.on('connect', (req, socket, head) => {
-  assert.equal(req.url, 'unresolvable.agentgram.invalid:80'); tunnels++;
+  assert.equal(req.url, 'unresolvable.agentpenpal.invalid:80'); tunnels++;
   const upstream = connect(target.address().port, '127.0.0.1', () => {
    socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
    if (head.length) upstream.write(head); socket.pipe(upstream); upstream.pipe(socket);
@@ -81,18 +81,18 @@ test('plain client command honors configured HTTP proxy when origin cannot resol
  await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
  t.after(async () => { for (const socket of sockets) socket.destroy(); await Promise.all([proxy, target].map(server => new Promise(resolve => server.close(resolve)))); });
  const url = `http://127.0.0.1:${proxy.address().port}`;
- const result = await execute(['me'], '', { AGENTGRAM_URL: 'http://unresolvable.agentgram.invalid', AGENTGRAM_TOKEN: 'agt_fixture_key', HTTP_PROXY: url, http_proxy: url, HTTPS_PROXY: '', https_proxy: '', NO_PROXY: '', no_proxy: '', NODE_USE_ENV_PROXY: '' });
+ const result = await execute(['me'], '', { AGENTPENPAL_URL: 'http://unresolvable.agentpenpal.invalid', AGENTPENPAL_TOKEN: 'agt_fixture_key', HTTP_PROXY: url, http_proxy: url, HTTPS_PROXY: '', https_proxy: '', NO_PROXY: '', no_proxy: '', NODE_USE_ENV_PROXY: '' });
  assert.equal(result.code, 0, result.stderr); assert.equal(JSON.parse(result.stdout).principal.id, 'agt_proxy'); assert.equal(requests, 1); assert.equal(tunnels, 1);
 });
 test('all agent identities use one CLI and skill without runtime selection',()=>{
  for(const name of ['Grok Bot','Muse','OpenAI Dots','OpenClaw','Hermes','Codex','Claude Code']) {
  const packet=connectionInstructions({url:'https://example.com',principal:{id:'agt_test',name},token:{id:'tok_test',token:'agt_fixture'},ownerId:'hum_owner'});
- assert.ok(packet.includes('agentgram join'));assert.ok(packet.includes('agentgram skill --install'));assert.ok(packet.includes(`“${name}”`));assert.ok(!packet.includes('--start'));
+ assert.ok(packet.includes('agentpenpal join'));assert.ok(packet.includes('agentpenpal skill --install'));assert.ok(packet.includes(`“${name}”`));assert.ok(!packet.includes('--start'));
  }
 });
 
 test('summary persists membership discovery across restarts, finds an old group newly joined without messages, and never acks',async t=>{
- const directory=await mkdtemp(join(tmpdir(),'agentgram-summary-'));let joined=false,pending=true;const calls=[];
+ const directory=await mkdtemp(join(tmpdir(),'agentpenpal-summary-'));let joined=false,pending=true;const calls=[];
  const server=createServer((req,res)=>{
   calls.push(req.method+' '+req.url);res.setHeader('Content-Type','application/json');
   if(req.url==='/api/v1/me')return res.end(JSON.stringify({principal:{id:'agt_fixture',kind:'agent',name:'资料员'}}));
@@ -103,7 +103,7 @@ test('summary persists membership discovery across restarts, finds an old group 
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});});
  const path=join(directory,'config.json');await import('node:fs/promises').then(fs=>fs.writeFile(path,JSON.stringify({url:`http://127.0.0.1:${server.address().port}`,token:'agt_fixture'}),{mode:0o600}));
- const env={AGENTGRAM_CONFIG:path};
+ const env={AGENTPENPAL_CONFIG:path};
  let result=await execute(['summary','--once'],'',env);assert.equal(result.code,0,result.stderr);
  assert.equal(JSON.parse(result.stdout).pending_count,1);assert.deepEqual(JSON.parse(result.stdout).new_chats.map(t=>t.id),['thr_first']);
  result=await execute(['summary','--once'],'',env);assert.deepEqual(JSON.parse(result.stdout).new_chats,[]);assert.equal(JSON.parse(result.stdout).pending_count,1);
@@ -113,18 +113,18 @@ test('summary persists membership discovery across restarts, finds an old group 
 });
 
 test('summary defaults to a resident stream and stops on revoked access', {timeout:10000},async t=>{
- const directory=await mkdtemp(join(tmpdir(),'agentgram-summary-stream-'));
+ const directory=await mkdtemp(join(tmpdir(),'agentpenpal-summary-stream-'));
  const server=createServer((req,res)=>{res.statusCode=401;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:{message:'revoked'}}));});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const path=join(directory,'config.json');await import('node:fs/promises').then(fs=>fs.writeFile(path,JSON.stringify({url:`http://127.0.0.1:${server.address().port}`,token:'agt_fixture'}),{mode:0o600}));
  t.after(async()=>{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});});
- const result=await execute(['summary'],'',{AGENTGRAM_CONFIG:path});
+ const result=await execute(['summary'],'',{AGENTPENPAL_CONFIG:path});
  assert.equal(result.code,1);assert.ok(result.stderr.includes('listening'));assert.ok(result.stderr.includes('401'));assert.equal(result.stdout,'');
 });
 
 test('pairing client persists a private proof across interruption and never receives access before approval', async t => {
   const {completePairing,clearPairing}=await import('../scripts/pairing-client.mjs');
-  const directory=await mkdtemp(join(tmpdir(),'agentgram-pair-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+  const directory=await mkdtemp(join(tmpdir(),'agentpenpal-pair-'));t.after(()=>rm(directory,{recursive:true,force:true}));
   const config={url:'https://private.example',principal_id:'agt_pair',pairing:{id:'pair_test',code:'agp_private_invitation'}};
   let savedHash,approved=false,interrupt=true,verificationShown='';
   const fake=async(url,options)=>{

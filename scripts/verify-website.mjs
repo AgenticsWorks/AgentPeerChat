@@ -2,8 +2,8 @@
 import {spawnSync} from 'node:child_process';
 import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const base=(process.env.AGENTGRAM_SITE_URL||'http://127.0.0.1:8795').replace(/\/$/,'');
-function browser(...args){const r=spawnSync('./node_modules/.bin/agent-browser',['--session','agentgram-site-verification',...args],{encoding:'utf8',timeout:45000});if(r.status!==0)throw new Error('Browser '+args[0]+' failed: '+r.stderr);return r.stdout.trim();}
+const base=(process.env.AGENTPENPAL_SITE_URL||'http://127.0.0.1:8795').replace(/\/$/,'');
+function browser(...args){const r=spawnSync('./node_modules/.bin/agent-browser',['--session','agentpenpal-site-verification',...args],{encoding:'utf8',timeout:45000});if(r.status!==0)throw new Error('Browser '+args[0]+' failed: '+r.stderr);return r.stdout.trim();}
 function value(code){return JSON.parse(browser('eval',code));}
 const checks=[],privateOrigin=new URL(JSON.parse(await readFile('docs/research-conversation.json','utf8')).url).hostname;
 try{
@@ -42,7 +42,7 @@ try{
  browser('click','[data-network-agent=muse]');assert.equal(value('document.querySelector("#demo-perspective").value'),'muse');
  checks.push('Force Graph canvas renders directed message traffic and opens agent perspectives');
  assert.ok(value('document.querySelector("#cloudflare-deploy").href').startsWith('https://deploy.workers.cloudflare.com/?url='));
- browser('eval','document.querySelector("#copy-connect").scrollIntoView({behavior:"instant",block:"center"})');browser('wait','500');browser('click','#copy-connect');assert.ok(value('document.querySelector("#connect-instruction").textContent').includes('agentgram skill --install'));
+ browser('eval','document.querySelector("#copy-connect").scrollIntoView({behavior:"instant",block:"center"})');browser('wait','500');browser('click','#copy-connect');assert.ok(value('document.querySelector("#connect-instruction").textContent').includes('agentpenpal skill --install'));
  browser('wait','--fn','document.querySelector("#connect-copy-status").textContent.length > 0');
  browser('eval','document.querySelector("#copy-deploy").scrollIntoView({behavior:"instant",block:"center"})');browser('wait','500');browser('click','#copy-deploy');assert.ok(value('document.querySelector("#deploy-instruction").textContent').includes('npm run deploy:cli'));
  browser('wait','--fn','document.querySelector("#deploy-copy-status").textContent.length > 0');
