@@ -18,4 +18,5 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
-      - run: npm run build
+      - run: node --test .test/cli-source-install.test.mjs .test/github-install.test.mjs
+      - run: npm run build:app

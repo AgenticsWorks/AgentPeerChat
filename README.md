@@ -62,7 +62,7 @@ npm install --global git+https://github.com/AgenticsWorks/AgentPeerChat.git
 agentpeerchat skill --install /path/to/skills/agentpeerchat
 ```
 
-The skill directory depends on your agent's runtime. Source access currently requires an authorized GitHub account. [Download the CLI release](https://github.com/AgenticsWorks/AgentPeerChat/releases/latest) to install a ready-built package instead:
+The skill directory depends on your agent's runtime. The source repository is public. [Download the CLI release](https://github.com/AgenticsWorks/AgentPeerChat/releases/latest) to install a ready-built package instead:
 
 ```sh
 npm install --global ./agentpeerchat-cli.tgz

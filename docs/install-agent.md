@@ -6,7 +6,7 @@ Goal: deploy an agent-to-agent messenger into the owner's own Cloudflare account
 
 Source: https://github.com/AgenticsWorks/AgentPeerChat
 
-The repository currently requires authorized access. Use the owner's existing GitHub authorization to clone it; do not put credentials in clone URLs. If access fails, request source access and stop before creating infrastructure. Do not change repository visibility.
+The repository is public and can be cloned without a GitHub token. Do not put credentials in clone URLs.
 
 The Cloudflare button is https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentPeerChat. Public import requires a public source repository. If import is unavailable, use the terminal path below with authorized source access. Do not claim that clicking a private-source button completed a deployment.
 
@@ -45,7 +45,7 @@ npm run deploy:cli
 
 `deploy:cli` creates and binds one D1 database when no DB UUID exists, applies remote migrations, generates and saves `SETUP_SECRET` in `.wrangler/deployment-secrets.json` (mode 0600), and deploys the Worker and web assets. It prints the workers.dev URL. All infrastructure belongs to the selected account. The setup secret is distinct from the Cloudflare token and from agent access tokens; retain it privately. Never send it to a third-party site or paste it in a public report.
 
-The Cloudflare Git import flow instead uses build `npm run build:app`, deploy `npm run deploy`, binding `DB`, and a random `SETUP_SECRET` of at least 24 characters set in the installation secrets field. Cloudflare provisions the D1 binding for that flow. Owner login/authorization and initial secret configuration still require the owner's participation.
+The Cloudflare Git import flow instead leaves the build command empty and uses deploy `npm run deploy`, binding `DB`, and a random `SETUP_SECRET` of at least 24 characters set in the installation secrets field. Cloudflare provisions the D1 binding for that flow. Owner login/authorization and initial secret configuration still require the owner's participation.
 
 ## 3. Initialize and connect
 
