@@ -1,10 +1,12 @@
 import {t, initLanguage, getLocale} from './i18n.js';
 import { chatName, messageDirection } from './chat-presentation.js';
+import { threadPeople, visibleThreads, avatarIcon } from './conversation-view.js';
+import { renderConversationGraph } from './conversation-graph.js';
 import { connectionInstructions } from './connection-kit.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpenpal-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null, perspective: 'all' };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -34,7 +36,7 @@ async function allPages(path, initial = '0') {
 }
 function authMode(mode) {
   state.authMode = mode;
-  $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
+  $('#perspective-toolbar').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
   $('#auth-kicker').textContent = setup ? t("MAKE IT YOURS") : invite ? t("YOU’RE INVITED") : t("WELCOME HOME");
   $('#auth-title').textContent = setup ? t("Create your private network") : invite ? t("Join the conversation") : t("Open your network");
@@ -107,7 +109,7 @@ function showSecret(title, description, value, extra = '', options = {}) {
 
 async function enter() {
   state.me = (await api('/me')).principal;
-  $('#onboarding').hidden = true; $('#shell').hidden = false;
+  $('#onboarding').hidden = true; $('#shell').hidden = false; state.perspective = 'all'; $('#perspective-toolbar').hidden = false;
   $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? t("拥有者") : t("联系人");
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
@@ -116,7 +118,7 @@ async function enter() {
 async function refresh() {
   state.principals = (await api('/principals')).items;
   state.threads = (await allPages('/threads')).items;
-  renderThreads(); renderPrincipals();
+  renderPerspective(); renderThreads(); renderPrincipals(); renderGraph();
   if (state.selected) await loadMessages();
   if(state.me.kind==='owner') await renderPairings();
   $('#sync-state').textContent = '';
@@ -138,16 +140,20 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
 $('#logout').addEventListener('click', async () => {
   try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
-document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => {
-  state.view = button.dataset.view; toggleMenu(false);
-  for (const view of ['conversations', 'network', 'access']) $(`#${view}`).hidden = view !== state.view;
-  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === state.view));
-  if (state.view === 'access') try { await loadAccess(); } catch (error) { toast(error.message); }
-}));
+function showView(view) {
+  state.view = view; toggleMenu(false);
+  for (const name of ['conversations', 'network', 'access', 'graph']) $(`#${name}`).hidden = name !== view;
+  document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  if (view === 'graph') renderGraph();
+  if (view === 'access') loadAccess().catch(error => toast(error.message));
+}
+document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 $('#thread-search').addEventListener('input', renderThreads);
 function renderThreads() {
   $('#thread-count').textContent = String(state.threads.length);
-  const filtered = state.threads.filter(t => chatName(t, state.me.id).toLowerCase().includes($('#thread-search').value.toLowerCase()));
+  const scope = visibleThreads(state.threads, state.perspective);
+  $('#thread-count').textContent = String(scope.length);
+  const filtered = scope.filter(thread => chatName(thread, state.perspective === 'all' ? null : state.perspective).toLowerCase().includes($('#thread-search').value.toLowerCase()));
   $('#thread-list').replaceChildren();
   if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? t("没有找到聊天。") : t("选择联系人，开始第一段聊天。")));
   for (const thread of [...filtered].sort((a, b) => (b.last_message_seq ?? 0) - (a.last_message_seq ?? 0))) {
@@ -155,8 +161,10 @@ function renderThreads() {
     const copy = el('div', 'thread-copy');
     const last = thread.last_message;
     const preview = !last ? t("还没有消息") : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? t("内容") : last.content;
-    copy.append(el('strong', '', chatName(thread, state.me.id)), el('small', '', last ? `${messageDirection(thread, last.sender_id, humanName(last.sender_id))}: ${preview}` : preview));
-    const avatar = el('div', 'avatar thread-avatar', chatName(thread, state.me.id).slice(0, 2).toUpperCase()); colorAvatar(avatar, chatName(thread, state.me.id));
+    copy.append(el('strong', '', chatName(thread, state.perspective === 'all' ? null : state.perspective)), el('small', '', last ? `${messageDirection(thread, last.sender_id, humanName(last.sender_id))}: ${preview}` : preview));
+    const avatar = conversationAvatar(thread);
+    const kind = el('span', 'conversation-kind', thread.kind === 'direct' ? t('Direct chat') : t('Group chat'));
+    copy.prepend(kind);
     button.append(avatar, copy, el('time', '', last?.created_at ? time(last.created_at) : date(thread.created_at)));
     button.addEventListener('click', () => selectThread(thread.id)); $('#thread-list').append(button);
   }
@@ -173,13 +181,17 @@ async function loadMessages(forceScroll = false) {
   const threadId = state.selected, cursor = state.cursor;
   const result = await allPages(`/threads/${threadId}`, cursor);
   if (state.selected !== threadId || state.cursor !== cursor) return;
-  $('#chat-title').textContent = chatName(result.last.thread, state.me.id);
-  $('#chat-members').textContent = result.last.thread.kind === 'direct' ? t("私聊") : t("{0} 位成员", result.last.thread.members.length);
-  $('#chat-avatar').textContent = chatName(result.last.thread, state.me.id).slice(0, 2).toUpperCase(); colorAvatar($('#chat-avatar'), chatName(result.last.thread, state.me.id));
+  $('#chat-title').textContent = chatName(result.last.thread, state.perspective === 'all' ? null : state.perspective);
+  $('#chat-members').textContent = conversationSubtitle(result.last.thread);
+  $('#chat-avatar').replaceChildren(...conversationAvatar(result.last.thread).childNodes); $('#chat-avatar').className = conversationAvatar(result.last.thread).className;
   state.members = result.last.thread.members; state.currentThread = result.last.thread;
   const observing = result.last.thread.kind === 'direct' && !state.members.some(p => p.id === state.me.id);
-  $('#observe-actions').hidden = !observing; $('#compose-form').hidden = observing;
-  $('#message-text').disabled = observing; $('#send-button').disabled = observing;
+  const perspectiveOnly = state.perspective !== 'all';
+  $('#observe-actions').hidden = !observing; $('#compose-form').hidden = observing || perspectiveOnly;
+  $('#message-text').disabled = observing || perspectiveOnly; $('#send-button').disabled = observing || perspectiveOnly;
+  $('#observe-actions').hidden = !(observing || perspectiveOnly);
+  $('#observe-actions span').textContent = perspectiveOnly ? t('Viewing as {0} · Read only', humanName(state.perspective)) : t('Viewing an agent direct chat · Original conversation preserved');
+  $('#join-discussion').hidden = perspectiveOnly;
   $('#message-text').placeholder = observing ? t("正在查看这段私聊") : t("消息");
   $('#add-members').hidden = result.last.thread.kind === 'direct';
   renderMembers();
@@ -251,10 +263,10 @@ function renderMessages(forceScroll = false) {
     const day = new Date(message.created_at).toLocaleDateString(getLocale());
     if (day !== previousDay) { const separator = el('div', 'date-separator'); separator.append(el('span', '', date(message.created_at))); list.append(separator); previousDay = day; }
     const principal = state.principals.find(p => p.id === message.sender_id);
-    const article = el('article', `message${message.sender_id === state.me.id ? ' mine' : ''}`);
+    const article = el('article', `message${message.sender_id === state.perspective ? ' mine' : ''}`);
     article.dataset.messageId = message.id;
     const name = principal?.name ?? message.sender_id;
-    const avatar = el('div', `avatar ${principal?.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, name.slice(0, 1).toUpperCase()); colorAvatar(avatar, name); article.append(avatar);
+    article.append(personAvatar(principal ?? {id:message.sender_id,name}));
     const content = el('div', 'message-body'), meta = el('div', 'message-meta');
     meta.append(el('strong', '', messageDirection(state.currentThread, message.sender_id, name)));
     const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(getLocale()); timestamp.dateTime = message.created_at;
@@ -296,7 +308,7 @@ function renderMessages(forceScroll = false) {
 }
 $('#compose-form').addEventListener('submit', async event => {
   event.preventDefault(); const threadId = state.selected, content = $('#message-text').value;
-  if (!content.trim() || !threadId) return;
+  if (!content.trim() || !threadId || state.perspective !== 'all') return;
   const signature = JSON.stringify({ threadId, content });
   if ($('#compose-form').dataset.pendingSignature !== signature) {
     $('#compose-form').dataset.pendingSignature = signature; $('#compose-form').dataset.pendingKey = crypto.randomUUID();
@@ -312,12 +324,12 @@ $('#compose-form').addEventListener('submit', async event => {
 async function directChat(principalId) {
   const result = await api('/threads', { method: 'POST', data: { kind: 'direct', members: [principalId] } });
   if ($('#modal').open) $('#modal').close();
-  await refresh(); $('[data-view="conversations"]').click(); await selectThread(result.thread.id);
+  await refresh(); showView('conversations'); await selectThread(result.thread.id);
 }
 function createGroup() {
   openModal(t("新建群组"), t("给群组起个名字，选择一起聊天的联系人。"), async data => {
     const result = await api('/threads', { method: 'POST', data: { title: data.get('title'), members: data.getAll('members') } });
-    $('#modal').close(); await refresh(); $('[data-view="conversations"]').click(); await selectThread(result.thread.id);
+    $('#modal').close(); await refresh(); showView('conversations'); await selectThread(result.thread.id);
   });
   field(t("群组名称"), 'title', t("例如：项目讨论"));
   const wrapper = el('div', 'check-list');
@@ -443,6 +455,48 @@ async function boot() {
     try { await enter(); } catch (error) { authMode('login'); if (error.status !== 401) $('#auth-error').textContent = error.message; }
   } catch (error) { authMode('login'); $('#auth-error').textContent = error.message; }
 }
+$('#identity-perspective').addEventListener('change', () => setPerspective($('#identity-perspective').value).catch(error => toast(error.message)));
+$('#refresh-map').addEventListener('click', () => refresh().catch(error => toast(error.message)));
+function renderPerspective() {
+  const select = $('#identity-perspective'); select.replaceChildren(el('option', '', t('All conversations'))); select.firstChild.value = 'all';
+  for (const p of state.principals.filter(p => p.kind === 'agent')) { const option = el('option', '', p.name); option.value = p.id; select.append(option); }
+  if (state.perspective !== 'all' && !state.principals.some(p => p.id === state.perspective)) state.perspective = 'all';
+  select.value = state.perspective;
+  $('#perspective-heading').textContent = state.perspective === 'all' ? t('All conversations') : t('{0} conversations', humanName(state.perspective));
+}
+async function setPerspective(id) {
+  state.perspective = id; renderPerspective(); renderThreads(); renderGraph();
+  if (state.selected && !visibleThreads(state.threads, id).some(thread => thread.id === state.selected)) {
+    state.selected = null; state.currentThread = null; state.members = []; state.messages = []; state.inspector = false;
+    $('#chat-active').hidden = true; $('#chat-empty').hidden = false; $('#conversations').classList.remove('chat-open'); renderMembers();
+  } else if (state.selected) await loadMessages(true);
+}
+function personAvatar(person) {
+  const avatar = el('span', 'avatar person-avatar', person.name.slice(0, 1).toUpperCase());
+  colorAvatar(avatar, person.name); avatar.title = person.name;
+  const icon = avatarIcon(person);
+  if (icon) { const image = el('img'); image.src = appBase + icon; image.alt = ''; avatar.replaceChildren(image); }
+  return avatar;
+}
+function conversationAvatar(thread) {
+  const people = threadPeople(thread), group = thread.kind !== 'direct';
+  const avatar = el('span', `conversation-avatar ${group ? 'group-stack' : 'direct-pair'}`);
+  avatar.setAttribute('aria-label', `${group ? t('Group chat') : t('Direct chat')}: ${people.map(p => p.name).join(', ')}`);
+  for (const person of people.slice(0, group ? 3 : 2)) avatar.append(personAvatar(person));
+  if (group && people.length > 3) avatar.append(el('span', 'avatar-more', `+${people.length - 3}`));
+  return avatar;
+}
+function conversationSubtitle(thread) {
+  return `${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')} · ${threadPeople(thread).map(p => p.name).join(', ')}`;
+}
+function renderGraph() {
+  if (!state.me) return;
+  const scope = visibleThreads(state.threads, state.perspective);
+  $('#graph-summary').textContent = t('{0} conversations · {1} groups · {2} direct chats', scope.length, scope.filter(t => t.kind !== 'direct').length, scope.filter(t => t.kind === 'direct').length);
+  renderConversationGraph($('#conversation-graph'), scope, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => setPerspective(id).catch(error => toast(error.message)), t, icon: person => { const icon = avatarIcon(person); return icon ? appBase + icon : null; } });
+  const list = $('#graph-conversations'); list.replaceChildren();
+  for (const thread of scope) { const button = el('button', 'graph-chat'); button.append(conversationAvatar(thread), el('span', '', `${chatName(thread, null)} · ${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')}`)); button.addEventListener('click', () => { showView('conversations'); selectThread(thread.id); }); list.append(button); }
+}
 boot();
 
 async function renderPairings(){
@@ -463,8 +517,9 @@ async function renderPairings(){
 document.addEventListener("agentpenpal:languagechange",()=>{
  if(!state.me){authMode(state.authMode);return;}
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
- renderThreads();renderPrincipals();renderMembers();renderMessages();
- if(state.currentThread){$("#chat-members").textContent=state.currentThread.kind==="direct"?t("私聊"):t("{0} 位成员",state.members.length);$("#message-text").placeholder=$("#observe-actions").hidden?t("消息"):t("正在查看这段私聊");}
+ renderPerspective();renderThreads();renderPrincipals();renderMembers();renderMessages();renderGraph();
+ if(state.perspective!=="all")$("#observe-actions span").textContent=t("Viewing as {0} · Read only",humanName(state.perspective));
+ if(state.currentThread){$("#chat-members").textContent=conversationSubtitle(state.currentThread);$("#message-text").placeholder=$("#observe-actions").hidden?t("消息"):t("正在查看这段私聊");}
  if(state.inspector&&state.selected)loadActivity(state.selected).catch(error=>toast(error.message));
  if(state.me.kind==="owner")renderPairings().catch(error=>toast(error.message));
 });

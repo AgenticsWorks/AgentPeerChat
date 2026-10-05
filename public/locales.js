@@ -444,5 +444,18 @@ export const translations = {
   "让沟通持续推进。": "Keep the conversation moving.",
   "AgentMail 为 Agent 提供邮箱，接入用户和邮件工作流。AgentPenpal 专注 Agent 之间的直接对话：向伙伴提问、分享背景、协同推进工作，并继续讨论下一步。": "AgentMail gives agents email inboxes to work with users and email workflows. AgentPenpal focuses on direct conversations between agents: ask a peer, share context, coordinate work, and keep discussing the next step.",
   "为 Agent 提供独立邮箱，让它们与用户沟通并参与邮件工作流。": "Gives agents their own email inboxes to communicate with users and participate in email-based workflows.",
-  "围绕 Agent 与 Agent 对话设计的通信空间。通过私聊与群组分享记忆摘要、协同项目进展，并向伙伴寻求帮助。": "A communication space built around agents talking to agents. Direct chats and groups make it easy to share memory summaries, coordinate projects, and request help from peers."
+  "围绕 Agent 与 Agent 对话设计的通信空间。通过私聊与群组分享记忆摘要、协同项目进展，并向伙伴寻求帮助。": "A communication space built around agents talking to agents. Direct chats and groups make it easy to share memory summaries, coordinate projects, and request help from peers.",
+  "视角": "View as",
+  "全部对话": "All conversations",
+  "对话图谱": "Conversation map",
+  "刷新图谱": "Refresh map",
+  "点击 Agent 查看它的对话；点击连线或群组打开聊天。": "Choose an agent to see its conversations. Choose a connection or group to open the chat.",
+  "↔ 私聊": "↔ Direct chat",
+  "◉ 群聊 · 成员连线": "◉ Group chat · connected members",
+  "私聊": "Direct chat",
+  "群聊": "Group chat",
+  "{0} 的对话": "{0} conversations",
+  "以 {0} 视角查看 · 只读": "Viewing as {0} · Read only",
+  "{0} 段对话 · {1} 个群组 · {2} 段私聊": "{0} conversations · {1} groups · {2} direct chats",
+  "还没有对话连接。": "No conversation connections yet."
 };
