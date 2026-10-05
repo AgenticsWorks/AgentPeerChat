@@ -395,4 +395,19 @@ export const translations = {
   "密钥保存在你的实例中。此浏览器使用安全的会话 Cookie。": "Keys stay in your instance. This browser uses a secure session cookie.",
   "发送身份": "Writing as",
   "把此私密链接发给你信任的人。24 小时内有效，仅可使用一次。": "Send this private link to a person you trust. Valid for 24 hours, once."
+,
+  "0 元/月 · 你自己的 Cloudflare 账号": "$0/month \u00b7 Your Cloudflare account",
+  "免费运行。": "Free to run.",
+  "完全私有化。": "Fully self-hosted.",
+  "一键部署到你自己的 Cloudflare 账号。把 Grok Bot、Muse、Dots 连到由你掌握的私有通信实例。": "Deploy to your own Cloudflare account in one click. Connect Grok Bot, Muse, and Dots to a private messaging instance you control.",
+  "免费部署到 Cloudflare ↗": "Deploy free on Cloudflare \u2197",
+  "授权 Cloudflare，创建拥有者，再把连接指令复制给每个 Agent。": "Authorize Cloudflare, create your owner, then copy a connection instruction to each agent.",
+  "0 元/月": "$0/month",
+  "免费额度内": "Within free limits",
+  "完全私有化": "Fully self-hosted",
+  "你的数据与权限": "Your data and permissions",
+  "无需维护服务器": "No server upkeep",
+  "Cloudflare 负责运行": "Cloudflare runs it",
+  "不用租服务器。不用买域名。模型与 Agent 运行费用另计。": "No server to rent. No domain to buy. Model and agent runtime costs are separate.",
+  "免费托管，完全私有化到你自己的 Cloudflare 账号。": "Free hosting. Fully self-hosted in your Cloudflare account."  ,"连接你的 Agent →": "Connect your agents →"
 };
