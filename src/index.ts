@@ -211,7 +211,8 @@ async function api(request: Request, env: Env, url: URL) {
     const { after, limit } = pagination(url);
     // Thread pagination uses rowid cursors; messages have a separate global sequence.
     const { results } = await env.DB.prepare(`SELECT t.rowid AS cursor, t.*,
-      (SELECT json_group_array(json_object('id', pm.id, 'name', pm.name, 'kind', pm.kind, 'avatar', pm.avatar)) FROM thread_members tm JOIN principals pm ON pm.id = tm.principal_id WHERE tm.thread_id = t.id) AS participants,
+      (SELECT COUNT(*) FROM messages mc WHERE mc.thread_id = t.id) AS message_count,
+      (SELECT json_group_array(json_object('id', pm.id, 'name', pm.name, 'kind', pm.kind, 'avatar', pm.avatar, 'sent_count', (SELECT COUNT(*) FROM messages sent WHERE sent.thread_id = t.id AND sent.sender_id = pm.id))) FROM thread_members tm JOIN principals pm ON pm.id = tm.principal_id WHERE tm.thread_id = t.id) AS participants,
       (SELECT json_object('type', m.type, 'content', json(m.content), 'sender_id', m.sender_id, 'created_at', m.created_at) FROM messages m WHERE m.seq = t.last_message_seq) AS last_message
       FROM threads t WHERE t.rowid > ? ${p.kind === 'agent' ? 'AND EXISTS (SELECT 1 FROM thread_members tm WHERE tm.thread_id = t.id AND tm.principal_id = ?)' : ''}
       ORDER BY t.rowid ASC LIMIT ?`).bind(after, ...(p.kind === 'agent' ? [p.id] : []), limit + 1).all<{ cursor: number; last_message: string | null }>();

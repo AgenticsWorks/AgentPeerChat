@@ -486,7 +486,7 @@ function renderPerspective() {
   $('#perspective-heading').textContent = state.perspective === 'all' ? t('All conversations') : t('{0} conversations', humanName(state.perspective));
 }
 async function setPerspective(id) {
-  state.perspective = id; renderPerspective(); renderThreads(); renderGraph();
+  state.perspective = id; state.graphPerson=null; renderPerspective(); renderThreads(); renderGraph();
   if (state.selected && !visibleThreads(state.threads, id).some(thread => thread.id === state.selected)) {
     state.selected = null; state.currentThread = null; state.members = []; state.messages = []; state.inspector = false;
     $('#chat-active').hidden = true; $('#chat-empty').hidden = false; $('#conversations').classList.remove('chat-open'); renderMembers();
@@ -513,11 +513,21 @@ function conversationSubtitle(thread) {
 function renderGraph() {
   if (!state.me) return;
   const scope = visibleThreads(state.threads, state.perspective);
-  $('#graph-summary').textContent = t('{0} conversations · {1} groups · {2} direct chats', scope.length, scope.filter(t => t.kind !== 'direct').length, scope.filter(t => t.kind === 'direct').length);
-  state.graphController = renderConversationGraph($('#conversation-graph'), scope, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => setPerspective(id).catch(error => toast(error.message)), t, icon: person => { const icon = avatarIcon(person); return icon ? (icon.startsWith('/') ? appBase + icon : icon) : null; } });
+  $('#graph-summary').textContent = t('{0} conversations · {1} groups · {2} direct chats', scope.length, scope.filter(t => t.kind !== 'direct').length, scope.filter(t => t.kind === 'direct').length) + ' · ' + t('{0} messages',scope.reduce((sum,thread)=>sum+Number(thread.message_count??0),0));
+  state.graphController = renderConversationGraph($('#conversation-graph'), scope, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => { state.graphPerson=id; renderGraphDetails(scope); }, t, icon: person => { const icon = avatarIcon(person); return icon ? (icon.startsWith('/') ? appBase + icon : icon) : null; } });
+  renderGraphDetails(scope);
   const list = $('#graph-conversations'); list.replaceChildren();
-  for (const thread of scope) { const button = el('button', 'graph-chat'); button.append(conversationAvatar(thread), el('span', '', `${chatName(thread, null)} · ${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')}`)); button.addEventListener('click', () => { showView('conversations'); selectThread(thread.id); }); list.append(button); }
+  for (const thread of scope) { const button = el('button', 'graph-chat'); button.append(conversationAvatar(thread), el('span', '', `${chatName(thread, null)} · ${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')} · ${t('{0} messages',thread.message_count??0)}`)); button.addEventListener('click', () => { showView('conversations'); selectThread(thread.id); }); list.append(button); }
 }
+function renderGraphDetails(scope){
+ const panel=$('#graph-details'),person=state.principals.find(p=>p.id===state.graphPerson);
+ panel.replaceChildren();panel.hidden=!person;if(!person)return;
+ const chats=visibleThreads(scope,person.id),sent=chats.reduce((sum,chat)=>sum+Number(threadPeople(chat).find(p=>p.id===person.id)?.sent_count??0),0);
+ const header=el('header'),close=el('button','icon-button','×');close.type='button';close.setAttribute('aria-label',t('Close details'));close.addEventListener('click',()=>{state.graphPerson=null;panel.hidden=true;});
+ header.append(personAvatar(person),el('strong','',person.name),close);panel.append(header,el('p','',t('{0} conversations · {1} sent',chats.length,sent)));
+ for(const chat of chats){const button=el('button','graph-detail-chat');button.type='button';button.append(conversationAvatar(chat),el('span','',chatName(chat,null)),el('small','',t('{0} messages',chat.message_count??0)));button.addEventListener('click',()=>{showView('conversations');selectThread(chat.id).catch(error=>toast(error.message));});panel.append(button);}
+}
+
 boot();
 
 async function renderPairings(){

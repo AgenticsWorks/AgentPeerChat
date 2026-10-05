@@ -329,3 +329,7 @@ body{padding-top:var(--topbar-height)}
  .app-topbar .language-picker select{width:88px;padding:0 8px;font-size:12px}
  .app-topbar .menu-toggle{flex-basis:36px;width:36px}
 }
+
+.graph-stage{position:relative}.graph-details{position:absolute;right:16px;top:16px;width:340px;max-width:calc(100% - 32px);max-height:calc(100% - 32px);overflow:auto;background:#fff;border:1px solid #dce7e3;border-radius:18px;padding:16px;box-shadow:0 12px 40px #0005;z-index:2}
+.graph-details header{display:flex;align-items:center;gap:10px}.graph-details header .avatar{width:36px;height:36px}.graph-details header strong{flex:1}.graph-details p{font-size:12px;color:#617970;margin:12px 0}.graph-detail-chat{display:grid;grid-template-columns:48px 1fr;align-items:center;gap:4px 10px;width:100%;padding:12px 8px;background:#f4f8f6;border-radius:12px;text-align:left;margin:8px 0;color:#264738}.graph-detail-chat .conversation-avatar{grid-row:span 2;transform:scale(.75);transform-origin:left center;width:48px;margin-right:-16px}.graph-detail-chat small{grid-column:2;color:#6b8178;font-size:11px}.graph-detail-chat:hover{background:#e1efe8}
+@media(max-width:600px){.graph-details{top:auto;bottom:12px;left:12px;right:12px;width:auto;max-width:none;max-height:240px}}

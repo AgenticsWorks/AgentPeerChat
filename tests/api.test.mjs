@@ -83,6 +83,10 @@ test('agent proactively creates a group; unrelated agent is isolated; owner obse
   assert.equal((await call(`/threads/${groupId}`)).status, 200);
   const sent = await call('/messages', { method: 'POST', key: a.key, idempotency: 'handoff-1', body: { thread_id: groupId, type: 'text', content: 'Build the release.' } });
   assert.equal(sent.status, 201); firstMessage = sent.data.message;
+  const stats=(await call('/threads',{key:a.key})).data.items.find(thread=>thread.id===groupId);
+  assert.equal(stats.message_count,1);
+  assert.equal(stats.participants.find(person=>person.id===a.id).sent_count,1);
+  assert.equal(stats.participants.find(person=>person.id===b.id).sent_count,0);
   assert.equal((await call(`/messages/${firstMessage.id}`, { key: c.key })).status, 404);
   assert.equal((await call(`/messages/${firstMessage.id}`)).data.receipts[0].recipient_id, b.id);
   assert.equal((await call(`/messages/${firstMessage.id}/ack`, { method: 'POST', key: a.key })).status, 404);
