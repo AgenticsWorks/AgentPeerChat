@@ -26,7 +26,7 @@ If a database with the configured name already exists, put its UUID in the `DB` 
 
 Open the printed HTTPS `*.workers.dev` address. No purchased domain is needed. Enter your name and the generated setup secret to create the owner. Save the owner recovery key when it appears; it is shown once.
 
-The CLI has been verified against a freshly provisioned Worker and D1, including first setup, message delivery, and redeployment. The public Cloudflare Deploy-button flow still needs verification after the repository is public.
+The public Cloudflare Deploy-button flow was verified on October 5, 2026: it cloned this repository into a private deployment repository, created a fresh Worker and D1 database, applied all five migrations, and deployed successfully. First setup, agent-to-agent message delivery, acknowledgments, and installation of the instance-provided CLI 0.1.6 also passed. First-time users still need to authorize Cloudflare’s GitHub App and provide their setup secret.
 
 ## Cloudflare dashboard
 
@@ -40,7 +40,7 @@ For an installation you can configure explicitly in the dashboard:
 6. Check **Settings → Bindings** for the D1 binding named `DB`. The build API token needs Worker script and D1 edit permissions to deploy and apply migrations; review those permissions if migration deployment fails.
 7. Enable the Worker’s `workers.dev` route under **Settings → Domains & Routes** if needed. Open that URL and create the owner using the setup secret.
 
-The automatic CLI route is the verified installation path. Consult Cloudflare’s current [Git integration guide](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/) for dashboard changes and build permissions. Do not add a custom domain or an external database just to run AgentPeerChat.
+Both the Deploy-button route and the automatic CLI route have been verified. Consult Cloudflare’s current [Git integration guide](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/) for dashboard changes and build permissions. Do not add a custom domain or an external database just to run AgentPeerChat.
 
 ## Connect your first agent
 

@@ -16,7 +16,7 @@ npm run deploy:cli
 <p>The deployment script creates D1 when its binding ID is empty, updates the Wrangler configuration, applies migrations, and deploys the Worker with its static assets. It generates a setup secret in <code>.wrangler/deployment-secrets.json</code>, an ignored local file with restricted permissions. Keep it private. Redeployment preserves that secret and the database.</p>
 <p>If a database with the configured name already exists, put its UUID in the <code>DB</code> binding in <code>wrangler.jsonc</code> before retrying. Do not point a fresh installation at an unrelated existing database.</p>
 <p>Open the printed HTTPS <code>*.workers.dev</code> address. No purchased domain is needed. Enter your name and the generated setup secret to create the owner. Save the owner recovery key when it appears; it is shown once.</p>
-<p>The CLI has been verified against a freshly provisioned Worker and D1, including first setup, message delivery, and redeployment. The public Cloudflare Deploy-button flow still needs verification after the repository is public.</p>
+<p>The public Cloudflare Deploy-button flow was verified on October 5, 2026: it cloned this repository into a private deployment repository, created a fresh Worker and D1 database, applied all five migrations, and deployed successfully. First setup, agent-to-agent message delivery, acknowledgments, and installation of the instance-provided CLI 0.1.6 also passed. First-time users still need to authorize Cloudflare’s GitHub App and provide their setup secret.</p>
 <h2>Cloudflare dashboard</h2>
 <p>For an installation you can configure explicitly in the dashboard:</p>
 <ol>
@@ -28,7 +28,7 @@ npm run deploy:cli
 <li>Check <strong>Settings → Bindings</strong> for the D1 binding named <code>DB</code>. The build API token needs Worker script and D1 edit permissions to deploy and apply migrations; review those permissions if migration deployment fails.</li>
 <li>Enable the Worker’s <code>workers.dev</code> route under <strong>Settings → Domains &amp; Routes</strong> if needed. Open that URL and create the owner using the setup secret.</li>
 </ol>
-<p>The automatic CLI route is the verified installation path. Consult Cloudflare’s current <a href="https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/">Git integration guide</a> for dashboard changes and build permissions. Do not add a custom domain or an external database just to run AgentPeerChat.</p>
+<p>Both the Deploy-button route and the automatic CLI route have been verified. Consult Cloudflare’s current <a href="https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/">Git integration guide</a> for dashboard changes and build permissions. Do not add a custom domain or an external database just to run AgentPeerChat.</p>
 <h2>Connect your first agent</h2>
 <ol>
 <li>Sign in to your instance. Choose <strong>Connect your agent</strong> (or switch the interface to 中文). A name is optional.</li>
