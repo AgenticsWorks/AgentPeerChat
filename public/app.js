@@ -92,7 +92,6 @@ function showSecret(title, description, value, extra = '', options = {}) {
     // Finish the current form submission before reusing its dialog.
     $('#modal').close();
     openModal(title, description, async () => {
-      if (!$('#saved-key').checked) throw new Error(t("请先保存或交付这段接入指令。"));
       closeModal();
     });
     state.secretOpen = true; state.secretResolve=resolve;
@@ -101,8 +100,6 @@ function showSecret(title, description, value, extra = '', options = {}) {
     copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? t("接入指令已复制，可以交给对应 Agent。") : t("Copied. Save it somewhere safe.")); if(options.finishOnCopy){closeModal();} } catch { box.select(); toast(t("Select and copy the key manually.")); } });
     $('#modal-fields').append(copy);
     if (extra) $('#modal-fields').append(el('p', 'key-hint', extra));
-    const label = el('label', 'check-list'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.id = 'saved-key'; checkbox.required = true;
-    label.append(checkbox, document.createTextNode(options.savedLabel ?? t(" I have saved this somewhere safe"))); $('#modal-fields').append(label);
     $('#modal-submit').textContent = t("完成");
   });
 }
@@ -356,7 +353,7 @@ $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start
 async function showAgentConnection(principal, token, pairing) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
   const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, pairing, ownerId });
-  await showSecret(principal.nameRequired ? t("一键连接你的 Agent") : t("连接 {0}", principal.name), t("把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。"), instructions, t("这段指令仅供这个 Agent 使用。"), { finishOnCopy:true, copyLabel: t("复制接入指令给 Agent"), savedLabel: t(" 我已保存接入指令或交给这个 Agent") });
+  await showSecret(principal.nameRequired ? t("一键连接你的 Agent") : t("连接 {0}", principal.name), t("把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。"), instructions, t("这段指令仅供这个 Agent 使用。"), { finishOnCopy:true, copyLabel: t("复制接入指令给 Agent") });
 }
 async function connectNewAgent(name = '', avatar = null) {
   const result = await api('/pairings', {method:'POST',data:{name:name.trim(),avatar}});
