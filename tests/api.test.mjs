@@ -59,6 +59,20 @@ test('owner creates agents; tokens are stored hashed and agent cannot administer
   assert.equal((await call('/tokens', { key: a.key })).status, 403);
 });
 
+test('owner can edit names and avatar presets without changing access; image validation rejects unsafe formats',async()=>{
+ const p=(await call('/pairings',{method:'POST',body:{name:'Icon agent',avatar:'preset:dots'}})).data.principal;
+ assert.equal(p.avatar,'preset:dots');
+ const updated=await call(`/principals/${p.id}`,{method:'PATCH',body:{name:'Renamed agent',avatar:'preset:muse'}});
+ assert.equal(updated.status,200);assert.equal(updated.data.principal.name,'Renamed agent');assert.equal(updated.data.principal.avatar,'preset:muse');assert.equal(updated.data.principal.active,0);
+ for(const avatar of ['data:image/svg+xml;base64,PHN2Zy8+','https://example.com/image.png','data:image/png;base64,bm90YW5pbWFnZQ=='])assert.equal((await call(`/principals/${p.id}`,{method:'PATCH',body:{avatar}})).status,400);
+ const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1AAAAABJRU5ErkJggg==';
+ assert.equal((await call(`/principals/${p.id}`,{method:'PATCH',body:{avatar:png}})).status,200);
+ assert.equal((await call(`/principals/${ownerId}`,{method:'PATCH',body:{avatar:'preset:dots'}})).status,200);
+ assert.equal((await call(`/principals/${ownerId}`,{method:'PATCH',body:{active:false}})).status,400);
+ const agent=(await call('/agents',{method:'POST',body:{name:'Avatar isolation'}})).data;
+ assert.equal((await call(`/principals/${p.id}`,{method:'PATCH',key:agent.token.token,body:{name:'Unauthorized'}})).status,403);
+});
+
 let groupId, firstMessage;
 test('agent proactively creates a group; unrelated agent is isolated; owner observes all', async () => {
   const group = await call('/threads', { method: 'POST', key: a.key, body: { title: 'Release plan', members: [b.id] } });

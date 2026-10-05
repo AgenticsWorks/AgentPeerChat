@@ -20,7 +20,8 @@
   },
   "scripts": {
     "dev": "wrangler dev",
-    "build:app": "node scripts/build-docs.mjs && tsc --noEmit && wrangler deploy --dry-run --outdir dist",
+    "build:graph": "node scripts/build-graph.mjs",
+    "build:app": "node scripts/build-graph.mjs && node scripts/build-docs.mjs && tsc --noEmit && wrangler deploy --dry-run --outdir dist",
     "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
     "db:local": "wrangler d1 migrations apply DB --local",
     "test": "node --test tests/*.test.mjs && node scripts/test-sqlite.mjs",

@@ -1,3 +1,1 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path id="Vector" d="M30 0C46.5686 0 60 13.4314 60 30C60 46.5686 46.5686 60 30 60C13.4314 60 0 46.5686 0 30C0 13.4314 13.4314 0 30 0ZM30 18.1314C23.4451 18.1314 18.1314 23.4451 18.1314 30C18.1314 36.5549 23.4451 41.8686 30 41.8686C36.5549 41.8686 41.8686 36.5549 41.8686 30C41.8686 23.4451 36.5549 18.1314 30 18.1314Z" fill="#BAC1D3"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" rx="40" fill="#b9bed6"/><text x="40" y="53" text-anchor="middle" fill="white" font-family="system-ui,sans-serif" font-size="42" font-weight="700">●</text></svg>

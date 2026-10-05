@@ -1,3 +1,4 @@
+import { avatarValue } from './avatar';
 import { pairingPublic, pairingOwner } from './pairing';
 import type { Env, Message, Principal } from './types';
 import { D1MessageStore, IdempotencyConflict } from './store';
@@ -127,11 +128,18 @@ async function api(request: Request, env: Env, url: URL) {
   let match = /^\/principals\/([^/]+)$/.exec(path);
   if (match && method === 'PATCH') {
     owner(p); const b = await body(request), target = await findPrincipal(env, match[1]);
-    if (target.kind === 'owner') fail(400, 'owner_protected', 'The instance owner cannot be disabled.');
-    if (typeof b.active !== 'boolean') fail(400, 'invalid_field', 'active must be a boolean.');
+    const updates: string[] = [], values: (string | number | null)[] = [];
+    if (b.active !== undefined) {
+      if (target.kind === 'owner') fail(400, 'owner_protected', 'The instance owner cannot be disabled.');
+      if (typeof b.active !== 'boolean') fail(400, 'invalid_field', 'active must be a boolean.');
+      updates.push('active = ?'); values.push(b.active ? 1 : 0);
+    }
+    if (b.name !== undefined) { updates.push('name = ?'); values.push(str(b.name, 'name', 80)); }
+    if (b.avatar !== undefined) { updates.push('avatar = ?'); values.push(avatarValue(b.avatar)); }
+    if (!updates.length) fail(400, 'invalid_field', 'Provide a name, avatar or active state.');
     await env.DB.batch([
-      env.DB.prepare('UPDATE principals SET active = ? WHERE id = ?').bind(b.active ? 1 : 0, target.id),
-      ...(b.active ? [] : [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE principal_id = ? AND status IN ('invited','pending')").bind(target.id), env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now(), target.id)])
+      env.DB.prepare('UPDATE principals SET '+updates.join(', ')+' WHERE id = ?').bind(...values, target.id),
+      ...(b.active !== false ? [] : [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE principal_id = ? AND status IN ('invited','pending')").bind(target.id), env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now(), target.id)])
     ]);
     return json({ principal: await findPrincipal(env, target.id) });
   }
@@ -203,7 +211,7 @@ async function api(request: Request, env: Env, url: URL) {
     const { after, limit } = pagination(url);
     // Thread pagination uses rowid cursors; messages have a separate global sequence.
     const { results } = await env.DB.prepare(`SELECT t.rowid AS cursor, t.*,
-      (SELECT json_group_array(json_object('id', pm.id, 'name', pm.name, 'kind', pm.kind)) FROM thread_members tm JOIN principals pm ON pm.id = tm.principal_id WHERE tm.thread_id = t.id) AS participants,
+      (SELECT json_group_array(json_object('id', pm.id, 'name', pm.name, 'kind', pm.kind, 'avatar', pm.avatar)) FROM thread_members tm JOIN principals pm ON pm.id = tm.principal_id WHERE tm.thread_id = t.id) AS participants,
       (SELECT json_object('type', m.type, 'content', json(m.content), 'sender_id', m.sender_id, 'created_at', m.created_at) FROM messages m WHERE m.seq = t.last_message_seq) AS last_message
       FROM threads t WHERE t.rowid > ? ${p.kind === 'agent' ? 'AND EXISTS (SELECT 1 FROM thread_members tm WHERE tm.thread_id = t.id AND tm.principal_id = ?)' : ''}
       ORDER BY t.rowid ASC LIMIT ?`).bind(after, ...(p.kind === 'agent' ? [p.id] : []), limit + 1).all<{ cursor: number; last_message: string | null }>();

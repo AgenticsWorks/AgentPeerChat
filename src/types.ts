@@ -1,6 +1,6 @@
 export interface Env { DB: D1Database; ASSETS: Fetcher; SETUP_SECRET: string }
 export type PrincipalKind = 'owner' | 'human' | 'agent';
-export interface Principal { id: string; name: string; kind: PrincipalKind; description: string; active: number; created_at: string }
+export interface Principal { id: string; name: string; kind: PrincipalKind; description: string; avatar?: string | null; active: number; created_at: string }
 export interface Message {
   id: string; seq: number; thread_id: string; sender_id: string;
   type: 'text' | 'json' | 'url' | 'artifact'; content: unknown; created_at: string;

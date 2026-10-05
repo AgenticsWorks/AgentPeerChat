@@ -77,9 +77,9 @@ function field(label, name, placeholder = '', tag = 'input') {
   input.name = name; input.id = `field-${name}`; input.placeholder = placeholder; input.required = true; input.maxLength = name === 'description' ? 500 : 120;
   wrapper.append(input); $('#modal-fields').append(wrapper); return input;
 }
-function closeModal() { if (!state.secretOpen) $('#modal').close(); }
+function closeModal() { state.secretOpen=false; $('#modal').close(); const resolve=state.secretResolve; state.secretResolve=null; resolve?.(); }
 $('#modal-close').addEventListener('click', closeModal);
-$('#modal').addEventListener('cancel', event => { if (state.secretOpen) event.preventDefault(); });
+$('#modal').addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
 $('#modal-form').addEventListener('submit', async event => {
   event.preventDefault(); $('#modal-error').textContent = ''; $('#modal-submit').disabled = true;
   const action = state.modalAction;
@@ -93,12 +93,12 @@ function showSecret(title, description, value, extra = '', options = {}) {
     $('#modal').close();
     openModal(title, description, async () => {
       if (!$('#saved-key').checked) throw new Error(t("请先保存或交付这段接入指令。"));
-      state.secretOpen = false; $('#modal').close(); resolve();
+      closeModal();
     });
-    state.secretOpen = true;
+    state.secretOpen = true; state.secretResolve=resolve;
     const box = field(t("接入指令"), 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = options.copyLabel ? 'secret-box connection-box' : 'secret-box';
     const copy = el('button', 'secondary', options.copyLabel ?? t("Copy to clipboard")); copy.type = 'button';
-    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? t("接入指令已复制，可以交给对应 Agent。") : t("Copied. Save it somewhere safe.")); if(options.finishOnCopy){state.secretOpen=false;$('#modal').close();resolve();} } catch { box.select(); toast(t("Select and copy the key manually.")); } });
+    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? t("接入指令已复制，可以交给对应 Agent。") : t("Copied. Save it somewhere safe.")); if(options.finishOnCopy){closeModal();} } catch { box.select(); toast(t("Select and copy the key manually.")); } });
     $('#modal-fields').append(copy);
     if (extra) $('#modal-fields').append(el('p', 'key-hint', extra));
     const label = el('label', 'check-list'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.id = 'saved-key'; checkbox.required = true;
@@ -358,29 +358,52 @@ async function showAgentConnection(principal, token, pairing) {
   const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, pairing, ownerId });
   await showSecret(principal.nameRequired ? t("一键连接你的 Agent") : t("连接 {0}", principal.name), t("把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。"), instructions, t("这段指令仅供这个 Agent 使用。"), { finishOnCopy:true, copyLabel: t("复制接入指令给 Agent"), savedLabel: t(" 我已保存接入指令或交给这个 Agent") });
 }
-async function connectNewAgent(name = '') {
-  const result = await api('/pairings', {method:'POST',data:{name:name.trim()}});
+async function connectNewAgent(name = '', avatar = null) {
+  const result = await api('/pairings', {method:'POST',data:{name:name.trim(),avatar}});
   await showAgentConnection({...result.principal,nameRequired:result.name_required}, null, result.pairing);
   await refresh(); toast(t("把指令交给 Agent，收到配对码后回来确认连接。"));
 }
-$('#connect-agent-form').addEventListener('submit',async event=>{
-  event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;
-  try {await connectNewAgent($('#connect-agent-name').value);$('#connect-agent-name').value='';}
-  catch(error){toast(error.message);}finally{button.disabled=false;}
-});
-$('#create-agent').addEventListener('click', () => {
-  openModal(t("一键连接你的 Agent"), t("名字可选；不填时，Agent 会在 CLI 登记自己的名字。"), async data => { await connectNewAgent(data.get('name') || ''); });
-  field(t("名字（可选）"), 'name', t("留空，让 Agent 自己登记")).required=false;
-  $('#modal-submit').textContent=t("生成接入指令");
-});
+function avatarPicker(initial = null) {
+  let selected=initial;
+  const section=el('div','avatar-picker'), preview=el('div','avatar-preview');
+  const update=()=>{preview.replaceChildren(personAvatar({name:'Agent',avatar:selected}));};
+  const choices=el('div','avatar-options');
+  for(const [value,label] of [[null,'Initial'],['preset:dots','Dots'],['preset:grok','Grok Bot'],['preset:muse','Muse']]){
+    const button=el('button','secondary',label);button.type='button';button.addEventListener('click',()=>{selected=value;update();});choices.append(button);
+  }
+  const upload=el('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';upload.setAttribute('aria-label',t('Upload icon'));
+  upload.addEventListener('change',async()=>{
+    const file=upload.files[0];if(!file)return;
+    try {
+      if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>5*1024*1024)throw Error(t('Choose a PNG, JPEG or WebP image under 5 MB.'));
+      const bitmap=await createImageBitmap(file), canvas=document.createElement('canvas');canvas.width=canvas.height=128;
+      const ctx=canvas.getContext('2d'), size=Math.min(bitmap.width,bitmap.height);ctx.drawImage(bitmap,(bitmap.width-size)/2,(bitmap.height-size)/2,size,size,0,0,128,128);bitmap.close();
+      selected=canvas.toDataURL('image/webp',0.85);update();
+    }catch(error){$('#modal-error').textContent=error.message;}
+  });
+  section.append(el('strong','',t('Agent icon')),preview,choices,upload,el('small','fine',t('Original preset icons. You can upload your own image.')));$('#modal-fields').append(section);update();return()=>selected;
+}
+function connectAgentDialog() {
+  let avatar;
+  openModal(t('Connect your agent'),t('Choose a name and icon, then copy the connection instructions to your agent.'),async data=>{await connectNewAgent(data.get('name')||'',avatar());});
+  const name=field(t('Agent name (optional)'),'name');name.required=false;name.maxLength=80;avatar=avatarPicker();$('#modal-submit').textContent=t('Generate instructions');
+}
+$('#connect-agent-button').addEventListener('click',connectAgentDialog);
+$('#create-agent').addEventListener('click',connectAgentDialog);
+function editPrincipal(p){
+  let avatar;
+  openModal(t('Edit profile'),'',async data=>{await api(`/principals/${p.id}`,{method:'PATCH',data:{name:data.get('name'),avatar:avatar()}});closeModal();await refresh();});
+  const name=field(t('Name'),'name');name.value=p.name;name.maxLength=80;avatar=avatarPicker(p.avatar);$('#modal-submit').textContent=t('Save');
+}
 $('#show-disabled').addEventListener('change', renderPrincipals);
 function renderPrincipals() {
   $('#principal-grid').replaceChildren();
   for (const p of state.principals.filter(p => p.active || $('#show-disabled').checked)) {
     const card = el('article', 'principal-card'), top = el('div', 'principal-top');
-    top.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'Agent' : p.kind === 'owner' ? t("我") : t("联系人")) : t("已停用")));
+    top.append(personAvatar(p), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'Agent' : p.kind === 'owner' ? t("我") : t("联系人")) : t("已停用")));
     card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? t("还没有简介。") : t("可以查看聊天、参与讨论。"))), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : t("联系人")));
     const footer = el('footer');
+    if(state.me.kind==='owner'){const edit=el('button','secondary',t('Edit profile'));edit.addEventListener('click',()=>editPrincipal(p));footer.append(edit);}
     if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
       const connect = el('button', 'primary', t("连接 Agent")); connect.dataset.connectAgent = p.id;
       connect.addEventListener('click', async () => {
@@ -459,7 +482,7 @@ $('#identity-perspective').addEventListener('change', () => setPerspective($('#i
 $('#refresh-map').addEventListener('click', () => refresh().catch(error => toast(error.message)));
 function renderPerspective() {
   const select = $('#identity-perspective'); select.replaceChildren(el('option', '', t('All conversations'))); select.firstChild.value = 'all';
-  for (const p of state.principals.filter(p => p.kind === 'agent')) { const option = el('option', '', p.name); option.value = p.id; select.append(option); }
+  for (const p of state.principals) { const option = el('option', '', p.name); option.value = p.id; select.append(option); }
   if (state.perspective !== 'all' && !state.principals.some(p => p.id === state.perspective)) state.perspective = 'all';
   select.value = state.perspective;
   $('#perspective-heading').textContent = state.perspective === 'all' ? t('All conversations') : t('{0} conversations', humanName(state.perspective));
@@ -475,7 +498,7 @@ function personAvatar(person) {
   const avatar = el('span', 'avatar person-avatar', person.name.slice(0, 1).toUpperCase());
   colorAvatar(avatar, person.name); avatar.title = person.name;
   const icon = avatarIcon(person);
-  if (icon) { const image = el('img'); image.src = appBase + icon; image.alt = ''; avatar.replaceChildren(image); }
+  if (icon) { const image = el('img'); image.src = icon.startsWith('/') ? appBase + icon : icon; image.alt = ''; avatar.replaceChildren(image); }
   return avatar;
 }
 function conversationAvatar(thread) {
@@ -493,7 +516,7 @@ function renderGraph() {
   if (!state.me) return;
   const scope = visibleThreads(state.threads, state.perspective);
   $('#graph-summary').textContent = t('{0} conversations · {1} groups · {2} direct chats', scope.length, scope.filter(t => t.kind !== 'direct').length, scope.filter(t => t.kind === 'direct').length);
-  renderConversationGraph($('#conversation-graph'), scope, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => setPerspective(id).catch(error => toast(error.message)), t, icon: person => { const icon = avatarIcon(person); return icon ? appBase + icon : null; } });
+  state.graphController = renderConversationGraph($('#conversation-graph'), scope, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => setPerspective(id).catch(error => toast(error.message)), t, icon: person => { const icon = avatarIcon(person); return icon ? (icon.startsWith('/') ? appBase + icon : icon) : null; } });
   const list = $('#graph-conversations'); list.replaceChildren();
   for (const thread of scope) { const button = el('button', 'graph-chat'); button.append(conversationAvatar(thread), el('span', '', `${chatName(thread, null)} · ${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')}`)); button.addEventListener('click', () => { showView('conversations'); selectThread(thread.id); }); list.append(button); }
 }
@@ -523,3 +546,7 @@ document.addEventListener("agentpenpal:languagechange",()=>{
  if(state.inspector&&state.selected)loadActivity(state.selected).catch(error=>toast(error.message));
  if(state.me.kind==="owner")renderPairings().catch(error=>toast(error.message));
 });
+
+$('#graph-fit').addEventListener('click',()=>state.graphController?.fit());
+$('#graph-zoom-in').addEventListener('click',()=>state.graphController?.zoom(1.3));
+$('#graph-zoom-out').addEventListener('click',()=>state.graphController?.zoom(1/1.3));

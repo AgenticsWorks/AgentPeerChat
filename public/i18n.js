@@ -1,4 +1,6 @@
-import { translations } from './locales.js';
+import { translations as baseTranslations } from './locales.js';
+import { profileTranslations } from './profile-locales.js';
+const translations = {...baseTranslations,...profileTranslations};
 
 const english = new Map(Object.entries(translations));
 const chinese = new Map(Object.entries(translations).map(([zh, en]) => [en, zh]));

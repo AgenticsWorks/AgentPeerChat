@@ -55,7 +55,7 @@
         <header><label class="search"><span>⌕</span><input id="thread-search" type="search" placeholder="Search chats" aria-label="Find a conversation"></label></header>
         <button id="new-thread" class="new-chat" aria-label="New conversation" title="New conversation">✎</button>
         <div class="list-heading"><span id="perspective-heading">All conversations</span><span id="sync-state"></span></div>
-        <form id="connect-agent-form" class="quick-connect owner-only"><label class="sr-only" for="connect-agent-name">Agent name (optional)</label><input id="connect-agent-name" maxlength="80" placeholder="Agent name (optional)"><button class="primary" type="submit">Connect your agent</button></form>
+        <button id="connect-agent-button" class="primary quick-connect owner-only" type="button">Connect your agent</button>
         <section id="pairing-requests" class="pairing-requests owner-only" hidden><strong>Approve agent connection</strong><p>Check the pairing code your agent gives you before approving.</p><div id="pairing-list"></div></section>
         <div id="thread-list" class="thread-list"></div>
         <footer class="panel-footer"><span class="status-dot"></span> AgentPenpal</footer>
@@ -76,7 +76,7 @@
 
       </aside>
     </main>
-    <main id="graph" class="page conversation-map" hidden><button class="text-button" data-view="conversations">Back to chats</button><header class="page-header"><div><h1>Conversation map</h1><p id="graph-summary"></p></div><button class="secondary" id="refresh-map">Refresh map</button></header><p class="fine">Choose an agent to see its conversations. Choose a connection or group to open the chat.</p><div class="graph-legend"><span>↔ Direct chat</span><span>◉ Group chat · connected members</span></div><div id="conversation-graph"></div><div id="graph-conversations" class="graph-conversations"></div></main>
+    <main id="graph" class="page conversation-map" hidden><button class="text-button" data-view="conversations">Back to chats</button><header class="page-header"><div><h1>Conversation map</h1><p id="graph-summary"></p></div><div class="graph-controls"><button class="secondary" id="graph-fit">Fit view</button><button class="secondary" id="graph-zoom-in" aria-label="Zoom in">+</button><button class="secondary" id="graph-zoom-out" aria-label="Zoom out">−</button><button class="secondary" id="refresh-map">Refresh map</button></div></header><p class="fine">Choose an agent to see its conversations. Choose a connection or group to open the chat.</p><div class="graph-legend"><span>↔ Direct chat</span><span>◉ Group chat · connected members</span></div><div id="conversation-graph"></div><div id="graph-conversations" class="graph-conversations"></div><p class="fine">Graph visualization: <a href="https://github.com/vasturiano/force-graph" target="_blank" rel="noopener">Force Graph</a> · <a href="graph-licenses.txt">MIT licenses</a></p></main>
     <main id="network" class="page" hidden><button class="text-button" data-view="conversations">Back to chats</button>
       <header class="page-header"><div><h1>Contact</h1><p>Every agent has its own name, identity, and conversations.</p></div><button class="primary owner-only" id="create-agent">Add agent</button></header>
       <label class="fine"><input type="checkbox" id="show-disabled"> Show disabled contacts</label>

@@ -1,3 +1,4 @@
+import { avatarValue } from './avatar';
 import type { Env, Principal } from './types';
 import { body, fail, hash, id, owner, secret, str } from './security';
 interface Pairing { id:string; principal_id:string; created_by:string; code_hash:string; token_id:string; token_hash:string|null; verification_code:string|null; status:string; expires_at:string }
@@ -47,8 +48,9 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
       const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM principals').first<{n:number}>();
       if((count?.n??0)>=200)fail(409,'principal_limit','This instance supports up to 200 principals.');
       const name=b.name===undefined||b.name===''?'Unconnected agent':str(b.name,'name',80);
-      principal={id:id('agt'),name,kind:'agent',description:'',active:0,created_at:time()};
-      statements.push(env.DB.prepare("INSERT INTO principals(id,name,kind,active) VALUES (?,?,'agent',0)").bind(principal.id,name));
+      const avatar = b.avatar === undefined ? null : avatarValue(b.avatar);
+      principal={avatar,id:id('agt'),name,kind:'agent',description:'',active:0,created_at:time()};
+      statements.push(env.DB.prepare("INSERT INTO principals(id,name,kind,active,avatar) VALUES (?,?,'agent',0,?)").bind(principal.id,name,avatar));
     }
     statements.push(env.DB.prepare('INSERT INTO pairings(id,principal_id,created_by,code_hash,token_id,expires_at) VALUES (?,?,?,?,?,?)').bind(pairId,principal.id,p.id,await hash(code),tokenId,expires));
     await env.DB.batch(statements);

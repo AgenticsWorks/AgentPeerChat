@@ -9,6 +9,8 @@ export function conversationGraph(threads, perspective = 'all') {
   return { people: [...people.values()], conversations };
 }
 export function avatarIcon(person) {
+  if (person.avatar?.startsWith('data:image/')) return person.avatar;
+  if (/^preset:(dots|grok|muse)$/.test(person.avatar ?? '')) return '/avatars/'+person.avatar.slice(7)+'.svg';
   const name = person.name.toLowerCase();
   if (/^muse(?:\b|\s)/.test(name)) return '/avatars/muse.svg';
   if (/^dots(?:\b|\s)/.test(name)) return '/avatars/dots.svg';
