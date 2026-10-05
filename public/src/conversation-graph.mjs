@@ -33,14 +33,32 @@ export function renderConversationGraph(container,threads,{openThread,chooseAgen
    })
    .linkLineDash(link=>link.group?[5,4]:null).linkLabel(link=>{const label=document.createElement('span');label.textContent=link.name;return label;})
    .nodeLabel(node=>{const label=document.createElement('span');label.textContent=node.name;return label;})
-   .onNodeClick(node=>{entry.selectedId=node.id;node.group?entry.callbacks.openThread(node.thread):entry.callbacks.chooseAgent(node.id);})
-   .onLinkClick(link=>link.thread&&entry.callbacks.openThread(link.thread))
    .onNodeHover(node=>{container.style.cursor=node?'pointer':'grab';}).onLinkHover(link=>{container.style.cursor=link?'pointer':'grab';});
   entry={graph,images:new Map(),signature:null,visible:false,fitTicks:0,callbacks:{openThread,chooseAgent}};instances.set(container,entry);
   const resize=()=>{if(container.clientWidth){graph.width(container.clientWidth).height(Math.max(440,Math.min(600,innerHeight-300)));graph.resumeAnimation();if(!entry.visible){entry.fitTicks=15;graph.d3ReheatSimulation();}entry.visible=true;}else{graph.pauseAnimation();entry.visible=false;}};
   new ResizeObserver(resize).observe(container);entry.resize=resize;
   graph.onEngineTick(()=>{if(entry.fitTicks>0&&--entry.fitTicks===0&&container.clientWidth)graph.zoomToFit(300,95);});
   const canvas=container.querySelector('canvas');canvas.setAttribute('role','img');canvas.setAttribute('aria-label',t('Conversation map'));
+  let pressed=null;
+  canvas.addEventListener('pointerdown',event=>{if(event.button===0)pressed={x:event.clientX,y:event.clientY};});
+  canvas.addEventListener('pointerup',event=>{
+   if(!pressed||event.button!==0)return;const down=pressed;pressed=null;if(Math.hypot(event.clientX-down.x,event.clientY-down.y)>5)return;
+   const bounds=canvas.getBoundingClientRect(),point=graph.screen2GraphCoords(event.clientX-bounds.left,event.clientY-bounds.top),scale=graph.zoom(),data=graph.graphData(),ctx=canvas.getContext('2d');
+   for(const node of [...data.nodes].reverse()){
+    ctx.font=`600 ${Math.max(12,13/scale)}px system-ui`;const width=Math.max(80,ctx.measureText(node.name).width+20);
+    if(Math.hypot(point.x-node.x,point.y-node.y)<(node.group?34:29)||(Math.abs(point.x-node.x)<width/2&&point.y-node.y>25&&point.y-node.y<80)){
+     entry.selectedId=node.id;node.group?entry.callbacks.openThread(node.thread):entry.callbacks.chooseAgent(node.id);return;
+    }
+   }
+   for(const link of data.links){
+    const a=link.source,b=link.target,dx=b.x-a.x,dy=b.y-a.y,length=dx*dx+dy*dy;
+    const fraction=length?Math.max(0,Math.min(1,((point.x-a.x)*dx+(point.y-a.y)*dy)/length)):0;
+    const distance=Math.hypot(point.x-a.x-fraction*dx,point.y-a.y-fraction*dy);
+    ctx.font=`600 ${12/scale}px system-ui`;const width=ctx.measureText(t('{0} messages',link.count)).width+22/scale;
+    if(distance<12/scale||(!link.group&&Math.abs(point.x-(a.x+b.x)/2)<width/2&&Math.abs(point.y-(a.y+b.y)/2)<15/scale)){entry.callbacks.openThread(link.thread);return;}
+   }
+  });
+
   graph.d3Force('collide',forceCollide(75));graph.d3Force('charge').strength(-650);graph.d3Force('link').distance(link=>link.group?145:230);
  }
  entry.callbacks={openThread,chooseAgent};entry.resize();
