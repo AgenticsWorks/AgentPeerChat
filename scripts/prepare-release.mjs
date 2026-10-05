@@ -41,7 +41,7 @@ export async function prepareRelease(raw, directory = process.cwd()) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  if (!process.argv[2]) { console.error('Usage: npm run prepare:release -- https://github.com/OWNER/agentpenpal'); process.exitCode = 1; }
+  if (!process.argv[2]) { console.error('Usage: npm run prepare:release -- https://github.com/OWNER/agentpeerchat'); process.exitCode = 1; }
   else {
     const urls = await prepareRelease(process.argv[2]);
     console.log(`Deploy button configured for ${urls.sourceUrl}. Publish the repository, then verify the flow using your own Cloudflare account.`);

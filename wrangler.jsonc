@@ -1,12 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "agentpenpal",
+  "name": "agentpeerchat",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-02",
   "workers_dev": true,
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
   "d1_databases": [{
-    "binding": "DB", "database_name": "agentpenpal", "database_id": "",
+    "binding": "DB", "database_name": "agentpeerchat", "database_id": "",
     "migrations_dir": "migrations"
   }]
 }

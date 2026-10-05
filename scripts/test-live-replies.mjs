@@ -5,9 +5,9 @@ import assert from 'node:assert/strict';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-const base = process.env.AGENTPENPAL_URL, owner = process.env.AGENTPENPAL_OWNER_TOKEN;
+const base = process.env.AGENTPEERCHAT_URL, owner = process.env.AGENTPEERCHAT_OWNER_TOKEN;
 if (!base || !owner) throw new Error('Provide the instance URL and owner credentials through the environment.');
-const session = 'agentpenpal-live-replies';
+const session = 'agentpeerchat-live-replies';
 function browser(args, input) {
  const result = spawnSync('./node_modules/.bin/agent-browser', ['--session', session, ...args], {encoding:'utf8',input,timeout:45000});
  if(result.status!==0) throw new Error('Browser step failed: '+args[0]+' '+result.stderr); return result.stdout.trim();
@@ -34,17 +34,17 @@ try {
   const packet=evaluate('document.querySelector("#field-secret").value');
   assert.ok(packet.includes('--from-stdin'));
   assert.ok(packet.includes(' summary'));
-  const config=JSON.parse(packet.match(/AGENTPENPAL_CONFIG_JSON'\n([\s\S]*?)\nAGENTPENPAL_CONFIG_JSON/)[1]);
+  const config=JSON.parse(packet.match(/AGENTPEERCHAT_CONFIG_JSON'\n([\s\S]*?)\nAGENTPEERCHAT_CONFIG_JSON/)[1]);
   assert.equal((await fetch(config.url+'/api/v1/me',{headers:{Authorization:`Bearer ${config.token}`}})).status,200);
   browser(['check','#saved-key']);browser(['click','#modal-submit']);
   // Run the copied installer with the documented CLI runtime option; credentials stay on stdin.
   const command=packet.match(/```sh\n([\s\S]*?)\n```/)[1].replace('--from-stdin', '--from-stdin '+adapter);
   const install=spawnSync('bash',[],{input:command,encoding:'utf8',timeout:90000});
   assert.equal(install.status,0,'Copied installer should connect and save a private profile.');
-  const profile=JSON.parse(await readFile(join(homedir(),'.config','agentpenpal',config.principal_id,'config.json'),'utf8'));
+  const profile=JSON.parse(await readFile(join(homedir(),'.config','agentpeerchat',config.principal_id,'config.json'),'utf8'));
   assert.equal(profile.token,config.token);assert.equal(profile.runtime.adapter,adapter);
-  const {createBridge,nativeGenerator}=await import(pathToFileURL(join(homedir(),'.config','agentpenpal',config.principal_id,'agentpenpal-runtime.mjs')).href);
-  const bridge=createBridge({config,generate:nativeGenerator(adapter,{claude:process.env.AGENTPENPAL_CLAUDE_CLI})});
+  const {createBridge,nativeGenerator}=await import(pathToFileURL(join(homedir(),'.config','agentpeerchat',config.principal_id,'agentpeerchat-runtime.mjs')).href);
+  const bridge=createBridge({config,generate:nativeGenerator(adapter,{claude:process.env.AGENTPEERCHAT_CLAUDE_CLI})});
   bots.push({name,adapter,config,bridge});
   pending.push((async()=>{while(running){try{await bridge.tick();}catch(error){console.error(name+': '+error.message);}await new Promise(r=>setTimeout(r,1500));}})());
  }

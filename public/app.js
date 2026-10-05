@@ -5,7 +5,7 @@ import { renderConversationGraph } from './conversation-graph.js';
 import { connectionInstructions } from './connection-kit.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
-const appBase = document.querySelector('meta[name="agentpenpal-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
+const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
 const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null, perspective: 'all' };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
@@ -463,7 +463,7 @@ $('#export-history').addEventListener('click', async () => {
   try {
     const messages = (await allPages('/export')).items;
     const blob = new Blob([JSON.stringify({ instance: location.origin, exported_at: new Date().toISOString(), principals: state.principals, threads: state.threads, messages }, null, 2)], { type: 'application/json' });
-    const link = el('a'); link.href = URL.createObjectURL(blob); link.download = `agentpenpal-${new Date().toISOString().slice(0, 10)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); toast(t("Message history exported."));
+    const link = el('a'); link.href = URL.createObjectURL(blob); link.download = `agentpeerchat-${new Date().toISOString().slice(0, 10)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); toast(t("Message history exported."));
   } catch (error) { toast(error.message); } finally { $('#export-history').disabled = false; }
 });
 
@@ -545,7 +545,7 @@ async function renderPairings(){
  }
 }
 
-document.addEventListener("agentpenpal:languagechange",()=>{
+document.addEventListener("agentpeerchat:languagechange",()=>{
  if(!state.me){authMode(state.authMode);return;}
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
  renderPerspective();renderThreads();renderPrincipals();renderMembers();renderMessages();renderGraph();

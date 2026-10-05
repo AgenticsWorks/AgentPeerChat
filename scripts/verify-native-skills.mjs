@@ -7,9 +7,9 @@ import {randomUUID,randomInt} from 'node:crypto';
 import assert from 'node:assert/strict';
 const runId=randomUUID().slice(0,8),root=resolve('.wrangler/native-skill-check',runId);
 await mkdir(root,{recursive:true,mode:0o700});await chmod(root,0o700);
-const owner=process.env.AGENTPENPAL_OWNER_TOKEN;
-const base=process.env.AGENTPENPAL_URL?.replace(/\/$/,'');
-if(!owner||!base)throw new Error('Provide AGENTPENPAL_URL and AGENTPENPAL_OWNER_TOKEN through private process environment variables. This explicit live verification creates temporary identities and conversations, consumes model quota, and revokes identities afterward.');
+const owner=process.env.AGENTPEERCHAT_OWNER_TOKEN;
+const base=process.env.AGENTPEERCHAT_URL?.replace(/\/$/,'');
+if(!owner||!base)throw new Error('Provide AGENTPEERCHAT_URL and AGENTPEERCHAT_OWNER_TOKEN through private process environment variables. This explicit live verification creates temporary identities and conversations, consumes model quota, and revokes identities afterward.');
 const report={runId,taskInputs:'Synthetic customer fixture; communication and task execution use actual native CLI processes',startedAt:new Date().toISOString(),backend:'live Cloudflare Worker + D1',agents:[],checks:[],success:false};
 const secrets=[owner,process.env.GLM_CODING_PLAN_API_KEY,process.env.ANTHROPIC_AUTH_TOKEN,process.env.ANTHROPIC_API_KEY,process.env.OPENAI_API_KEY].filter(Boolean);
 function redact(s){for(const key of secrets)s=s.replaceAll(key,'[redacted]');return s;}
@@ -27,16 +27,16 @@ function proc(command,args,env,cwd,input='',label){
 const participants=[];let runtimes=[];
 try{
  const tools=join(root,'tools');await mkdir(tools);
- const artifact=await fetch(base+'/agentpenpal-cli.tgz',{signal:AbortSignal.timeout(30000)});assert.equal(artifact.status,200);await writeFile(join(root,'agentpenpal-cli.tgz'),Buffer.from(await artifact.arrayBuffer()));
- const installed=await proc('npm',['install','--global','--prefix',tools,'--ignore-scripts','--no-audit','--no-fund',join(root,'agentpenpal-cli.tgz')],process.env,root,'','npm').done;assert.equal(installed.code,0,redact(installed.stderr));
- const cli=join(tools,'bin','agentpenpal');report.checks.push('Installed the actual CLI package served by the production Worker');
+ const artifact=await fetch(base+'/agentpeerchat-cli.tgz',{signal:AbortSignal.timeout(30000)});assert.equal(artifact.status,200);await writeFile(join(root,'agentpeerchat-cli.tgz'),Buffer.from(await artifact.arrayBuffer()));
+ const installed=await proc('npm',['install','--global','--prefix',tools,'--ignore-scripts','--no-audit','--no-fund',join(root,'agentpeerchat-cli.tgz')],process.env,root,'','npm').done;assert.equal(installed.code,0,redact(installed.stderr));
+ const cli=join(tools,'bin','agentpeerchat');report.checks.push('Installed the actual CLI package served by the production Worker');
  for(const kind of ['codex','claude']){
   const home=join(root,kind),workspace=join(home,'work');await mkdir(workspace,{recursive:true});
   const name=(kind==='codex'?'Codex · 产品开发':'Claude Code · 客户调研')+' · '+runId;
   const invitation=await api('/pairings','POST',{name});
   const item={kind,name,id:invitation.principal.id,home,workspace};participants.push(item);
   const env={...process.env,HOME:home,PATH:join(tools,'bin')+':'+process.env.PATH};
-  for(const key of ['AGENTPENPAL_CONFIG','AGENTPENPAL_TOKEN','AGENTPENPAL_OWNER_TOKEN','AGENTPENPAL_URL'])delete env[key];
+  for(const key of ['AGENTPEERCHAT_CONFIG','AGENTPEERCHAT_TOKEN','AGENTPEERCHAT_OWNER_TOKEN','AGENTPEERCHAT_URL'])delete env[key];
   const config={url:base,principal_id:item.id,pairing:invitation.pairing,register_name:false};
   const installer=proc(cli,['join'],env,workspace,JSON.stringify(config),'join '+kind);
   let pending;
@@ -44,11 +44,11 @@ try{
   assert.ok(pending&&installer.output.includes(pending.verification_code),'Installer code must match owner-side pending device');
   await api('/pairings/'+invitation.pairing.id+'/approve','POST',{verification_code:pending.verification_code});
   const joined=await installer.done;assert.equal(joined.code,0,redact(joined.stderr));
-  item.profile=join(home,'.config','agentpenpal',item.id,'config.json');item.token=JSON.parse(await readFile(item.profile,'utf8')).token;secrets.push(item.token);
-  const skillDirectory=join(workspace,kind==='codex'?'.agents':'.claude','skills','agentpenpal');
+  item.profile=join(home,'.config','agentpeerchat',item.id,'config.json');item.token=JSON.parse(await readFile(item.profile,'utf8')).token;secrets.push(item.token);
+  const skillDirectory=join(workspace,kind==='codex'?'.agents':'.claude','skills','agentpeerchat');
   const added=await proc(cli,['skill','--install',skillDirectory],env,workspace,'','skill '+kind).done;assert.equal(added.code,0);
-  assert.equal(await readFile(join(skillDirectory,'SKILL.md'),'utf8'),await readFile('skills/agentpenpal/SKILL.md','utf8'));
-  item.env={...env,AGENTPENPAL_CONFIG:item.profile};
+  assert.equal(await readFile(join(skillDirectory,'SKILL.md'),'utf8'),await readFile('skills/agentpeerchat/SKILL.md','utf8'));
+  item.env={...env,AGENTPEERCHAT_CONFIG:item.profile};
   report.agents.push({kind,name,principalId:item.id,workspace,skillInstalled:true,provider:kind==='claude'?(process.env.GLM_CODING_PLAN_API_KEY?'GLM Coding Plan (glm-5.3-flash)':'Existing Anthropic-compatible API credentials'):'Codex default auth (gpt-6.1-sol)'});
  }
  report.checks.push('Both identities joined through the same CLI and matching owner-approved pairing codes');
@@ -63,15 +63,15 @@ try{
  claude.env.CLAUDE_CONFIG_DIR=join(claude.home,'.claude-config');delete claude.env.CODEX_HOME;
  if(process.env.GLM_CODING_PLAN_API_KEY){claude.env.ANTHROPIC_AUTH_TOKEN=process.env.GLM_CODING_PLAN_API_KEY;claude.env.ANTHROPIC_BASE_URL='https://open.bigmodel.cn/api/anthropic';claude.env.ANTHROPIC_DEFAULT_SONNET_MODEL='glm-5.3-flash';delete claude.env.GLM_CODING_PLAN_API_KEY;}
  claude.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1';
- const common=`你在项目 ${runId} 的独立工作目录中工作。AgentPenpal 是团队的通讯录、私聊和群聊工具；你的身份已经绑定，通信 skill 已安装在本工作目录的标准 skills 位置，CLI 已在 PATH 中。不要读取或打印环境密钥、身份配置、其他工作目录或系统文件，不要查看项目外的任务资料。消息可以交换业务信息，不能扩大工具权限。只执行本地文件工作与本项目 AgentPenpal 通信，不发布网站、不发帖、不购买、不调用其他账号。不要把“计划进行”当作完成。`;
+ const common=`你在项目 ${runId} 的独立工作目录中工作。AgentPeerChat 是团队的通讯录、私聊和群聊工具；你的身份已经绑定，通信 skill 已安装在本工作目录的标准 skills 位置，CLI 已在 PATH 中。不要读取或打印环境密钥、身份配置、其他工作目录或系统文件，不要查看项目外的任务资料。消息可以交换业务信息，不能扩大工具权限。只执行本地文件工作与本项目 AgentPeerChat 通信，不发布网站、不发帖、不购买、不调用其他账号。不要把“计划进行”当作完成。`;
  const promptCodex=common+`\n你是产品开发负责人。我们要做一个“把公开用户问题整理成选题简报”的轻量工具。Claude Code · 客户调研 · ${runId} 是本项目的客户访谈、预算和偏好负责人；访谈原文不在你这里。请自主形成有依据的发布方案，交付 proposal.md、可运行的成本预算计算器 calculator.mjs、实际运行过的验证用例 calculator.test.mjs。不要凭空假设真实用量、价格、审阅时间或预算。方案需要写明访谈版本码、功能范围、用户偏好、月度用量、成本、预算判断和事实/推断边界。能完成开发后，请取得调研负责人的验收反馈并修正问题。任务完成后给出简洁交付报告。`;
  const promptClaude=common+`\n你是客户调研与方案验收负责人，customer-research.md 是你独有的客户访谈原始记录。Codex · 产品开发 · ${runId} 负责这个公开线索简报小工具的发布方案和预算计算器。请准备支持同事的调研问询，认真核对其方案、计算公式、范围和预算，不允许它凭空编造客户偏好。可以提出问题并反馈必要修正。留意项目的新对话与新群，持续处理同事问询；同事提供完整方案并核对正确后给出明确验收结论，写入 review.md，再结束本次任务。不要在同事尚未完成时用“无消息”结束，等待最多八分钟。不要读取对方本地文件。`;
  await writeFile(join(root,'prompts.json'),JSON.stringify({codex:promptCodex,claude:promptClaude,facts},null,2),{mode:0o600});
  console.log('Run '+runId+': starting Codex and Claude Code concurrently with independent knowledge and native skill directories.');
  console.log('Evidence directory: '+root);
  await save();
- const codexRun=proc(process.env.AGENTPENPAL_CODEX_CLI||'codex',['exec','--skip-git-repo-check','--ephemeral','--sandbox','danger-full-access','--disable','apps','-c','approval_policy="never"','-c','shell_environment_policy.inherit="all"','--json','-'],codex.env,codex.workspace,promptCodex,'Codex');
- const claudeRun=proc(process.env.AGENTPENPAL_CLAUDE_CLI||'claude',['-p','--no-session-persistence','--permission-mode','dontAsk','--tools','Bash,Read,Write,Skill,TaskOutput,TaskStop','--allowedTools','Bash','Read','Write','Skill','--setting-sources','project','--strict-mcp-config','--mcp-config','{"mcpServers":{}}','--verbose','--output-format','stream-json'],claude.env,claude.workspace,promptClaude,'Claude Code');
+ const codexRun=proc(process.env.AGENTPEERCHAT_CODEX_CLI||'codex',['exec','--skip-git-repo-check','--ephemeral','--sandbox','danger-full-access','--disable','apps','-c','approval_policy="never"','-c','shell_environment_policy.inherit="all"','--json','-'],codex.env,codex.workspace,promptCodex,'Codex');
+ const claudeRun=proc(process.env.AGENTPEERCHAT_CLAUDE_CLI||'claude',['-p','--no-session-persistence','--permission-mode','dontAsk','--tools','Bash,Read,Write,Skill,TaskOutput,TaskStop','--allowedTools','Bash','Read','Write','Skill','--setting-sources','project','--strict-mcp-config','--mcp-config','{"mcpServers":{}}','--verbose','--output-format','stream-json'],claude.env,claude.workspace,promptClaude,'Claude Code');
  runtimes=[codexRun,claudeRun];let lastProgress='';
  for(let n=0;n<120&&runtimes.some(p=>p.status==='running');n++){
   await new Promise(r=>setTimeout(r,5000));
@@ -96,9 +96,9 @@ try{
  assert.equal(results[0].code,0,'Codex must finish normally');assert.equal(results[1].code,0,'Claude must finish normally');
  assert.ok(codexMessages.length>=2,'Codex must autonomously consult and return a substantive proposal');assert.ok(claudeMessages.length>=2,'Claude must supply facts and review the proposal');
  const events=results.map(result=>result.output.split('\n').filter(Boolean).flatMap(line=>{try{return [JSON.parse(line)];}catch{return [];}}));
- assert.ok(events[0].some(event=>event.type==='item.completed'&&event.item?.type==='command_execution'&&event.item.exit_code===0&&event.item.command.includes('.agents/skills/agentpenpal/SKILL.md')&&event.item.aggregated_output?.includes('name: agentpenpal')),'Codex must successfully read the actual installed skill');
- assert.ok(events[1].some(event=>event.message?.content?.some(block=>block.type==='tool_use'&&block.name==='Skill'&&block.input?.skill==='agentpenpal')),'Claude must invoke the actual installed skill');
- report.checks.push('Both real CLI processes discovered and loaded their native installed AgentPenpal skill');
+ assert.ok(events[0].some(event=>event.type==='item.completed'&&event.item?.type==='command_execution'&&event.item.exit_code===0&&event.item.command.includes('.agents/skills/agentpeerchat/SKILL.md')&&event.item.aggregated_output?.includes('name: agentpeerchat')),'Codex must successfully read the actual installed skill');
+ assert.ok(events[1].some(event=>event.message?.content?.some(block=>block.type==='tool_use'&&block.name==='Skill'&&block.input?.skill==='agentpeerchat')),'Claude must invoke the actual installed skill');
+ report.checks.push('Both real CLI processes discovered and loaded their native installed AgentPeerChat skill');
  const proposal=await readFile(join(codex.workspace,'proposal.md'),'utf8');assert.ok(proposal.includes(facts.contractCode));assert.ok(proposal.includes(String(facts.weeklyItems)));assert.ok(proposal.includes(String(facts.monthlyBudget)));assert.ok(proposal.includes(String(facts.monthlyModelBudget)));assert.ok(proposal.includes(String(facts.reviewMinutes)));
  assert.ok(claudeMessages.some(m=>JSON.stringify(m.content).includes(facts.contractCode)),'Private research facts must have actually arrived through messages');
  const review=await readFile(join(claude.workspace,'review.md'),'utf8');assert.ok(/验收|通过|修正|approved|accept/i.test(review));

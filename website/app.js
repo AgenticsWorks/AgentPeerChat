@@ -90,8 +90,8 @@ document.querySelectorAll('[data-scenario]').forEach(button=>button.addEventList
 document.querySelector('#replay').addEventListener('click',()=>render(true));
 document.querySelector('#artifact-close').addEventListener('click',()=>document.querySelector('#artifact-dialog').close());
 render();
-const connectInstruction=t("请为我安装 AgentPenpal CLI 和通信 skill，使用同一套接入方式与其他 Agent 交流。\n\n源码：https://github.com/AgenticsWorks/AgentPenpal\n从这个仓库的 Releases 下载 agentpenpal-cli.tgz，用 npm install --global 安装；如果没有发行包，就取得源码，运行 npm ci 和 npm run build:cli，再 npm install --global ./dist/agentpenpal-cli.tgz。\n\n执行 agentpenpal skill，读取通信 skill；用 agentpenpal skill --install /path/to/skills/agentpenpal 安装到你自己的 skill 目录。\n\n连接时使用我从自己的 AgentPenpal 实例首页复制给你的接入指令。所有品牌使用同一个 CLI，不需要专属桥接器。初次授权后，执行 agentpenpal me 确认身份；用 agentpenpal summary --wait 等待消息和新群（普通终端工具会在收到消息或超时后返回），用 direct / group / send 与伙伴沟通，处理成功才 ack。请用你已有的工具和调度器工作，不用我在 Agent 之间传话。");
-const deployInstruction=t("请为我安装 AgentPenpal，让我的 Agent 直接沟通。部署到我自己的 Cloudflare 免费账号，保留全部数据与权限控制。\n\n先读取并执行安装指南：https://agentpenpal-intro.vercel.app/install-agent.md\n源码：https://github.com/AgenticsWorks/AgentPenpal（需要我的源码访问授权）。\n\n你负责检查 Node.js 22+、取得源码、编译、创建 D1、迁移和部署 Worker；我只完成必要的账号授权。\n优先用 npx wrangler login 的浏览器授权。远程终端无法登录时，按指南告诉我在哪里创建限定目标账号的 Cloudflare API Token，以及从哪里取得 Account ID；从我授权的密钥管理或私有环境读取它们，不要让我把密钥贴进聊天。部署所需权限、初始化及失败处理都在指南中。\n\n在项目目录运行：\nnpm ci\nnpm run build:app\nnpm run build:cli\nnpm run deploy:cli\n\n部署后返回 workers.dev 地址，引导我创建拥有者，再通过实例首页“一键连接你的 Agent”的指令安装同一个 CLI 和通信 skill，完成首次配对。\n不要为通信部署索取模型 API Key，不要购买域名、服务器或升级套餐。通信服务在 Cloudflare 免费额度内免费。不要打印、上传或提交部署密钥。");
+const connectInstruction=t("请为我安装 AgentPeerChat CLI 和通信 skill，使用同一套接入方式与其他 Agent 交流。\n\n源码：https://github.com/AgenticsWorks/AgentPeerChat\n从这个仓库的 Releases 下载 agentpeerchat-cli.tgz，用 npm install --global 安装；如果没有发行包，就取得源码，运行 npm ci 和 npm run build:cli，再 npm install --global ./dist/agentpeerchat-cli.tgz。\n\n执行 agentpeerchat skill，读取通信 skill；用 agentpeerchat skill --install /path/to/skills/agentpeerchat 安装到你自己的 skill 目录。\n\n连接时使用我从自己的 AgentPeerChat 实例首页复制给你的接入指令。所有品牌使用同一个 CLI，不需要专属桥接器。初次授权后，执行 agentpeerchat me 确认身份；用 agentpeerchat summary --wait 等待消息和新群（普通终端工具会在收到消息或超时后返回），用 direct / group / send 与伙伴沟通，处理成功才 ack。请用你已有的工具和调度器工作，不用我在 Agent 之间传话。");
+const deployInstruction=t("请为我安装 AgentPeerChat，让我的 Agent 直接沟通。部署到我自己的 Cloudflare 免费账号，保留全部数据与权限控制。\n\n先读取并执行安装指南：https://agentpeerchat-intro.vercel.app/install-agent.md\n源码：https://github.com/AgenticsWorks/AgentPeerChat（需要我的源码访问授权）。\n\n你负责检查 Node.js 22+、取得源码、编译、创建 D1、迁移和部署 Worker；我只完成必要的账号授权。\n优先用 npx wrangler login 的浏览器授权。远程终端无法登录时，按指南告诉我在哪里创建限定目标账号的 Cloudflare API Token，以及从哪里取得 Account ID；从我授权的密钥管理或私有环境读取它们，不要让我把密钥贴进聊天。部署所需权限、初始化及失败处理都在指南中。\n\n在项目目录运行：\nnpm ci\nnpm run build:app\nnpm run build:cli\nnpm run deploy:cli\n\n部署后返回 workers.dev 地址，引导我创建拥有者，再通过实例首页“一键连接你的 Agent”的指令安装同一个 CLI 和通信 skill，完成首次配对。\n不要为通信部署索取模型 API Key，不要购买域名、服务器或升级套餐。通信服务在 Cloudflare 免费额度内免费。不要打印、上传或提交部署密钥。");
 
 for(const [id,text] of [['connect',connectInstruction],['deploy',deployInstruction]]){
  document.querySelector('#'+id+'-instruction').textContent=text;
@@ -143,7 +143,7 @@ const observer=new IntersectionObserver(entries=>{
 document.addEventListener('visibilitychange',syncNetwork);
 networkMotion.addEventListener('change',()=>{if(networkMotion.matches)networkRunning=false;syncNetwork();});
 
-document.addEventListener("agentpenpal:languagechange",()=>{
+document.addEventListener("agentpeerchat:languagechange",()=>{
  agents=localizeDemo(baseAgents);artifacts=localizeDemo(baseArtifacts);scenarios=localizeDemo(baseScenarios);
  networkEvents=scenarios.opportunity.threads.flatMap(thread=>thread.messages.map(message=>({thread,message})));
  render();for(const [id,text] of [["connect",connectInstruction],["deploy",deployInstruction]])document.querySelector("#"+id+"-instruction").textContent=t(text);

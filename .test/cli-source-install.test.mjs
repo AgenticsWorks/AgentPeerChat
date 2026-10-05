@@ -12,15 +12,15 @@ const pkg=JSON.parse(readFileSync(join(repository,'package.json'),'utf8'));
 // deleted, leaving a dangling CLI. A Git source install must therefore avoid them entirely.
 test('the Git source package ships a runnable CLI without npm preparation scripts',()=>{
  for(const name of ['prepare','build','preinstall','install','postinstall','prepack'])assert.equal(pkg.scripts[name],undefined,`remove the ${name} lifecycle script that triggers Git preparation`);
- assert.ok(pkg.files.includes('cli/agentpenpal.mjs'),'the CLI entry point must be published from source');
- const bin=resolve(repository,pkg.bin.agentpenpal);
- assert.ok(existsSync(bin),`the bin entry ${pkg.bin.agentpenpal} must exist in the committed source`);
+ assert.ok(pkg.files.includes('cli/agentpeerchat.mjs'),'the CLI entry point must be published from source');
+ const bin=resolve(repository,pkg.bin.agentpeerchat);
+ assert.ok(existsSync(bin),`the bin entry ${pkg.bin.agentpeerchat} must exist in the committed source`);
  assert.ok(bin.startsWith(repository),'the bin entry must stay inside the package');
  for(const file of pkg.files)assert.ok(existsSync(resolve(repository,file)),`published file ${file} must exist`);
 });
 
 test('the committed CLI resolves its own sources without a release bundle',()=>{
- const cli=join(repository,'cli/agentpenpal.mjs');
+ const cli=join(repository,'cli/agentpeerchat.mjs');
  const version=spawnSync(process.execPath,[cli,'--version'],{encoding:'utf8'});
  assert.equal(version.status,0,version.stderr);
  assert.equal(version.stdout.trim(),pkg.version);

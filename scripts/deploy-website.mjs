@@ -13,13 +13,15 @@ if(!teamId){
 }
 async function api(path,method='GET',body,raw=false){
  const response=await fetch('https://api.vercel.com'+path+(teamId?(path.includes('?')?'&':'?')+'teamId='+encodeURIComponent(teamId):''),{method,headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':raw?'application/octet-stream':'application/json'}:{})},body:body?(raw?body:JSON.stringify(body)):undefined,signal:AbortSignal.timeout(60000)});
- const d=await response.json();if(!response.ok)throw new Error('Vercel '+response.status+' '+String(d.error?.message||'API error').replaceAll(token,'[redacted]'));return d;
+ const d=await response.json();if(!response.ok)throw new Error('Vercel '+response.status+' '+method+' '+path+' '+String(d.error?.message||'API error').replaceAll(token,'[redacted]'));return d;
 }
 try{
- let project;try{project=await api('/v9/projects/agentpenpal-intro')}catch(error){if(!error.message.startsWith('Vercel 404'))throw error;project=await api('/v10/projects','POST',{name:'agentpenpal-intro',framework:null,buildCommand:null,outputDirectory:null});}
+ let previous;try{previous=JSON.parse(await readFile('.wrangler/vercel-intro-deployment.json','utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+ let project;try{project=await api('/v9/projects/'+(previous?.projectId||'agentpeerchat-intro'))}catch(error){if(!error.message.startsWith('Vercel 404'))throw error;project=await api('/v10/projects','POST',{name:'agentpeerchat-intro',framework:null,buildCommand:null,outputDirectory:null});}
+ if(project.name!=='agentpeerchat-intro')project=await api('/v9/projects/'+project.id,'PATCH',{name:'agentpeerchat-intro'});
  await mkdir('.wrangler',{recursive:true});
  // Only marketing HTML/CSS/JS, docs and the icon are allowed to leave this directory.
- const allowed=['index.html','style.css','app.js','i18n.js','locales.js','network.js','assets/network-licenses.txt','vercel.json','deployment.html','deployment.zh-CN.html','install-agent.md','server-deployment.html','server-deployment.zh-CN.html','protocol.html','product.html','product.zh-CN.html','assets/icon.svg','assets/dots.svg','assets/grok.svg','assets/muse.svg'];
+ const allowed=['index.html','style.css','app.js','i18n.js','locales.js','profile-locales.js','network.js','assets/network-licenses.txt','vercel.json','deployment.html','deployment.zh-CN.html','install-agent.md','server-deployment.html','server-deployment.zh-CN.html','protocol.html','product.html','product.zh-CN.html','assets/icon.svg','assets/dots.svg','assets/grok.svg','assets/muse.svg'];
  const privateRecording=JSON.parse(await readFile('docs/research-conversation.json','utf8'));
  const privateOrigin=privateRecording.url?new URL(privateRecording.url).hostname:null;
  const files=[];for(const file of allowed){const data=await readFile('website/'+file);if(privateOrigin&&data.includes(Buffer.from(privateOrigin)))throw new Error('Private instance address found in a public upload file: '+file);if(data.includes(Buffer.from(token)))throw new Error('Credential found in an upload file.');files.push({file,data:data.toString('base64'),encoding:'base64'});}
@@ -28,9 +30,10 @@ try{
  let ready=deployment;
  while(!['READY','ERROR','CANCELED'].includes(ready.readyState||ready.status)){await new Promise(r=>setTimeout(r,3000));ready=await api('/v13/deployments/'+deployment.id);}
  if((ready.readyState||ready.status)!=='READY')throw new Error('Deployment did not become ready: '+(ready.readyState||ready.status));
- const canonicalAlias='agentpenpal-intro.vercel.app';
+ const canonicalAlias='agentpeerchat-intro.vercel.app';
  await api('/v2/deployments/'+deployment.id+'/aliases','POST',{alias:canonicalAlias});
- const aliases=[...new Set([...(Array.isArray(ready.alias)?ready.alias:[]),canonicalAlias])];
+ for(const alias of previous?.aliases||[]){if(alias==='agentpenpal-intro.vercel.app'||alias==='agentgram-intro.vercel.app')await api('/v2/deployments/'+deployment.id+'/aliases','POST',{alias});}
+ const aliases=[...new Set([...(previous?.aliases||[]),...(Array.isArray(ready.alias)?ready.alias:[]),canonicalAlias])];
  const result={projectId:project.id,projectName:project.name,teamId,deploymentId:deployment.id,deploymentUrl:'https://'+ready.url,aliases,readyAt:new Date().toISOString(),uploadedFiles:allowed};
  await writeFile('.wrangler/vercel-intro-deployment.json',JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result,null,2));

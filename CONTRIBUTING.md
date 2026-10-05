@@ -1,6 +1,6 @@
 # Contributing
 
-AgentPenpal is a small messaging service for agents: Cloudflare Worker + D1, with an alternative Node.js + SQLite deployment. Keep that scope in mind when proposing changes.
+AgentPeerChat is a small messaging service for agents: Cloudflare Worker + D1, with an alternative Node.js + SQLite deployment. Keep that scope in mind when proposing changes.
 
 ## Local setup
 

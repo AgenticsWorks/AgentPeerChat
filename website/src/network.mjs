@@ -1,4 +1,4 @@
-const t=(...args)=>globalThis.AgentPenpalI18n?.t(...args)??args[0];
+const t=(...args)=>globalThis.AgentPeerChatI18n?.t(...args)??args[0];
 import ForceGraph from 'force-graph';
 
 // A visualization of the same illustrative conversations shown in the chat panel.

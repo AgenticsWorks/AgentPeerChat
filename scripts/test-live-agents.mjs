@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
-const base = process.env.AGENTPENPAL_URL;
-const owner = process.env.AGENTPENPAL_OWNER_TOKEN;
-if (!base || !owner) throw new Error('Set AGENTPENPAL_URL and AGENTPENPAL_OWNER_TOKEN in the process environment.');
-const claude = process.env.AGENTPENPAL_CLAUDE_CLI || 'claude';
+const base = process.env.AGENTPEERCHAT_URL;
+const owner = process.env.AGENTPEERCHAT_OWNER_TOKEN;
+if (!base || !owner) throw new Error('Set AGENTPEERCHAT_URL and AGENTPEERCHAT_OWNER_TOKEN in the process environment.');
+const claude = process.env.AGENTPEERCHAT_CLAUDE_CLI || 'claude';
 const runId = randomUUID();
 const report = { runId, checkedAt: new Date().toISOString(), timezone: 'Asia/Shanghai', url: base, checks: [], runtimes: [] };
 const credentials = [owner, process.env.GLM_CODING_PLAN_API_KEY].filter(Boolean);
@@ -28,10 +28,10 @@ function runCli(binary, args, prompt, env, cwd) {
   child.stdin.end(prompt);
  });
 }
-const directory = await mkdtemp(join(tmpdir(), 'agentpenpal-cli-live-'));
+const directory = await mkdtemp(join(tmpdir(), 'agentpeerchat-cli-live-'));
 const agents = [];
 try {
- await copyFile('scripts/agent.mjs', join(directory, 'agentpenpal.mjs'));
+ await copyFile('scripts/agent.mjs', join(directory, 'agentpeerchat.mjs'));
  for (const name of ['Codex CLI', 'Claude Code']) {
   const result = await api('/agents', 'POST', { name: `${name} · live test`, description: 'Actual local coding-agent runtime integration test; temporary scoped identity.' });
   agents.push({ name, id: result.principal.id, key: result.token.token }); credentials.push(result.token.token);
@@ -41,11 +41,11 @@ try {
  report.threadId = thread.id;
  const challenge = (await api('/messages', 'POST', { thread_id: thread.id, type: 'text', content: `Live runtime challenge ${runId}: Codex must read this inbox message and reply CODEX_OK ${runId}; Claude Code must read the actual Codex reply and answer CLAUDE_OK ${runId}. Both must ack only messages they actually processed.` })).message;
  const envFor = agent => {
-  const env = { ...process.env, AGENTPENPAL_URL: base, AGENTPENPAL_TOKEN: agent.key };
-  for (const name of ['NODE_USE_ENV_PROXY', 'AGENTPENPAL_OWNER_TOKEN', 'AGENTPENPAL_CONFIG', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'GLM_CODING_PLAN_API_KEY']) delete env[name];
+  const env = { ...process.env, AGENTPEERCHAT_URL: base, AGENTPEERCHAT_TOKEN: agent.key };
+  for (const name of ['NODE_USE_ENV_PROXY', 'AGENTPEERCHAT_OWNER_TOKEN', 'AGENTPEERCHAT_CONFIG', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'GLM_CODING_PLAN_API_KEY']) delete env[name];
   return env;
  };
- const instructions = `You are performing an authorized, narrowly scoped AgentPenpal integration test in a temporary directory. Use only shell commands invoking the provided dependency-free client: node agentpenpal.mjs me, inbox, send THREAD_ID TEXT, ack MESSAGE_ID. Your private scoped Agent token and URL are already in the environment. Never print or inspect environment credentials, write credentials, change configuration, install packages, or touch other files. Run the actual commands; reporting intended commands is insufficient. This is a mailbox test, not a coding task. `;
+ const instructions = `You are performing an authorized, narrowly scoped AgentPeerChat integration test in a temporary directory. Use only shell commands invoking the provided dependency-free client: node agentpeerchat.mjs me, inbox, send THREAD_ID TEXT, ack MESSAGE_ID. Your private scoped Agent token and URL are already in the environment. Never print or inspect environment credentials, write credentials, change configuration, install packages, or touch other files. Run the actual commands; reporting intended commands is insufficient. This is a mailbox test, not a coding task. `;
  const codexArgs = ['exec', '--skip-git-repo-check', '--ephemeral', '--sandbox', 'danger-full-access', '-c', 'approval_policy="never"', '-c', 'shell_environment_policy.inherit="all"', '--json', '-'];
  console.log('Starting actual Codex CLI: read challenge, send reply, acknowledge processing.');
  await runCli('codex', codexArgs, instructions + `Run me and inbox. Locate challenge ${runId}; send to ${thread.id} the exact text CODEX_OK ${runId}; then ack ${challenge.id}. Finish with a brief success/failure report.`, envFor(agents[0]), directory);
@@ -57,8 +57,8 @@ try {
  const claudeEnv = envFor(agents[1]);
  if (process.env.GLM_CODING_PLAN_API_KEY) {
   claudeEnv.ANTHROPIC_AUTH_TOKEN = process.env.GLM_CODING_PLAN_API_KEY;
-  claudeEnv.ANTHROPIC_BASE_URL = process.env.AGENTPENPAL_GLM_BASE_URL || 'https://open.bigmodel.cn/api/anthropic';
-  claudeEnv.ANTHROPIC_DEFAULT_SONNET_MODEL = process.env.AGENTPENPAL_GLM_MODEL || 'glm-5.3-flash';
+  claudeEnv.ANTHROPIC_BASE_URL = process.env.AGENTPEERCHAT_GLM_BASE_URL || 'https://open.bigmodel.cn/api/anthropic';
+  claudeEnv.ANTHROPIC_DEFAULT_SONNET_MODEL = process.env.AGENTPEERCHAT_GLM_MODEL || 'glm-5.3-flash';
   claudeEnv.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
  }
  const args = ['-p', '--no-session-persistence', '--permission-mode', 'dontAsk', '--tools', 'Bash', '--allowedTools', 'Bash(node *)', '--setting-sources', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--output-format', 'json'];
@@ -81,7 +81,7 @@ try {
  if (!report.cleanupError) report.checks.push('Temporary test Agent identities disabled and their keys revoked');
  report.completedAt = new Date().toISOString();
  await rm(directory, { recursive: true, force: true });
- const destination = process.env.AGENTPENPAL_LIVE_REPORT || 'docs/live-agents-verification.json';
+ const destination = process.env.AGENTPEERCHAT_LIVE_REPORT || 'docs/live-agents-verification.json';
  await writeFile(destination, JSON.stringify(report, null, 2) + '\n');
  console.log(JSON.stringify(report, null, 2));
 }

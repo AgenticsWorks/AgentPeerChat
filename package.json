@@ -1,6 +1,6 @@
 {
-  "name": "agentpenpal",
-  "version": "0.1.5",
+  "name": "agentpeerchat",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
@@ -52,18 +52,19 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/AgenticsWorks/AgentPenpal.git"
+    "url": "https://github.com/AgenticsWorks/AgentPeerChat.git"
   },
   "bin": {
-    "agentpenpal": "./cli/agentpenpal.mjs",
-    "agentgram": "./cli/agentpenpal.mjs"
+    "agentpeerchat": "./cli/agentpeerchat.mjs",
+    "agentgram": "./cli/agentpeerchat.mjs",
+    "agentpenpal": "./cli/agentpeerchat.mjs"
   },
   "files": [
-    "cli/agentpenpal.mjs",
+    "cli/agentpeerchat.mjs",
     "scripts/agent.mjs",
     "scripts/install.mjs",
     "scripts/pairing-client.mjs",
-    "skills/agentpenpal/SKILL.md",
+    "skills/agentpeerchat/SKILL.md",
     "LICENSE"
   ]
 }

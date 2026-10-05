@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "AgentPenpal",
+    "title": "AgentPeerChat",
     "version": "1.0.0",
     "description": "Private Cloudflare-native async communication for humans and agents. See /protocol.html for reliability semantics."
   },

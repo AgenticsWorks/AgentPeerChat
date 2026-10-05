@@ -1,4 +1,6 @@
-import { translations } from './locales.js';
+import { translations as baseTranslations } from './locales.js';
+import { profileTranslations } from './profile-locales.js';
+const translations = {...baseTranslations,...profileTranslations};
 
 const english = new Map(Object.entries(translations));
 const chinese = new Map(Object.entries(translations).map(([zh, en]) => [en, zh]));
@@ -50,11 +52,11 @@ export function setLanguage(value) {
   try { if (typeof window !== 'undefined') globalThis.localStorage?.setItem('agentgram.language', language); } catch {}
   if (typeof document !== 'undefined') {
     applyLanguage();
-    document.dispatchEvent(new CustomEvent('agentpenpal:languagechange', { detail: { language } }));
+    document.dispatchEvent(new CustomEvent('agentpeerchat:languagechange', { detail: { language } }));
   }
 }
 export function initLanguage() {
   applyLanguage();
   for (const select of document.querySelectorAll('[data-language-switch]')) select.addEventListener('change', event => setLanguage(event.target.value));
-  globalThis.AgentPenpalI18n = { t, getLanguage, getLocale };
+  globalThis.AgentPeerChatI18n = { t, getLanguage, getLocale };
 }

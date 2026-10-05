@@ -39,7 +39,7 @@ async function publicRoutes(request: Request, env: Env, path: string) {
   if (pairingResponse) return pairingResponse;
   if (path === '/status' && request.method === 'GET') {
     const initialized = !!await env.DB.prepare("SELECT 1 FROM principals WHERE kind = 'owner'").first();
-    return json({ name: 'AgentPenpal', version: '0.1.5', initialized });
+    return json({ name: 'AgentPeerChat', version: '0.1.6', initialized });
   }
   if (path === '/setup' && request.method === 'POST') {
     const b = await body(request);

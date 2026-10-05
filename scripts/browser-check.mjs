@@ -4,11 +4,11 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { randomUUID, createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-const base = (process.env.AGENTPENPAL_TEST_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
+const base = (process.env.AGENTPEERCHAT_TEST_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname)) throw new Error('Browser fixture tests require a disposable loopback instance.');
 const browser = './node_modules/.bin/agent-browser';
 function browse(...args) {
-  const r = spawnSync(browser, ['--session', process.env.AGENTPENPAL_BROWSER_SESSION ?? 'agentpenpal-verification', ...args], { encoding: 'utf8', timeout: 30000 });
+  const r = spawnSync(browser, ['--session', process.env.AGENTPEERCHAT_BROWSER_SESSION ?? 'agentpeerchat-verification', ...args], { encoding: 'utf8', timeout: 30000 });
   if (r.status !== 0) throw new Error(r.stderr || r.stdout || 'Browser command failed');
   return r.stdout.trim();
 }
@@ -48,7 +48,7 @@ if (!credentials.group) {
   // Create the first agent through the product UI, including the one-time key dialog.
   browse('click', '#connect-agent-form button'); await waitFor('#saved-key');
   const packet = browserValue('document.querySelector("#field-secret").value');
-  const connection = JSON.parse(packet.match(/AGENTPENPAL_CONFIG_JSON'\n([\s\S]*?)\nAGENTPENPAL_CONFIG_JSON/)[1]);
+  const connection = JSON.parse(packet.match(/AGENTPEERCHAT_CONFIG_JSON'\n([\s\S]*?)\nAGENTPEERCHAT_CONFIG_JSON/)[1]);
   assert.equal(connection.register_name,true); assert.ok(packet.includes(' summary'));
   assert.ok(!connection.token);assert.ok(connection.pairing.code);
   const key = 'agt_'+randomUUID().replaceAll('-','');
@@ -64,7 +64,7 @@ if (!credentials.group) {
   for (const [name, description, field] of [['Researcher', 'Finds the evidence behind every decision', 'researcher'], ['Reviewer', 'Checks quality, clarity, and accessibility', 'reviewer']]) {
     const r = await api('/agents', credentials.owner, 'POST', { name, description }); credentials[field] = { id: r.principal.id, key: r.token.token };
   }
-  const group = await api('/threads', credentials.codex.key, 'POST', { title: 'AgentPenpal · Launch crew', members: [credentials.researcher.id, me.id] });
+  const group = await api('/threads', credentials.codex.key, 'POST', { title: 'AgentPeerChat · Launch crew', members: [credentials.researcher.id, me.id] });
   credentials.group = group.thread.id;
   // Agent proactively adds another agent after creating the group.
   await api(`/threads/${credentials.group}/members`, credentials.codex.key, 'POST', { members: [credentials.reviewer.id] });
@@ -74,7 +74,7 @@ if (!credentials.group) {
   const brief = await send(credentials.researcher.key, 'json', { status: 'Research complete', finding: 'One Worker + one D1. Everything belongs to the user’s Cloudflare account.', next_step: 'Keep the first release focused on reliable async handoffs.' });
   await api(`/messages/${brief.id}/ack`, credentials.codex.key, 'POST');
   await send(credentials.reviewer.key, 'text', 'The group flow feels familiar. I’d make pending vs. acknowledged visible beside every handoff, so people can follow the work without reading API logs.');
-  await send(credentials.codex.key, 'artifact', { name: 'First-run experience · design notes', url: 'https://example.com/agentpenpal/design-notes' });
+  await send(credentials.codex.key, 'artifact', { name: 'First-run experience · design notes', url: 'https://example.com/agentpeerchat/design-notes' });
   await send(credentials.owner, 'text', 'Yes — make the collaboration itself the demo. I want to see agents creating a group, handing off work, and sharing the result.');
   await writeFile('.wrangler/demo-secrets.json', JSON.stringify(credentials), { mode: 0o600 });
 }
@@ -92,7 +92,7 @@ if (!credentials.sideGroups) {
 }
 browse('open', base); await waitFor('#shell:not([hidden])');
 browse('set', 'viewport', '1600', '1100');
-browse('find', 'text', 'AgentPenpal · Launch crew', 'click'); await waitFor('[data-message-id]');
+browse('find', 'text', 'AgentPeerChat · Launch crew', 'click'); await waitFor('[data-message-id]');
 if (evaluate('document.querySelector("#thread-inspector").hidden') === 'true') browse('click', '#toggle-activity');
 await waitFor('#activity-list .activity-card');
 // Verify human participation through the composer and confirm the resulting row through the API.
@@ -111,7 +111,7 @@ browse('wait', '--fn', 'document.querySelector("#message-text").value === ""');
 const messages = (await api(`/threads/${smoke.id}?limit=100`, credentials.owner)).items;
 assert.ok(messages.some(m => m.sender_id === me.id && m.content === unique));
 assert.ok((await api('/inbox', credentials.codex.key)).items.some(m => m.content === unique));
-browse('find', 'text', 'AgentPenpal · Launch crew', 'click'); await waitFor('[data-message-id]');
+browse('find', 'text', 'AgentPeerChat · Launch crew', 'click'); await waitFor('[data-message-id]');
 evaluate('document.querySelector("#message-list").scrollTop = 0');
 browse('screenshot', 'docs/screenshots/conversation-desktop.png');
 // Observer cannot write into an Agent-only DM. Joining creates a separate group.
@@ -145,7 +145,7 @@ const urls = typeof resources === 'string' ? JSON.parse(resources) : resources;
 assert.ok(urls.every(url => new URL(url).origin === base), 'Unexpected third-party request');
 const protocol = await fetch(base + '/protocol.html'); assert.equal(protocol.status, 200); assert.ok((await protocol.text()).includes('Receive and acknowledge'));
 const spec = await fetch(base + '/openapi.json'); assert.equal(spec.status, 200); assert.equal((await spec.json()).openapi, '3.1.0');
-await writeFile('docs/browser-verification.json', JSON.stringify({ checked_at: new Date().toISOString(), runtime: process.env.AGENTPENPAL_BROWSER_BACKEND === 'sqlite' ? 'Node.js + persistent SQLite' : 'Wrangler + local D1',
+await writeFile('docs/browser-verification.json', JSON.stringify({ checked_at: new Date().toISOString(), runtime: process.env.AGENTPEERCHAT_BROWSER_BACKEND === 'sqlite' ? 'Node.js + persistent SQLite' : 'Wrangler + local D1',
   verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Owner-invited Agent pairs through UI; proof rejected until explicit approval', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
   demo_note: 'Demo messages are fixtures posted through the real API, not autonomous LLM outputs.' }, null, 2));
 browse('close');

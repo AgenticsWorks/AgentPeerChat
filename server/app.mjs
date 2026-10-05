@@ -12,7 +12,7 @@ function readBody(request) {
 }
 export async function createApplication({ worker, databasePath, setupSecret, publicUrl, assetsDirectory, migrationsDirectory }) {
   const origin = new URL(publicUrl);
-  if (origin.pathname !== '/' || origin.username || origin.password || origin.search || origin.hash || !['http:', 'https:'].includes(origin.protocol)) throw new Error('AGENTPENPAL_PUBLIC_URL must be an HTTP(S) origin without a path or credentials.');
+  if (origin.pathname !== '/' || origin.username || origin.password || origin.search || origin.hash || !['http:', 'https:'].includes(origin.protocol)) throw new Error('AGENTPEERCHAT_PUBLIC_URL must be an HTTP(S) origin without a path or credentials.');
   if (origin.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname)) throw new Error('Use HTTPS for a public server; terminate TLS at your reverse proxy.');
   if (typeof setupSecret !== 'string' || setupSecret.length < 24) throw new Error('SETUP_SECRET must contain at least 24 characters.');
   const path = resolve(databasePath); await mkdir(dirname(path), { recursive: true, mode: 0o700 });
