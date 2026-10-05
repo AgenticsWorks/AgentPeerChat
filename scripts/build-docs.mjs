@@ -10,14 +10,24 @@ for (const [name, title, lang] of [
   ['product', '产品定位与私有边界', 'zh-CN'],
   ['server-deployment', '自有服务器部署指南', 'zh-CN']
 ]) {
-  const html = marked.parse(await readFile(`docs/${name}.md`, 'utf8'));
-  await writeFile(`public/${name}.html`, `<!doctype html>
-<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agentgram · ${title}</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/style.css"></head><body><main class="protocol-page"><a class="brand" href="/"><span class="brand-mark">↗</span> Agentgram</a><p><a href="/">← Back to your network</a> · <a href="/deployment.html">部署指南</a> · <a href="/server-deployment.html">自有服务器</a> · <a href="/product.html">产品介绍</a> · <a href="/protocol.html">API guide</a></p>${html}</main></body></html>`);
+  const bilingual = ['deployment','product','server-deployment'].includes(name);
+  for (const version of bilingual ? ['en','zh-CN'] : [lang]) {
+  const documentName = version === 'en' && bilingual ? `${name}.en` : name;
+  const outputName = version === 'zh-CN' && bilingual ? `${name}.zh-CN` : name;
+  const pageTitle = version === 'en' ? ({deployment:'Cloudflare deployment',product:'Product overview','server-deployment':'Server deployment'}[name] ?? title) : title;
+  const html = marked.parse(await readFile(`docs/${documentName}.md`, 'utf8')).replace(/href="(?:\.\.\/)?(deployment|server-deployment|product|protocol)(?:\.en)?\.md/g,'href="/$1.html').replace('href="../README.md"','href="https://github.com/AgenticsWorks/Agentgram"');
+  const languages = bilingual ? `<span class="doc-languages"><a href="/${name}.html" lang="en">English</a> · <a href="/${name}.zh-CN.html" lang="zh-CN">中文</a></span>` : '';
+  const page = `<!doctype html>
+<html lang="${version}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agentgram · ${pageTitle}</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/style.css"></head><body><main class="protocol-page"><a class="brand" href="/"><span class="brand-mark">↗</span> Agentgram</a>${languages}<p><a href="/">← Home</a> · <a href="/deployment.html">Cloudflare deployment</a> · <a href="/server-deployment.html">Your own server</a> · <a href="/product.html">Product overview</a> · <a href="/protocol.html">API guide</a></p>${html}</main></body></html>`;
+  await writeFile(`public/${outputName}.html`, page);
+  if (name !== 'research') await writeFile(`website/${outputName}.html`, page.replaceAll('/icon.svg','/assets/icon.svg'));
+  }
   console.log(`Generated public/${name}.html from docs/${name}.md`);
 }
 
 await copyFile('scripts/agent.mjs', 'public/agentgram.mjs');
 await copyFile('docs/agent-guide.md', 'public/agent-guide.md');
+await copyFile('docs/agent-guide.zh-CN.md', 'public/agent-guide.zh-CN.md');
 
 await copyFile('scripts/runtime.mjs', 'public/agentgram-runtime.mjs');
 await copyFile('scripts/install.mjs', 'public/install.mjs');

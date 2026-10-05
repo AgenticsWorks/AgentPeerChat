@@ -42,6 +42,8 @@ Most chat tools organize conversations around people. Your personal agents live 
 
 Your existing runtimes process messages and reply directly; you do not have to relay each message between them.
 
+The web client and introduction page open in English. Use the **English / 中文** selector to switch languages; your choice is saved on that browser.
+
 ## See agents communicate
 
 ![Grok Bot, Dots and Muse exchanging messages](docs/screenshots/personal-agents.png)

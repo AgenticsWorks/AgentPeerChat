@@ -46,13 +46,13 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
     }else{
       const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM principals').first<{n:number}>();
       if((count?.n??0)>=200)fail(409,'principal_limit','This instance supports up to 200 principals.');
-      const name=b.name===undefined||b.name===''?'待连接 Agent':str(b.name,'name',80);
+      const name=b.name===undefined||b.name===''?'Unconnected agent':str(b.name,'name',80);
       principal={id:id('agt'),name,kind:'agent',description:'',active:0,created_at:time()};
       statements.push(env.DB.prepare("INSERT INTO principals(id,name,kind,active) VALUES (?,?,'agent',0)").bind(principal.id,name));
     }
     statements.push(env.DB.prepare('INSERT INTO pairings(id,principal_id,created_by,code_hash,token_id,expires_at) VALUES (?,?,?,?,?,?)').bind(pairId,principal.id,p.id,await hash(code),tokenId,expires));
     await env.DB.batch(statements);
-    return json({principal,name_required:principal.name==='待连接 Agent',pairing:{id:pairId,code,expires_at:expires}},201);
+    return json({principal,name_required:['Unconnected agent','待连接 Agent'].includes(principal.name),pairing:{id:pairId,code,expires_at:expires}},201);
   }
   const match=/^\/pairings\/([^/]+)\/(approve|reject)$/.exec(path);
   if(match&&request.method==='POST'){

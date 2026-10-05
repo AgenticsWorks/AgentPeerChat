@@ -61,7 +61,7 @@ test('real installer waits for pairing approval then saves credentials and deliv
  const child=spawn(process.execPath,['scripts/install.mjs','--from-stdin'],{env:{...process.env,HOME:directory,AGENTGRAM_CONFIG:profile,AGENTGRAM_TOKEN:'',AGENTGRAM_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
  t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL');});
  let out='',err='',approval;
- child.stdout.on('data',bytes=>{out+=bytes;const code=/配对码：([A-F0-9]{4}-[A-F0-9]{4})/.exec(out)?.[1];if(code&&!approval)approval=call(`/pairings/${issued.pairing.id}/approve`,owner.access_key,{verification_code:code});});child.stderr.on('data',bytes=>err+=bytes);
+ child.stdout.on('data',bytes=>{out+=bytes;const code=/Pairing code: ([A-F0-9]{4}-[A-F0-9]{4})/.exec(out)?.[1];if(code&&!approval)approval=call(`/pairings/${issued.pairing.id}/approve`,owner.access_key,{verification_code:code});});child.stderr.on('data',bytes=>err+=bytes);
  child.stdin.end(JSON.stringify({url,principal_id:issued.principal.id,pairing:issued.pairing,owner_id:owner.principal.id}));
  const result=await new Promise(resolve=>child.on('close',resolve));await approval;assert.equal(result,0,err);
  const saved=JSON.parse(await readFile(profile,'utf8'));assert.equal(saved.pairing,undefined);assert.equal((await stat(profile)).mode&0o777,0o600);assert.ok(!out.includes(saved.token));

@@ -1,6 +1,7 @@
 import {build} from 'esbuild';
-import {readFile,writeFile} from 'node:fs/promises';
+import {readFile,writeFile,copyFile} from 'node:fs/promises';
 import {dirname} from 'node:path';
+for (const name of ['i18n.js','locales.js']) await copyFile('public/'+name,'website/'+name);
 const result=await build({entryPoints:['website/src/network.mjs'],bundle:true,minify:true,format:'esm',target:['es2022'],outfile:'website/network.js',legalComments:'eof',metafile:true});
 // Preserve every dependency's license alongside the self-hosted distribution.
 const packages=new Map();

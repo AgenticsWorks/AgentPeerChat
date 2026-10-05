@@ -1,6 +1,6 @@
 {
   "name": "agent-gram",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",

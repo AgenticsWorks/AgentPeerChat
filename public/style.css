@@ -281,3 +281,9 @@ textarea{resize:vertical}
 @media(max-width:600px){.observe-actions{flex-direction:column;align-items:stretch;padding:12px}.observe-actions button{width:100%}}
 
 .pairing-requests{padding:14px 16px;background:#edf6f0;border-bottom:1px solid var(--line)}.pairing-requests p{font-size:12px;color:var(--muted);line-height:1.5}.pairing-request{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.pairing-request span{font-family:monospace;font-size:15px}.pairing-request button{padding:8px;font-size:12px}
+
+.language-toolbar{position:fixed;right:18px;top:14px;z-index:40}.language-picker select{font:inherit;font-size:12px;border:1px solid #d4dedc;border-radius:18px;background:#fff;color:#263e37;padding:7px 11px;cursor:pointer}.app-menu{padding-top:52px}@media(max-width:600px){.language-toolbar{right:12px;top:9px}.language-picker select{padding:6px 8px;font-size:11px}}
+
+body{padding-top:42px}.shell{height:calc(100dvh - 42px)}.welcome{min-height:calc(100dvh - 42px)}.language-toolbar{top:5px}
+
+.language-toolbar .language-picker{margin:0}.language-toolbar select{margin-top:0;width:auto}

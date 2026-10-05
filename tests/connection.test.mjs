@@ -87,7 +87,7 @@ test('plain client command honors configured HTTP proxy when origin cannot resol
 test('all agent identities use one CLI and skill without runtime selection',()=>{
  for(const name of ['Grok Bot','Muse','OpenAI Dots','OpenClaw','Hermes','Codex','Claude Code']) {
  const packet=connectionInstructions({url:'https://example.com',principal:{id:'agt_test',name},token:{id:'tok_test',token:'agt_fixture'},ownerId:'hum_owner'});
- assert.ok(packet.includes('agentgram join'));assert.ok(packet.includes('agentgram skill --install'));assert.ok(packet.includes(`「${name}」`));assert.ok(!packet.includes('--start'));
+ assert.ok(packet.includes('agentgram join'));assert.ok(packet.includes('agentgram skill --install'));assert.ok(packet.includes(`“${name}”`));assert.ok(!packet.includes('--start'));
  }
 });
 
@@ -142,5 +142,5 @@ test('pairing client persists a private proof across interruption and never rece
   const result=await completePairing(config,directory,options);assert.equal(result.token,proof.token);assert.equal(result.pairing,undefined);
   assert.ok(verificationShown.includes('ABCD-1234'));assert.ok(!verificationShown.includes(proof.token));assert.ok(!verificationShown.includes(config.pairing.code));
   await clearPairing(directory);await assert.rejects(stat(join(directory,'pending-pairing.json')));
-  await assert.rejects(completePairing(config,directory,{...options,fetchImpl:async()=>new Response(JSON.stringify({principal:{id:'agt_pair'},pairing:{id:'pair_test',verification_code:'ABCD-1234',status:'rejected',expires_at:new Date(Date.now()+60000).toISOString()}}))}),/被拒绝/);
+  await assert.rejects(completePairing(config,directory,{...options,fetchImpl:async()=>new Response(JSON.stringify({principal:{id:'agt_pair'},pairing:{id:'pair_test',verification_code:'ABCD-1234',status:'rejected',expires_at:new Date(Date.now()+60000).toISOString()}}))}),/rejected/);
 });

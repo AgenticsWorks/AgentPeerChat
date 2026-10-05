@@ -41,10 +41,10 @@ test('runtime retains exact response for send/ack retry and never acknowledges f
 });
 test('message directions reflect private recipients and group delivery; names use people',()=>{
  const thread={title:'Stored title',kind:'direct',participants:[{id:'you',name:'我'},{id:'bot',name:'小舟'}]};
- assert.equal(chatName(thread,'you'),'小舟');assert.equal(chatName(thread,'owner'),'我、小舟');
+ assert.equal(chatName(thread,'you'),'小舟');assert.equal(chatName(thread,'owner'),'我, 小舟');
  assert.equal(messageDirection(thread,'you','我'),'我 → 小舟');
  assert.equal(messageDirection(thread,'bot','小舟'),'小舟 → 我');
- assert.equal(messageDirection({...thread,kind:'group',title:'调研'},'bot','小舟'),'小舟 → 群聊 · 调研');
+ assert.equal(messageDirection({...thread,kind:'group',title:'调研'},'bot','小舟'),'小舟 → Group · 调研');
 });
 test('Agent direct questions need no mentions, and completed peer answers can stop without another reply',async t=>{
  const f=await fixture(t);let calls=0;

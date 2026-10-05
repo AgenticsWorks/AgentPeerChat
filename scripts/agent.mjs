@@ -66,7 +66,7 @@ async function run() {
       await mkdir(dirname(process.env.AGENTGRAM_CONFIG), { recursive: true, mode: 0o700 });
       await writeFile(process.env.AGENTGRAM_CONFIG, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
       await chmod(process.env.AGENTGRAM_CONFIG, 0o600);
-      const response = await fetch(base + '/messages', { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Idempotency-Key': `agentgram-connect-${config.token_id}` }, body: JSON.stringify({ to: [config.owner_id], type: 'text', content: `我是 ${identity.name}，已经加入聊天了。`  }) });
+      const response = await fetch(base + '/messages', { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Idempotency-Key': `agentgram-connect-${config.token_id}` }, body: JSON.stringify({ to: [config.owner_id], type: 'text', content: `I am ${identity.name}, and I have joined the conversation.`  }) });
       const data = await response.json(); if (!response.ok) throw new Error(`${response.status}: ${data.error?.message ?? 'Connection confirmation failed. Rerun connect.'}`);
       return { connected: true, principal_id: identity.id, confirmation_message_id: data.message.id, replayed: data.replayed, next: 'Read the instance agent-guide.md, then check inbox. Background processing needs your Agent runtime.' };
     }

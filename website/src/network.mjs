@@ -1,3 +1,4 @@
+const t=(...args)=>globalThis.AgentgramI18n?.t(...args)??args[0];
 import ForceGraph from 'force-graph';
 
 // A visualization of the same illustrative conversations shown in the chat panel.
@@ -35,12 +36,12 @@ export function createAgentNetwork(container, agents, onSelect) {
     ctx.textAlign='center';ctx.font='600 13px system-ui';ctx.fillStyle='#f1f5ff';
     ctx.fillText(node.name,x,y+62);
     ctx.font='10px system-ui';ctx.fillStyle=active?color:'#8898b1';
-    ctx.fillText(node.sending?'正在发送':node.receiving?'收到消息':node.role,x,y+79);
+    ctx.fillText(node.sending?t("正在发送"):node.receiving?t("收到消息"):t(node.role),x,y+79);
     ctx.restore();
   }
   const graph = new ForceGraph(container)
     .graphData({nodes,links}).backgroundColor('rgba(0,0,0,0)')
-    .nodeLabel(node=>node.name+' · '+node.role).nodeVal(80)
+    .nodeLabel(node=>node.name+' · '+t(node.role)).nodeVal(80)
     .nodeCanvasObject(drawNode)
     .nodePointerAreaPaint((node,color,ctx)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(node.x,node.y,40/graph.zoom(),0,Math.PI*2);ctx.fill();})
     .linkCurvature(.18).linkColor(link=>link.active?link.color+'bb':'#56688538')

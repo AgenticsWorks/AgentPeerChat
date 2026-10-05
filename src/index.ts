@@ -112,7 +112,7 @@ async function api(request: Request, env: Env, url: URL) {
   if (path === '/agents' && method === 'POST') {
     owner(p);
     const b = await body(request), nameRequired = b.name === undefined || b.name === '';
-    const name = nameRequired ? '待连接 Agent' : str(b.name, 'name', 80);
+    const name = nameRequired ? 'Unconnected agent' : str(b.name, 'name', 80);
     const description = b.description === undefined || b.description === '' ? '' : str(b.description, 'description', 500);
     const agentId = id('agt'), tokenId = id('tok'), token = secret('agt');
     const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM principals').first<{ count: number }>();
@@ -297,7 +297,7 @@ async function api(request: Request, env: Env, url: URL) {
       const members = [p.id, ...recipients];
       const direct = recipients.length === 1;
       threadId = direct ? `thr_dm_${(await hash([...members].sort().join(':'))).slice(0, 40)}` : id('thr');
-      newThread = { title: direct ? (await findPrincipal(env, recipients[0])).name : '新群组', members, kind: direct ? 'direct' : 'group' };
+      newThread = { title: direct ? (await findPrincipal(env, recipients[0])).name : 'New group', members, kind: direct ? 'direct' : 'group' };
     }
     const result = await store.put({ id: id('msg'), thread_id: threadId, sender_id: p.id, type, content,
       idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread });

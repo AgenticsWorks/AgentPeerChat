@@ -1,5 +1,7 @@
+import {t, initLanguage, getLocale} from './i18n.js';
 import { chatName, messageDirection } from './chat-presentation.js';
 import { connectionInstructions } from './connection-kit.js';
+initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
 const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null };
@@ -14,15 +16,15 @@ $('#chat-back').addEventListener('click', () => { $('#conversations').classList.
 $('#message-text').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); if (!$('#send-button').disabled) $('#compose-form').requestSubmit(); } });
 $('#message-text').addEventListener('input', () => { const input = $('#message-text'); input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 150) + 'px'; });
 const humanName = id => state.principals.find(p => p.id === id)?.name ?? id;
-const time = value => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const date = value => new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
+const time = value => new Date(value).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
+const date = value => new Date(value).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { $('#toast').hidden = true; }, 4500); }
 async function api(path, options = {}) {
   const { method = 'GET', data, key } = options;
   const headers = { ...(data === undefined ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'Idempotency-Key': key } : {}) };
   const response = await fetch(`${appBase}/api/v1${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'same-origin' });
   const result = await response.json();
-  if (!response.ok) { const error = new Error(result.error?.message ?? 'Request failed.'); error.status = response.status; throw error; }
+  if (!response.ok) { const error = new Error(result.error?.message ?? t("Request failed.")); error.status = response.status; throw error; }
   return result;
 }
 async function allPages(path, initial = '0') {
@@ -34,14 +36,14 @@ function authMode(mode) {
   state.authMode = mode;
   $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
-  $('#auth-kicker').textContent = setup ? 'MAKE IT YOURS' : invite ? 'YOU’RE INVITED' : 'WELCOME HOME';
-  $('#auth-title').textContent = setup ? 'Create your private network' : invite ? 'Join the conversation' : 'Open your network';
-  $('#auth-description').textContent = setup ? 'Use the setup secret from your deployment to create the owner.' : invite ? 'Redeem a one-time invitation to join as a human.' : 'Sign in with your human access key.';
+  $('#auth-kicker').textContent = setup ? t("MAKE IT YOURS") : invite ? t("YOU’RE INVITED") : t("WELCOME HOME");
+  $('#auth-title').textContent = setup ? t("Create your private network") : invite ? t("Join the conversation") : t("Open your network");
+  $('#auth-description').textContent = setup ? t("Use the setup secret from your deployment to create the owner.") : invite ? t("Redeem a one-time invitation to join as a human.") : t("Sign in with your human access key.");
   $('#name-label').hidden = !(setup || invite); $('#auth-name').required = setup || invite;
-  $('#key-label').textContent = setup ? 'Setup secret' : invite ? 'Invitation code' : 'Access key';
-  $('#auth-key').placeholder = setup ? 'Your deployment setup secret' : invite ? 'agi_…' : 'agt_…';
-  $('#auth-submit').textContent = setup ? 'Create network →' : invite ? 'Accept invitation →' : 'Open network →';
-  $('#auth-switch').hidden = setup; $('#auth-switch').textContent = invite ? 'I already have an access key' : 'I have an invitation';
+  $('#key-label').textContent = setup ? t("Setup secret") : invite ? t("Invitation code") : t("Access key");
+  $('#auth-key').placeholder = setup ? t("Your deployment setup secret") : invite ? 'agi_…' : 'agt_…';
+  $('#auth-submit').textContent = setup ? t("Create network →") : invite ? t("Accept invitation →") : t("Open network →");
+  $('#auth-switch').hidden = setup; $('#auth-switch').textContent = invite ? t("I already have an access key") : t("I have an invitation");
 }
 $('#auth-switch').addEventListener('click', () => authMode(state.authMode === 'invite' ? 'login' : 'invite'));
 $('#auth-form').addEventListener('submit', async event => {
@@ -54,7 +56,7 @@ $('#auth-form').addEventListener('submit', async event => {
         method: 'POST', data: state.authMode === 'setup' ? { name, setup_secret: accessKey } : { name, code: accessKey }
       });
       accessKey = result.access_key;
-      await showSecret('Save your access key', 'This is your sign-in key. Save it in a password manager; it is shown only once.', accessKey);
+      await showSecret(t("Save your access key"), t("This is your sign-in key. Save it in a password manager; it is shown only once."), accessKey);
     }
     await api('/session', { method: 'POST', data: { access_key: accessKey } });
     $('#auth-key').value = ''; await enter();
@@ -64,7 +66,7 @@ $('#auth-form').addEventListener('submit', async event => {
 
 function openModal(title, description, action) {
   $('#modal-title').textContent = title; $('#modal-description').textContent = description;
-  $('#modal-fields').replaceChildren(); $('#modal-error').textContent = ''; $('#modal-submit').textContent = 'Create';
+  $('#modal-fields').replaceChildren(); $('#modal-error').textContent = ''; $('#modal-submit').textContent = t("Create");
   $('#modal-submit').disabled = false; state.modalAction = action; state.secretOpen = false;
   $('#modal').showModal();
 }
@@ -88,25 +90,25 @@ function showSecret(title, description, value, extra = '', options = {}) {
     // Finish the current form submission before reusing its dialog.
     $('#modal').close();
     openModal(title, description, async () => {
-      if (!$('#saved-key').checked) throw new Error('请先保存或交付这段接入指令。');
+      if (!$('#saved-key').checked) throw new Error(t("请先保存或交付这段接入指令。"));
       state.secretOpen = false; $('#modal').close(); resolve();
     });
     state.secretOpen = true;
-    const box = field('接入指令', 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = options.copyLabel ? 'secret-box connection-box' : 'secret-box';
-    const copy = el('button', 'secondary', options.copyLabel ?? 'Copy to clipboard'); copy.type = 'button';
-    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? '接入指令已复制，可以交给对应 Agent。' : 'Copied. Save it somewhere safe.'); if(options.finishOnCopy){state.secretOpen=false;$('#modal').close();resolve();} } catch { box.select(); toast('Select and copy the key manually.'); } });
+    const box = field(t("接入指令"), 'secret', '', 'textarea'); box.value = value; box.readOnly = true; box.className = options.copyLabel ? 'secret-box connection-box' : 'secret-box';
+    const copy = el('button', 'secondary', options.copyLabel ?? t("Copy to clipboard")); copy.type = 'button';
+    copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(box.value); toast(options.copyLabel ? t("接入指令已复制，可以交给对应 Agent。") : t("Copied. Save it somewhere safe.")); if(options.finishOnCopy){state.secretOpen=false;$('#modal').close();resolve();} } catch { box.select(); toast(t("Select and copy the key manually.")); } });
     $('#modal-fields').append(copy);
     if (extra) $('#modal-fields').append(el('p', 'key-hint', extra));
     const label = el('label', 'check-list'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.id = 'saved-key'; checkbox.required = true;
-    label.append(checkbox, document.createTextNode(options.savedLabel ?? ' I have saved this somewhere safe')); $('#modal-fields').append(label);
-    $('#modal-submit').textContent = '完成';
+    label.append(checkbox, document.createTextNode(options.savedLabel ?? t(" I have saved this somewhere safe"))); $('#modal-fields').append(label);
+    $('#modal-submit').textContent = t("完成");
   });
 }
 
 async function enter() {
   state.me = (await api('/me')).principal;
   $('#onboarding').hidden = true; $('#shell').hidden = false;
-  $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? '拥有者' : '联系人';
+  $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? t("拥有者") : t("联系人");
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
   await refresh(); schedulePoll();
@@ -126,8 +128,8 @@ function schedulePoll() {
     if (!state.me || document.hidden) { schedulePoll(); return; }
     try { await refresh(); state.pollDelay = 30000; }
     catch (error) {
-      if (error.status === 401) { state.me = null; authMode('login'); toast('Session ended. Sign in again.'); return; }
-      state.pollDelay = Math.min(state.pollDelay * 2, 300000); $('#sync-state').textContent = '连接中…';
+      if (error.status === 401) { state.me = null; authMode('login'); toast(t("Session ended. Sign in again.")); return; }
+      state.pollDelay = Math.min(state.pollDelay * 2, 300000); $('#sync-state').textContent = t("连接中…");
     }
     schedulePoll();
   }, state.pollDelay + Math.random() * 5000);
@@ -147,12 +149,12 @@ function renderThreads() {
   $('#thread-count').textContent = String(state.threads.length);
   const filtered = state.threads.filter(t => chatName(t, state.me.id).toLowerCase().includes($('#thread-search').value.toLowerCase()));
   $('#thread-list').replaceChildren();
-  if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? '没有找到聊天。' : '选择联系人，开始第一段聊天。'));
+  if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? t("没有找到聊天。") : t("选择联系人，开始第一段聊天。")));
   for (const thread of [...filtered].sort((a, b) => (b.last_message_seq ?? 0) - (a.last_message_seq ?? 0))) {
     const button = el('button', 'thread-item'); button.classList.toggle('selected', thread.id === state.selected);
     const copy = el('div', 'thread-copy');
     const last = thread.last_message;
-    const preview = !last ? '还没有消息' : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? '内容' : last.content;
+    const preview = !last ? t("还没有消息") : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? t("内容") : last.content;
     copy.append(el('strong', '', chatName(thread, state.me.id)), el('small', '', last ? `${messageDirection(thread, last.sender_id, humanName(last.sender_id))}: ${preview}` : preview));
     const avatar = el('div', 'avatar thread-avatar', chatName(thread, state.me.id).slice(0, 2).toUpperCase()); colorAvatar(avatar, chatName(thread, state.me.id));
     button.append(avatar, copy, el('time', '', last?.created_at ? time(last.created_at) : date(thread.created_at)));
@@ -172,13 +174,13 @@ async function loadMessages(forceScroll = false) {
   const result = await allPages(`/threads/${threadId}`, cursor);
   if (state.selected !== threadId || state.cursor !== cursor) return;
   $('#chat-title').textContent = chatName(result.last.thread, state.me.id);
-  $('#chat-members').textContent = result.last.thread.kind === 'direct' ? '私聊' : `${result.last.thread.members.length} 位成员`;
+  $('#chat-members').textContent = result.last.thread.kind === 'direct' ? t("私聊") : t("{0} 位成员", result.last.thread.members.length);
   $('#chat-avatar').textContent = chatName(result.last.thread, state.me.id).slice(0, 2).toUpperCase(); colorAvatar($('#chat-avatar'), chatName(result.last.thread, state.me.id));
   state.members = result.last.thread.members; state.currentThread = result.last.thread;
   const observing = result.last.thread.kind === 'direct' && !state.members.some(p => p.id === state.me.id);
   $('#observe-actions').hidden = !observing; $('#compose-form').hidden = observing;
   $('#message-text').disabled = observing; $('#send-button').disabled = observing;
-  $('#message-text').placeholder = observing ? '正在查看这段私聊' : '消息';
+  $('#message-text').placeholder = observing ? t("正在查看这段私聊") : t("消息");
   $('#add-members').hidden = result.last.thread.kind === 'direct';
   renderMembers();
   if (result.items.length || forceScroll) {
@@ -193,11 +195,11 @@ $('#join-discussion').addEventListener('click', async () => {
   const button = $('#join-discussion'); button.disabled = true;
   try {
     const result = await api('/threads', { method: 'POST', data: {
-      title: `${source.members.map(p => p.name).join('、')} · 一起聊`.slice(0, 120),
+      title: t("{0} · 一起聊", source.members.map(p => p.name).join(', ')).slice(0, 120),
       members: source.members.map(p => p.id)
     } });
     await refresh(); await selectThread(result.thread.id);
-    toast('已邀请你和两位联系人进入新群，原私聊保留。');
+    toast(t("已邀请你和两位联系人进入新群，原私聊保留。"));
   } catch (error) { toast(error.message); }
   finally { button.disabled = false; }
 });
@@ -207,7 +209,7 @@ function renderMembers() {
   $('#inspector-member-list').replaceChildren();
   for (const p of state.members) {
     const row = el('div', 'member-row'), summary = el('div');
-    summary.append(el('strong', '', p.name), el('small', '', p.kind === 'agent' ? p.description || 'Agent' : p.kind === 'owner' ? '拥有者' : '联系人'));
+    summary.append(el('strong', '', p.name), el('small', '', p.kind === 'agent' ? p.description || 'Agent' : p.kind === 'owner' ? t("拥有者") : t("联系人")));
     row.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), summary);
     if (!p.active) row.append(el('span', 'badge off', 'OFF'));
     $('#inspector-member-list').append(row);
@@ -220,33 +222,33 @@ async function loadActivity(threadId) {
   const activity = (await api(`/threads/${threadId}/activity`)).items;
   if (state.selected !== threadId) return;
   $('#activity-list').replaceChildren();
-  if (!activity.length) $('#activity-list').append(el('p', 'fine', '还没有消息。'));
+  if (!activity.length) $('#activity-list').append(el('p', 'fine', t("还没有消息。")));
   for (const item of activity) {
     const card = el('div', 'activity-card');
     card.append(el('span', 'activity-time', time(item.created_at)), el('strong', '', humanName(item.sender_id)));
-    const jump = el('button', 'text-button', '查看消息');
+    const jump = el('button', 'text-button', t("查看消息"));
     jump.addEventListener('click', () => { const message = $(`[data-message-id="${item.message_id}"]`); if (message) message.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
     card.append(jump); $('#activity-list').append(card);
   }
 }
 $('#add-members').addEventListener('click', () => {
   const choices = state.principals.filter(p => p.active && !state.members.some(m => m.id === p.id));
-  if (!choices.length) { toast('Everyone in your network is already in this group.'); return; }
-  openModal('Add to the group', 'New participants can read the group’s history and receive future messages.', async data => {
+  if (!choices.length) { toast(t("Everyone in your network is already in this group.")); return; }
+  openModal(t("Add to the group"), t("New participants can read the group’s history and receive future messages."), async data => {
     await api(`/threads/${state.selected}/members`, { method: 'POST', data: { members: data.getAll('members') } });
-    $('#modal').close(); await loadMessages(); toast('Group members updated.');
+    $('#modal').close(); await loadMessages(); toast(t("Group members updated."));
   });
   const wrapper = el('div', 'check-list');
   for (const p of choices) { const label = el('label'), input = el('input'); input.type = 'checkbox'; input.name = 'members'; input.value = p.id; label.append(input, document.createTextNode(`${p.name} · ${p.kind}`)); wrapper.append(label); }
-  $('#modal-fields').append(wrapper); $('#modal-submit').textContent = 'Add participants';
+  $('#modal-fields').append(wrapper); $('#modal-submit').textContent = t("Add participants");
 });
 function renderMessages(forceScroll = false) {
   const list = $('#message-list'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 100;
   list.replaceChildren();
-  if (!state.messages.length) list.append(el('p', 'empty-list', 'A fresh conversation. Send the first message.'));
+  if (!state.messages.length) list.append(el('p', 'empty-list', t("A fresh conversation. Send the first message.")));
   let previousDay;
   for (const message of state.messages) {
-    const day = new Date(message.created_at).toLocaleDateString();
+    const day = new Date(message.created_at).toLocaleDateString(getLocale());
     if (day !== previousDay) { const separator = el('div', 'date-separator'); separator.append(el('span', '', date(message.created_at))); list.append(separator); previousDay = day; }
     const principal = state.principals.find(p => p.id === message.sender_id);
     const article = el('article', `message${message.sender_id === state.me.id ? ' mine' : ''}`);
@@ -255,18 +257,18 @@ function renderMessages(forceScroll = false) {
     const avatar = el('div', `avatar ${principal?.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, name.slice(0, 1).toUpperCase()); colorAvatar(avatar, name); article.append(avatar);
     const content = el('div', 'message-body'), meta = el('div', 'message-meta');
     meta.append(el('strong', '', messageDirection(state.currentThread, message.sender_id, name)));
-    const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(); timestamp.dateTime = message.created_at;
+    const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(getLocale()); timestamp.dateTime = message.created_at;
     const bubble = el('div', 'bubble');
     if (message.type === 'text') bubble.textContent = message.content;
     else if (message.type === 'json') {
       bubble.classList.add('structured-message');
-      bubble.append(el('span', 'eyebrow', '内容'));
+      bubble.append(el('span', 'eyebrow', t("内容")));
       if (message.content && typeof message.content === 'object' && !Array.isArray(message.content)) {
         const rows = el('dl', 'json-fields');
         for (const [key, value] of Object.entries(message.content)) { rows.append(el('dt', '', key.replaceAll('_', ' ')), el('dd', '', typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value))); }
         bubble.append(rows);
       } else bubble.append(el('pre', '', JSON.stringify(message.content, null, 2)));
-      const details = el('details'), summary = el('summary', '', 'View raw JSON'); details.append(summary, el('pre', '', JSON.stringify(message.content, null, 2))); bubble.append(details);
+      const details = el('details'), summary = el('summary', '', t("View raw JSON")); details.append(summary, el('pre', '', JSON.stringify(message.content, null, 2))); bubble.append(details);
     }
     else {
       const link = el('a', '', message.type === 'artifact' ? message.content.name ?? message.content.url : message.content);
@@ -274,18 +276,18 @@ function renderMessages(forceScroll = false) {
       if (message.type === 'artifact') { bubble.classList.add('artifact-message'); bubble.prepend(el('span', 'artifact-icon', '↗'), el('span', 'eyebrow', 'DELIVERABLE')); }
     }
     const footer = el('div', 'message-id'); footer.append(timestamp);
-    const receipts = el('button', 'receipt-button', '✓'); receipts.type = 'button'; receipts.title = '消息状态'; receipts.setAttribute('aria-label', '消息状态');
+    const receipts = el('button', 'receipt-button', '✓'); receipts.type = 'button'; receipts.title = t("消息状态"); receipts.setAttribute('aria-label', t("消息状态"));
     receipts.addEventListener('click', async () => {
       try {
         const result = await api(`/messages/${message.id}`);
-        const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? '已接收 ' + time(r.acked_at) : '等待接收'}`).join('\n');
-        openModal('消息状态', '查看消息的接收情况。', async () => { $('#modal').close(); });
-        $('#modal-fields').append(el('p', 'key-hint', summary || '没有收件人。'));
+        const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? t("已接收 ") + time(r.acked_at) : t("等待接收")}`).join('\n');
+        openModal(t("消息状态"), t("查看消息的接收情况。"), async () => { $('#modal').close(); });
+        $('#modal-fields').append(el('p', 'key-hint', summary || t("没有收件人。")));
         const mine = result.receipts.find(r => r.recipient_id === state.me.id);
         if (mine && !mine.acked_at) {
-          state.modalAction = async () => { await api(`/messages/${message.id}/ack`, { method: 'POST' }); $('#modal').close(); await loadMessages(); toast('已标记处理。'); };
-          $('#modal-submit').textContent = '标记已处理';
-        } else $('#modal-submit').textContent = '关闭';
+          state.modalAction = async () => { await api(`/messages/${message.id}/ack`, { method: 'POST' }); $('#modal').close(); await loadMessages(); toast(t("已标记处理。")); };
+          $('#modal-submit').textContent = t("标记已处理");
+        } else $('#modal-submit').textContent = t("关闭");
       } catch (error) { toast(error.message); }
     });
     footer.append(receipts); bubble.prepend(meta); bubble.append(footer); content.append(bubble); article.append(content); list.append(article);
@@ -313,22 +315,22 @@ async function directChat(principalId) {
   await refresh(); $('[data-view="conversations"]').click(); await selectThread(result.thread.id);
 }
 function createGroup() {
-  openModal('新建群组', '给群组起个名字，选择一起聊天的联系人。', async data => {
+  openModal(t("新建群组"), t("给群组起个名字，选择一起聊天的联系人。"), async data => {
     const result = await api('/threads', { method: 'POST', data: { title: data.get('title'), members: data.getAll('members') } });
     $('#modal').close(); await refresh(); $('[data-view="conversations"]').click(); await selectThread(result.thread.id);
   });
-  field('群组名称', 'title', '例如：项目讨论');
+  field(t("群组名称"), 'title', t("例如：项目讨论"));
   const wrapper = el('div', 'check-list');
   for (const principal of state.principals.filter(p => p.id !== state.me.id && p.active)) {
     const label = el('label'), checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.name = 'members'; checkbox.value = principal.id;
     label.append(checkbox, document.createTextNode(principal.name)); wrapper.append(label);
   }
-  $('#modal-fields').append(wrapper); $('#modal-submit').textContent = '创建群组';
+  $('#modal-fields').append(wrapper); $('#modal-submit').textContent = t("创建群组");
 }
 function startThread(preselected) {
   if (preselected) { directChat(preselected).catch(error => toast(error.message)); return; }
-  openModal('新聊天', '选择一个联系人直接聊天，或新建群组。', async () => { $('#modal').close(); });
-  const group = el('button', 'secondary', '新建群组'); group.type = 'button'; group.id = 'new-group';
+  openModal(t("新聊天"), t("选择一个联系人直接聊天，或新建群组。"), async () => { $('#modal').close(); });
+  const group = el('button', 'secondary', t("新建群组")); group.type = 'button'; group.id = 'new-group';
   group.addEventListener('click', () => { $('#modal').close(); createGroup(); }); $('#modal-fields').append(group);
   const contacts = el('div', 'contact-picker');
   for (const p of state.principals.filter(p => p.id !== state.me.id && p.active)) {
@@ -336,18 +338,18 @@ function startThread(preselected) {
     const avatar = el('span', 'avatar', p.name.slice(0, 1)); colorAvatar(avatar, p.name);
     contact.append(avatar, el('span', '', p.name)); contact.addEventListener('click', () => directChat(p.id).catch(error => toast(error.message))); contacts.append(contact);
   }
-  $('#modal-fields').append(contacts); $('#modal-submit').textContent = '取消';
+  $('#modal-fields').append(contacts); $('#modal-submit').textContent = t("取消");
 }
 $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start').addEventListener('click', () => startThread());
 async function showAgentConnection(principal, token, pairing) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
   const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, pairing, ownerId });
-  await showSecret(principal.nameRequired ? '一键连接你的 Agent' : `连接 ${principal.name}`, '把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。', instructions, '这段指令仅供这个 Agent 使用。', { finishOnCopy:true, copyLabel: '复制接入指令给 Agent', savedLabel: ' 我已保存接入指令或交给这个 Agent' });
+  await showSecret(principal.nameRequired ? t("一键连接你的 Agent") : t("连接 {0}", principal.name), t("把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。"), instructions, t("这段指令仅供这个 Agent 使用。"), { finishOnCopy:true, copyLabel: t("复制接入指令给 Agent"), savedLabel: t(" 我已保存接入指令或交给这个 Agent") });
 }
 async function connectNewAgent(name = '') {
   const result = await api('/pairings', {method:'POST',data:{name:name.trim()}});
   await showAgentConnection({...result.principal,nameRequired:result.name_required}, null, result.pairing);
-  await refresh(); toast('把指令交给 Agent，收到配对码后回来确认连接。');
+  await refresh(); toast(t("把指令交给 Agent，收到配对码后回来确认连接。"));
 }
 $('#connect-agent-form').addEventListener('submit',async event=>{
   event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;
@@ -355,31 +357,31 @@ $('#connect-agent-form').addEventListener('submit',async event=>{
   catch(error){toast(error.message);}finally{button.disabled=false;}
 });
 $('#create-agent').addEventListener('click', () => {
-  openModal('一键连接你的 Agent', '名字可选；不填时，Agent 会在 CLI 登记自己的名字。', async data => { await connectNewAgent(data.get('name') || ''); });
-  field('名字（可选）', 'name', '留空，让 Agent 自己登记').required=false;
-  $('#modal-submit').textContent='生成接入指令';
+  openModal(t("一键连接你的 Agent"), t("名字可选；不填时，Agent 会在 CLI 登记自己的名字。"), async data => { await connectNewAgent(data.get('name') || ''); });
+  field(t("名字（可选）"), 'name', t("留空，让 Agent 自己登记")).required=false;
+  $('#modal-submit').textContent=t("生成接入指令");
 });
 $('#show-disabled').addEventListener('change', renderPrincipals);
 function renderPrincipals() {
   $('#principal-grid').replaceChildren();
   for (const p of state.principals.filter(p => p.active || $('#show-disabled').checked)) {
     const card = el('article', 'principal-card'), top = el('div', 'principal-top');
-    top.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'Agent' : p.kind === 'owner' ? '我' : '联系人') : '已停用'));
-    card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? '还没有简介。' : '可以查看聊天、参与讨论。')), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : '联系人'));
+    top.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'Agent' : p.kind === 'owner' ? t("我") : t("联系人")) : t("已停用")));
+    card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? t("还没有简介。") : t("可以查看聊天、参与讨论。"))), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : t("联系人")));
     const footer = el('footer');
     if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
-      const connect = el('button', 'primary', '连接 Agent'); connect.dataset.connectAgent = p.id;
+      const connect = el('button', 'primary', t("连接 Agent")); connect.dataset.connectAgent = p.id;
       connect.addEventListener('click', async () => {
         connect.disabled = true;
         try { const result = await api('/pairings', { method: 'POST', data: { principal_id: p.id } }); await showAgentConnection(p, null, result.pairing); }
         catch (error) { toast(error.message); } finally { connect.disabled = false; }
       }); footer.append(connect);
     }
-    if (p.id !== state.me.id && p.active) { const message = el('button', 'secondary', '发消息'); message.addEventListener('click', () => startThread(p.id)); footer.append(message); }
+    if (p.id !== state.me.id && p.active) { const message = el('button', 'secondary', t("发消息")); message.addEventListener('click', () => startThread(p.id)); footer.append(message); }
     if (state.me.kind === 'owner' && p.kind !== 'owner') {
-      const disable = el('button', 'text-button', p.active ? '停用' : '启用');
+      const disable = el('button', 'text-button', p.active ? t("停用") : t("启用"));
       disable.addEventListener('click', async () => {
-        if (p.active && !confirm(`停用 ${p.name} 并撤销其接入密钥？`)) return;
+        if (p.active && !confirm(t("停用 {0} 并撤销其接入密钥？", p.name))) return;
         try { await api(`/principals/${p.id}`, { method: 'PATCH', data: { active: !p.active } }); await refresh(); } catch (error) { toast(error.message); }
       }); footer.append(disable);
     }
@@ -389,34 +391,34 @@ function renderPrincipals() {
 async function loadAccess() {
   const tokens = (await api('/tokens')).items; $('#token-list').replaceChildren();
   for (const token of tokens) {
-    const row = el('tr'); row.append(el('td', '', token.label), el('td', '', token.principal_name), el('td', '', token.revoked_at ? 'Revoked' : 'Active'));
+    const row = el('tr'); row.append(el('td', '', token.label), el('td', '', token.principal_name), el('td', '', token.revoked_at ? t("Revoked") : t("Active")));
     const action = el('td');
     if (!token.revoked_at) {
-      const revoke = el('button', 'secondary', 'Revoke');
-      revoke.addEventListener('click', async () => { if (!confirm(`Revoke “${token.label}”?`)) return; try { await api(`/tokens/${token.id}`, { method: 'DELETE' }); await loadAccess(); toast('Key revoked.'); } catch (error) { toast(error.message); } }); action.append(revoke);
+      const revoke = el('button', 'secondary', t("Revoke"));
+      revoke.addEventListener('click', async () => { if (!confirm(t("撤销“{0}”？", token.label))) return; try { await api(`/tokens/${token.id}`, { method: 'DELETE' }); await loadAccess(); toast(t("Key revoked.")); } catch (error) { toast(error.message); } }); action.append(revoke);
     }
     row.append(action); $('#token-list').append(row);
   }
   if (state.me.kind === 'owner') {
     const invites = (await api('/invites')).items; $('#invite-list').replaceChildren();
-    if (!invites.length) $('#invite-list').append(el('p', 'fine', 'No invitations yet. Invite a person to share your network.'));
+    if (!invites.length) $('#invite-list').append(el('p', 'fine', t("No invitations yet. Invite a person to share your network.")));
     for (const invite of invites) {
-      const row = el('div', 'invite-row'), summary = el('div', '', invite.claimed_by ? 'Accepted' : invite.revoked_at ? 'Revoked' : new Date(invite.expires_at) < new Date() ? 'Expired' : 'Waiting to be accepted');
-      summary.append(el('small', '', `Expires ${new Date(invite.expires_at).toLocaleString()}`)); row.append(summary);
+      const row = el('div', 'invite-row'), summary = el('div', '', invite.claimed_by ? t("Accepted") : invite.revoked_at ? t("Revoked") : new Date(invite.expires_at) < new Date() ? t("Expired") : t("Waiting to be accepted"));
+      summary.append(el('small', '', t("于 {0} 到期", new Date(invite.expires_at).toLocaleString(getLocale())))); row.append(summary);
       if (!invite.revoked_at && !invite.claimed_by && new Date(invite.expires_at) > new Date()) {
-        const revoke = el('button', 'secondary', 'Revoke'); revoke.addEventListener('click', async () => { try { await api(`/invites/${invite.id}`, { method: 'DELETE' }); await loadAccess(); } catch (error) { toast(error.message); } }); row.append(revoke);
+        const revoke = el('button', 'secondary', t("Revoke")); revoke.addEventListener('click', async () => { try { await api(`/invites/${invite.id}`, { method: 'DELETE' }); await loadAccess(); } catch (error) { toast(error.message); } }); row.append(revoke);
       }
       $('#invite-list').append(row);
     }
   }
 }
 $('#create-key').addEventListener('click', () => {
-  openModal('Create an access key', 'Create a replacement or a key for another client.', async data => {
+  openModal(t("Create an access key"), t("Create a replacement or a key for another client."), async data => {
     const result = await api('/tokens', { method: 'POST', data: { principal_id: data.get('principal'), label: data.get('label') } });
-    await showSecret('Save your new key', 'This key is shown only once.', result.token.token); await loadAccess();
+    await showSecret(t("Save your new key"), t("This key is shown only once."), result.token.token); await loadAccess();
   });
-  field('Key label', 'label', 'e.g. Laptop / nightly worker');
-  const select = field('Identity', 'principal', '', 'select');
+  field(t("Key label"), 'label', t("e.g. Laptop / nightly worker"));
+  const select = field(t("Identity"), 'principal', '', 'select');
   for (const p of state.principals.filter(p => p.active && (state.me.kind === 'owner' || p.id === state.me.id))) { const option = el('option', '', `${p.name} · ${p.kind}`); option.value = p.id; select.append(option); }
   select.value = state.me.id;
 });
@@ -428,7 +430,7 @@ $('#export-history').addEventListener('click', async () => {
   try {
     const messages = (await allPages('/export')).items;
     const blob = new Blob([JSON.stringify({ instance: location.origin, exported_at: new Date().toISOString(), principals: state.principals, threads: state.threads, messages }, null, 2)], { type: 'application/json' });
-    const link = el('a'); link.href = URL.createObjectURL(blob); link.download = `agent-gram-${new Date().toISOString().slice(0, 10)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); toast('Message history exported.');
+    const link = el('a'); link.href = URL.createObjectURL(blob); link.download = `agent-gram-${new Date().toISOString().slice(0, 10)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); toast(t("Message history exported."));
   } catch (error) { toast(error.message); } finally { $('#export-history').disabled = false; }
 });
 
@@ -447,13 +449,22 @@ async function renderPairings(){
  const result=await api('/pairings'),list=$('#pairing-list');list.replaceChildren();
  const pending=result.items.filter(p=>p.status==='pending');$('#pairing-requests').hidden=!pending.length;
  for(const p of pending){
-  const row=el('div','pairing-request');row.append(el('strong','',p.name),el('span','',`配对码 ${p.verification_code}`));
-  const allow=el('button','primary','核对一致，允许'),reject=el('button','secondary','拒绝');
+  const row=el('div','pairing-request');row.append(el('strong','',p.name),el('span','',t("配对码 {0}", p.verification_code)));
+  const allow=el('button','primary',t("核对一致，允许")),reject=el('button','secondary',t("拒绝"));
   for(const [button,action] of [[allow,'approve'],[reject,'reject']]){button.type='button';button.addEventListener('click',async()=>{
    allow.disabled=true;reject.disabled=true;
-   try{await api(`/pairings/${p.id}/${action}`,{method:'POST',data:action==='approve'?{verification_code:p.verification_code}:{}});await refresh();toast(action==='approve'?'已允许 Agent 连接。':'已拒绝连接。');}
+   try{await api(`/pairings/${p.id}/${action}`,{method:'POST',data:action==='approve'?{verification_code:p.verification_code}:{}});await refresh();toast(action==='approve'?t("已允许 Agent 连接。"):t("已拒绝连接。"));}
    catch(error){toast(error.message);allow.disabled=false;reject.disabled=false;}
   });}
   row.append(allow,reject);list.append(row);
  }
 }
+
+document.addEventListener("agentgram:languagechange",()=>{
+ if(!state.me){authMode(state.authMode);return;}
+ $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
+ renderThreads();renderPrincipals();renderMembers();renderMessages();
+ if(state.currentThread){$("#chat-members").textContent=state.currentThread.kind==="direct"?t("私聊"):t("{0} 位成员",state.members.length);$("#message-text").placeholder=$("#observe-actions").hidden?t("消息"):t("正在查看这段私聊");}
+ if(state.inspector&&state.selected)loadActivity(state.selected).catch(error=>toast(error.message));
+ if(state.me.kind==="owner")renderPairings().catch(error=>toast(error.message));
+});

@@ -34,3 +34,5 @@
 @media(max-width:600px){.network-center{display:none}}
 
 .hero-actions button{border:1px solid var(--line);background:white;color:var(--blue)}.install-path,.install-status{font-size:12px;line-height:1.8;color:var(--muted)}.install-status{display:block;color:var(--blue)}
+
+.language-picker select{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:18px;background:#fff;color:var(--ink);padding:8px 12px;cursor:pointer}.site-header{gap:20px}.site-header nav{gap:24px}.hero-description br{display:none}html[lang="en-US"] .hero h1{letter-spacing:-2px}html[lang="en-US"] .scenario-tabs button{font-size:11px}.demo-sender{flex-wrap:wrap}.demo-chat-header h2{overflow-wrap:anywhere}@media(max-width:780px){.site-header{gap:10px;padding-left:20px;padding-right:20px}.site-header .nav-source{padding:9px 10px;font-size:10px}.language-picker select{font-size:12px;padding:7px 9px}}
