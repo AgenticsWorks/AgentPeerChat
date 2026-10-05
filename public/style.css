@@ -298,3 +298,5 @@ body{padding-top:42px}.shell{height:calc(100dvh - 42px)}.welcome{min-height:calc
 .graph-controls{display:flex;gap:8px;flex-wrap:wrap}.graph-legend{gap:20px;margin:18px 0;color:#687e92}.graph-conversations{margin-top:20px}
 .avatar-picker{display:grid;gap:12px;padding:16px;background:#f5f8f7;border-radius:16px}.avatar-preview .avatar{width:64px;height:64px}.avatar-options{display:flex;gap:8px;flex-wrap:wrap}.avatar-picker input[type=file]{max-width:100%;font-size:14px}.quick-connect{width:100%;margin:12px 0}.principal-top .person-avatar img{width:100%;height:100%;object-fit:cover}
 @media(max-width:650px){.conversation-map .page-header{align-items:flex-start;flex-direction:column}.graph-controls{width:100%}#conversation-graph{border-radius:16px}}
+
+.avatar-options button{display:flex;align-items:center;gap:6px;padding:8px}.avatar-options .avatar{width:26px;height:26px;font-size:12px;flex-shrink:0}

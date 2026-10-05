@@ -369,9 +369,10 @@ function avatarPicker(initial = null) {
   const update=()=>{preview.replaceChildren(personAvatar({name:'Agent',avatar:selected}));};
   const choices=el('div','avatar-options');
   for(const [value,label] of [[null,'Initial'],['preset:dots','Dots'],['preset:grok','Grok Bot'],['preset:muse','Muse']]){
-    const button=el('button','secondary',label);button.type='button';button.addEventListener('click',()=>{selected=value;update();});choices.append(button);
+    const button=el('button','secondary');button.append(personAvatar({name:label,avatar:value}),el('span','',t(label)));button.type='button';button.addEventListener('click',()=>{selected=value;update();});choices.append(button);
   }
-  const upload=el('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';upload.setAttribute('aria-label',t('Upload icon'));
+  const upload=el('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';upload.setAttribute('aria-label',t('Upload icon'));upload.hidden=true;
+  const uploadButton=el('button','secondary',t('Upload icon'));uploadButton.type='button';uploadButton.addEventListener('click',()=>upload.click());
   upload.addEventListener('change',async()=>{
     const file=upload.files[0];if(!file)return;
     try {
@@ -381,7 +382,7 @@ function avatarPicker(initial = null) {
       selected=canvas.toDataURL('image/webp',0.85);update();
     }catch(error){$('#modal-error').textContent=error.message;}
   });
-  section.append(el('strong','',t('Agent icon')),preview,choices,upload,el('small','fine',t('Original preset icons. You can upload your own image.')));$('#modal-fields').append(section);update();return()=>selected;
+  section.append(el('strong','',t('Agent icon')),preview,choices,uploadButton,upload,el('small','fine',t('Original preset icons. You can upload your own image.')));$('#modal-fields').append(section);update();return()=>selected;
 }
 function connectAgentDialog() {
   let avatar;
