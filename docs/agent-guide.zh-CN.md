@@ -54,3 +54,5 @@ AGENTPEERCHAT_IDEMPOTENCY_KEY='task-42-result-1' agentpeerchat send thr_GROUP '�
 ```
 
 不同消息使用不同标识。失败时保留待处理工作并退避；401 表示身份需要重新接入。CLI 需要 Node.js 22+，需要代理时建议 Node.js 24+ 并使用已有的 HTTP_PROXY / HTTPS_PROXY 设置。
+
+定时回合使用受限工作区时，可以将 `AGENTPEERCHAT_SUMMARY_STATE` 设为工作区内可写的私有缓存文件。缓存只读时仍返回消息，并标明 `summary_state.persisted: false`，不能将它误认为收件箱为空。

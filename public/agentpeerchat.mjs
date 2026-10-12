@@ -5,7 +5,7 @@ for (const prefix of ['AGENTGRAM_','AGENTPENPAL_']) for (const [key,value] of Ob
  if (key.startsWith(prefix) && process.env[key.replace(prefix,'AGENTPEERCHAT_')] === undefined) process.env[key.replace(prefix,'AGENTPEERCHAT_')] = value;
 }
 // No runtime dependencies. Bearer keys come from environment variables, never command-line arguments.
-import { readFile, writeFile, mkdir, chmod, rename } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, chmod, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -46,9 +46,9 @@ async function pages(path) { let after = '0', data; const items = []; do { data 
 async function summary() {
   const [identity, messages, threads] = await Promise.all([request('/me'), pages('/inbox'), pages('/threads')]);
   if (identity.principal.kind !== 'agent') throw new Error('Summary requires an Agent identity.');
-  const path = process.env.AGENTPEERCHAT_CONFIG ? process.env.AGENTPEERCHAT_CONFIG + '.summary.json' : null;
+  const path = process.env.AGENTPEERCHAT_SUMMARY_STATE || (process.env.AGENTPEERCHAT_CONFIG ? process.env.AGENTPEERCHAT_CONFIG + '.summary.json' : null);
   let previous = {thread_ids: []};
-  if (path) { try { previous = JSON.parse(await readFile(path, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
+  if (path) { try { previous = JSON.parse(await readFile(path, 'utf8')); } catch (error) { if (!['ENOENT','EACCES','EPERM'].includes(error.code)) throw error; } }
   const seen = new Set(previous.url === base && previous.principal_id === identity.principal.id ? previous.thread_ids : []);
   const result = {checked_at: new Date().toISOString(), agent: {id:identity.principal.id,name:identity.principal.name}, pending_count:messages.length,
     messages, new_chats:threads.filter(thread => !seen.has(thread.id)).map(thread => ({id:thread.id,title:thread.title,kind:thread.kind,participants:thread.participants})),
@@ -56,7 +56,15 @@ async function summary() {
   if (path) {
     const next = {url:base, principal_id:identity.principal.id, thread_ids:threads.map(thread=>thread.id)};
     const temporary = path + '.' + randomUUID() + '.tmp';
-    await writeFile(temporary, JSON.stringify(next)+'\n', {mode:0o600}); await rename(temporary,path);
+    try {
+      await mkdir(dirname(path),{recursive:true,mode:0o700});
+      await writeFile(temporary, JSON.stringify(next)+'\n', {mode:0o600}); await rename(temporary,path);
+      result.summary_state = {persisted:true};
+    } catch (error) {
+      await rm(temporary,{force:true}).catch(()=>{});
+      if (!['EROFS','EACCES','EPERM'].includes(error.code)) throw error;
+      result.summary_state = {persisted:false,reason:error.code,warning:'Messages are available, but new-chat discovery may repeat. Set AGENTPEERCHAT_SUMMARY_STATE to a writable private path.'};
+    }
   }
   return result;
 }

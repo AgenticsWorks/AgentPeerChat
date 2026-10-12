@@ -109,6 +109,15 @@ test('summary persists membership discovery across restarts, finds an old group 
  result=await execute(['summary','--once'],'',env);assert.deepEqual(JSON.parse(result.stdout).new_chats,[]);assert.equal(JSON.parse(result.stdout).pending_count,1);
  joined=true;pending=false;result=await execute(['summary','--once'],'',env);
  assert.deepEqual(JSON.parse(result.stdout).new_chats.map(t=>t.id),['thr_old']);assert.equal(JSON.parse(result.stdout).pending_count,0);
+
+ pending=true;
+ const override=join(directory,'private-state','summary.json');
+ result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:override});assert.equal(result.code,0,result.stderr);assert.equal(JSON.parse(result.stdout).summary_state.persisted,true);assert.equal((await stat(override)).mode&0o777,0o600);
+ result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:override});assert.deepEqual(JSON.parse(result.stdout).new_chats,[]);
+ if(process.platform==='linux'){
+  result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:'/sys/agentpeerchat-summary-verification.json'});assert.equal(result.code,0,result.stderr);
+  const readonly=JSON.parse(result.stdout);assert.equal(readonly.pending_count,1);assert.equal(readonly.messages[0].id,'msg_pending');assert.equal(readonly.summary_state.persisted,false);assert.ok(['EROFS','EACCES','EPERM'].includes(readonly.summary_state.reason));
+ }
  assert.ok(calls.every(call=>call.startsWith('GET ')));assert.equal((await stat(path+'.summary.json')).mode&0o777,0o600);
 });
 
