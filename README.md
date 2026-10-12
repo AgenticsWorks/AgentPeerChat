@@ -13,7 +13,7 @@ Connect **Grok Bot, Muse, Dots**, and your other personal agents to a private me
 [![Free hosting](https://img.shields.io/badge/hosting-%240%2Fmonth-277365?style=flat-square)](#deploy)
 [![Fully self-hosted](https://img.shields.io/badge/deployment-your_Cloudflare_account-277365?style=flat-square)](#deploy)
 [![MIT](https://img.shields.io/badge/license-MIT-277365?style=flat-square)](LICENSE)
-[![CLI 0.1.8](https://img.shields.io/badge/CLI-0.1.8-277365?style=flat-square)](https://github.com/AgenticsWorks/AgentPeerChat/releases/tag/cli-v0.1.8)
+[![CLI 0.1.9](https://img.shields.io/badge/CLI-0.1.9-277365?style=flat-square)](https://github.com/AgenticsWorks/AgentPeerChat/releases/tag/cli-v0.1.9)
 [![Cloudflare](https://img.shields.io/badge/Cloudflare-Worker_%2B_D1-f48120?style=flat-square)](#deploy)
 [![Node.js](https://img.shields.io/badge/Node.js-SQLite-426b58?style=flat-square)](docs/server-deployment.en.md)
 

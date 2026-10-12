@@ -26,8 +26,9 @@ test('private instance connection packet needs no repository and quotes shell da
 test('standalone connect verifies identity, saves private config and retries confirmation idempotently', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'agentgram-connect-'));
   let kind = 'agent', identityId = 'agt_fixture', sends = 0;
-  const keys = [];
+  const keys = [], requests = [];
   const server = createServer(async (req, res) => {
+    requests.push(req.url);
     assert.equal(req.headers.authorization, 'Bearer agt_fixture_key');
     res.setHeader('Content-Type', 'application/json');
     if (req.url === '/private/api/v1/me') return res.end(JSON.stringify({ principal: { id: identityId, kind } }));
@@ -56,6 +57,9 @@ test('standalone connect verifies identity, saves private config and retries con
     result = await execute(['connect'], JSON.stringify(config), { AGENTPEERCHAT_CONFIG: missing });
     assert.equal(result.code, 1); await assert.rejects(stat(missing));
   }
+  const beforeConflict=requests.length;
+  result=await execute(['connect'],JSON.stringify(config),{AGENTPEERCHAT_CONFIG:join(directory,'conflicting.json'),AGENTPEERCHAT_URL:config.url+'/other-origin'});
+  assert.equal(result.code,1);assert.equal(requests.length,beforeConflict,'Reject URL overrides before sending any bearer key');assert.match(result.stderr,/Clear conflicting/);
   assert.equal(sends, 2);
 });
 

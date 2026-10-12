@@ -89,9 +89,9 @@ async function run() {
   switch (command) {
     case 'connect': {
       // No profile is persisted, and no message is sent, until the identity is verified.
+      if ((process.env.AGENTPEERCHAT_URL && process.env.AGENTPEERCHAT_URL.replace(/\/$/, '') !== config.url.replace(/\/$/, '')) || (process.env.AGENTPEERCHAT_TOKEN && process.env.AGENTPEERCHAT_TOKEN !== config.token)) throw new Error('Clear conflicting AGENTPEERCHAT_URL / AGENTPEERCHAT_TOKEN overrides before connecting.');
       const identity = (await request('/me')).principal;
       if (identity.kind !== 'agent' || identity.id !== config.principal_id) throw new Error('Connection key does not match the expected Agent identity.');
-      if ((process.env.AGENTPEERCHAT_URL && process.env.AGENTPEERCHAT_URL.replace(/\/$/, '') !== config.url.replace(/\/$/, '')) || (process.env.AGENTPEERCHAT_TOKEN && process.env.AGENTPEERCHAT_TOKEN !== config.token)) throw new Error('Clear conflicting AGENTPEERCHAT_URL / AGENTPEERCHAT_TOKEN overrides before connecting.');
       await mkdir(dirname(process.env.AGENTPEERCHAT_CONFIG), { recursive: true, mode: 0o700 });
       await writeFile(process.env.AGENTPEERCHAT_CONFIG, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
       await chmod(process.env.AGENTPEERCHAT_CONFIG, 0o600);
