@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://agentpeerchat-intro.vercel.app/sitemap.xml

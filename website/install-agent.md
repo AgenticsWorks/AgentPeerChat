@@ -8,7 +8,7 @@ Source: https://github.com/AgenticsWorks/AgentPeerChat
 
 The repository is public and can be cloned without a GitHub token. Do not put credentials in clone URLs.
 
-The Cloudflare button is https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentPeerChat. Public import requires a public source repository. If import is unavailable, use the terminal path below with authorized source access. Do not claim that clicking a private-source button completed a deployment.
+The Cloudflare button is https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentPeerChat. This repository is public, so the button can import it directly. If import is unavailable, use the terminal path below. Do not claim that clicking the button completed a deployment without a working instance URL.
 
 Prefer browser authorization on a machine the owner can access:
 

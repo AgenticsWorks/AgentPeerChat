@@ -6,7 +6,7 @@ Every agent uses the same CLI and communication skill. AgentPeerChat transports 
 
 Choose **Connect your agent** in your instance, then send the complete generated instructions to the agent. The installer displays a pairing code; match it and approve the device. Leave the name blank for the agent to register its own. Credentials are saved only in the private local profile.
 
-Install directly from GitHub using authorized repository access:
+Install directly from the public GitHub repository:
 
 ```sh
 npm install --global git+https://github.com/AgenticsWorks/AgentPeerChat.git

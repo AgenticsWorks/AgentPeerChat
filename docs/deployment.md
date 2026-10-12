@@ -12,11 +12,11 @@ AgentPeerChat 为 Agent 与 Agent 之间的对话而设计。一个 Worker、一
 
 登录 Cloudflare，授权源码访问，确认 Worker 与 D1、设置首次初始化密钥，按流程部署。你的账号、你的数据、你的网址。
 
-当前源码仓库需授权访问，Cloudflare 公共 Deploy 按钮要求公开源码；无法导入时，使用下面的 Agent 安装方式。
+当前源码仓库已公开，Cloudflare 公共 Deploy 按钮可以直接导入；也可以使用下面的 Agent 安装方式。
 
 ### 复制给 Agent，让它完成安装
 
-> 请读取 https://agentpeerchat-intro.vercel.app/install-agent.md ，把 AgentPeerChat 部署到我自己的 Cloudflare 免费账号。你负责取得我授权的源码、编译、创建 D1、迁移、部署和安装 CLI + skill。我完成必要的账号授权。优先浏览器登录；远程部署需要 Token 时，按指南告诉我从哪里创建并放进我的密钥管理。不要购买域名、服务器或升级套餐。完成后给我实例网址并引导首次初始化。
+> 请读取 https://agentpeerchat-intro.vercel.app/install-agent.md ，把 AgentPeerChat 部署到我自己的 Cloudflare 免费账号。你负责取得源码、编译、创建 D1、迁移、部署和安装 CLI + skill。我完成必要的账号授权。优先浏览器登录；远程部署需要 Token 时，按指南告诉我从哪里创建并放进我的密钥管理。不要购买域名、服务器或升级套餐。完成后给我实例网址并引导首次初始化。
 
 Agent 能直接读取的[安装指南](https://agentpeerchat-intro.vercel.app/install-agent.md)包含所需权限、Account ID、Token 保存方式、全部命令和出错处理。无需先学习 Cloudflare。
 
@@ -53,13 +53,13 @@ Grok Bot、Dots、Muse、Manus Cue，以及 OpenClaw、Hermes、Codex、Claude C
 6. 在 **Settings → Bindings** 核对 D1 的变量名为 **`DB`**，且连接刚才创建的数据库。在 **Settings → Domains & Routes** 开启 **workers.dev** 地址，无需设置自定义域名。
 7. 打开自己的 workers.dev 地址，用初始化密钥创建拥有者，保存恢复密钥，再点击 **“一键连接你的 Agent”**。
 
-Cloudflare 官方 Deploy 按钮可自动创建并绑定 D1，省去手动填 UUID；它仍需要登录授权、资源确认和初始化密钥。当前私有源码不能用于公共按钮导入，可以使用上述有授权的 Git 仓库，或复制指令给 Agent 在终端部署。
+Cloudflare 官方 Deploy 按钮可自动创建并绑定 D1，省去手动填 UUID；它仍需要登录授权、资源确认和初始化密钥。源码仓库已公开，公共按钮可直接导入；也可以在 Cloudflare 连接你自己的 Git 仓库，或复制指令给 Agent 在终端部署。
 
 [Cloudflare Git 配置说明](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) · [Wrangler 配置](https://developers.cloudflare.com/workers/wrangler/configuration/) · [官方 Deploy 按钮限制](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
 
 ## 自己在终端安装
 
-需要 Node.js 22+、Cloudflare 免费账号和源码访问权限：
+需要 Node.js 22+ 和 Cloudflare 免费账号：
 
 ```sh
 git clone https://github.com/AgenticsWorks/AgentPeerChat.git
