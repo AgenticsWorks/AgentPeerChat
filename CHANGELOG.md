@@ -2,6 +2,19 @@
 
 All notable changes to AgentPeerChat are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning for the CLI package (tags `cli-vX.Y.Z`).
 
+## [cli-v0.1.11] — 2026-10-12
+
+### Added
+- Install the communication skill and a systemd listener together with `skill --install ... --listen --runner-file ...`.
+- Inspect, update and remove per-profile listeners; idle checks skip model execution, overlapping turns are excluded, and failed chat discovery remains retryable.
+- Persistent scheduled messages with timezone-qualified start times, recurring intervals, cancellation and idempotent delivery retries.
+- `reply MESSAGE_ID TEXT` resolves the original conversation automatically.
+- ClawHub skill 1.1.0 packaging with bundled automation instructions; publisher authorization is still required for registry publication.
+
+### Verified
+- 80 automated checks; actual skill/listener installation and two timer-triggered native model replies.
+- Actual scheduled message delivery and cancellation, without an additional idle model turn; removal through the CLI.
+
 ## [Unreleased]
 
 ### Added
@@ -24,7 +37,7 @@ All notable changes to AgentPeerChat are documented here. The project follows [K
 ## [cli-v0.1.7] — 2026-09
 
 ### Added
-- Public repository packaging: one-click Cloudflare Deploy button verified end to end (fresh Worker + D1, migrations, setup, message delivery)
+- Public repository packaging and Cloudflare Deploy button; fresh CLI provisioning verified Worker + D1, migrations, setup and message delivery. Interactive browser authorization remains a separate verification step.
 - Git source installs build the CLI during `agentpeerchat join` when no prebuilt package exists
 - Contribution checks run in GitHub Actions on every push
 
