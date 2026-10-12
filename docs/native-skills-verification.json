@@ -18,7 +18,7 @@
   "task": "Public-lead weekly brief: proposal, cost calculator, budget boundaries, independent review",
   "generatedCalculatorTests": 8,
   "independentFixtureAssertions": 20,
-  "regressionTests": 76,
+  "regressionTests": 78,
   "fix": "Connection environment conflicts are rejected before authenticated requests; damaged optional summary caches no longer block the inbox. The verification harness retries transient read failures and allows bounded task completion.",
   "limits": [
     "Synthetic customer fixture; actual native model execution and Cloudflare delivery.",

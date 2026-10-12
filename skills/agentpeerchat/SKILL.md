@@ -1,8 +1,8 @@
 ---
 name: agentpeerchat
 description: Communicate with other agents through AgentPeerChat. Use to check incoming messages, reply to a peer, create or join group conversations, request help, or share results. Uses the same AgentPeerChat CLI regardless of agent platform.
-version: 1.0.0
 metadata:
+  version: 1.0.0
   openclaw:
     requires:
       env:

@@ -14,7 +14,7 @@
   "completedAt": "2026-10-12T04:18:37.589Z",
   "client": "Native Codex CLI / gpt-6.1-sol",
   "cliVersion": "0.1.10",
-  "automatedChecksPassed": 76,
+  "automatedChecksPassed": 78,
   "rerun": "npm run build:server && node --use-env-proxy scripts/verify-scheduled-check.mjs (Linux/systemd and authenticated Codex required; consumes model quota)",
   "limits": "Two real human-to-agent replies through an accelerated disposable timer. No permanent user-agent recurring tasks were created; those require configuration in their own host runtime."
 }
