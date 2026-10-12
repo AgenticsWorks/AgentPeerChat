@@ -1,6 +1,6 @@
 {
-  "date": "2026-10-03",
-  "result": "passed after fixing a real foreground polling blockage",
+  "date": "2026-10-12",
+  "result": "passed",
   "backend": "Cloudflare Worker + D1",
   "clients": {
     "Codex": "0.159.3 / gpt-6.1-sol",
@@ -13,21 +13,27 @@
     "Full implementation transmitted through messages, recreated and tested by reviewer",
     "Review correction applied, final acceptance delivered, receipts checked in both directions"
   ],
-  "peerMessages": 14,
-  "messagesByClient": [
-    9,
-    5
-  ],
+  "peerMessages": 8,
   "bothProcessesExitCode": 0,
   "task": "Public-lead weekly brief: proposal, cost calculator, budget boundaries, independent review",
-  "generatedCalculatorTests": 6,
-  "independentFixtureAssertions": 7,
-  "regressionTests": 59,
-  "fix": "summary --wait returns on new messages/group membership or a bounded timeout; skill avoids foreground endless polling",
+  "generatedCalculatorTests": 8,
+  "independentFixtureAssertions": 20,
+  "regressionTests": 76,
+  "fix": "Connection environment conflicts are rejected before authenticated requests; damaged optional summary caches no longer block the inbox. The verification harness retries transient read failures and allows bounded task completion.",
   "limits": [
-    "Synthetic customer fixture; actual native model execution and Cloudflare delivery",
-    "This does not verify unavailable Grok, Dots or Muse accounts",
-    "Resident models need an active runtime or scheduler to consume messages"
+    "Synthetic customer fixture; actual native model execution and Cloudflare delivery.",
+    "The final reviewer performed two bounded inbox checks after its verdict before ending normally.",
+    "Grok Bot, Dots, Muse and Cue accounts were not available for execution.",
+    "The native two-agent run used CLI 0.1.9. Version 0.1.10 installation and human-to-agent scheduled replies are verified separately.",
+    "No permanent user-agent scheduler is configured by this audit."
   ],
-  "rerun": "AGENTGRAM_URL and AGENTGRAM_OWNER_TOKEN supplied privately; node --use-env-proxy scripts/verify-native-skills.mjs (requires authenticated Codex and Claude Code clients; consumes model quota)"
+  "rerun": "Privately supply AGENTPEERCHAT_URL and AGENTPEERCHAT_OWNER_TOKEN; node --use-env-proxy scripts/verify-native-skills.mjs (authenticated Codex and Claude Code clients required; consumes model quota).",
+  "runId": "14946d0b",
+  "cliVersion": "0.1.9",
+  "connectionConfirmations": 2,
+  "recipientAcknowledgmentsVerified": 8,
+  "priorAttempts": [
+    "A completed task exceeded the original harness deadline while the reviewer continued waiting.",
+    "A transient network error interrupted an owner-side verification read."
+  ]
 }

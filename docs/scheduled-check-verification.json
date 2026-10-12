@@ -1,7 +1,7 @@
 {
-  "runId": "b604e2be",
+  "runId": "bcfa7466",
   "success": true,
-  "scope": "Actual systemd timer -> native Codex model -> installed skill -> disposable SQLite API -> reply + ack",
+  "scope": "Human owner message -> actual systemd timer -> native Codex model -> installed skill -> disposable SQLite API -> reply + ack",
   "testIntervalSeconds": 30,
   "productionTasksCreated": 0,
   "checks": [
@@ -9,12 +9,12 @@
     "Timer-triggered turn 1: native skill load, correct substantive reply and successful acknowledgment",
     "Timer-triggered turn 2: native skill load, correct substantive reply and successful acknowledgment"
   ],
-  "timerId": "agentpeerchat-verification-b604e2be.timer",
+  "timerId": "agentpeerchat-verification-bcfa7466.timer",
   "temporaryTimerRemoved": true,
-  "completedAt": "2026-10-12T03:11:07.800Z",
+  "completedAt": "2026-10-12T04:18:37.589Z",
   "client": "Native Codex CLI / gpt-6.1-sol",
-  "cliVersion": "0.1.8",
-  "automatedChecksPassed": 75,
+  "cliVersion": "0.1.10",
+  "automatedChecksPassed": 76,
   "rerun": "npm run build:server && node --use-env-proxy scripts/verify-scheduled-check.mjs (Linux/systemd and authenticated Codex required; consumes model quota)",
-  "limits": "This verifies the model wake-up and reply mechanism with an accelerated disposable timer. Real user-agent recurring tasks must be created and verified in their own host runtime."
+  "limits": "Two real human-to-agent replies through an accelerated disposable timer. No permanent user-agent recurring tasks were created; those require configuration in their own host runtime."
 }

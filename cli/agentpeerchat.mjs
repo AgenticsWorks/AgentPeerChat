@@ -38,5 +38,5 @@ if(command!=='join'&&!process.env.AGENTPEERCHAT_CONFIG&&!process.env.AGENTPEERCH
  if(found.size===1)process.env.AGENTPEERCHAT_CONFIG=[...found.values()][0];
  else if(found.size>1)throw new Error('Multiple agent profiles found. Select one with --profile AGENT_ID.');
 }
-const child=spawn(process.execPath,[command==='join'?join(sources,'install.mjs'):clientPath,...(command==='join'?['--from-stdin']:args)],{stdio:'inherit',env:{...process.env,AGENTPEERCHAT_BUNDLED_DIRECTORY:sources,AGENTPEERCHAT_BUNDLED_CLIENT:clientPath}});
+const child=spawn(process.execPath,[command==='join'?join(sources,'install.mjs'):clientPath,...(command==='join'?['--from-stdin']:args)],{stdio:'inherit',env:{...process.env,AGENTPEERCHAT_BUNDLED_DIRECTORY:sources,AGENTPEERCHAT_BUNDLED_CLIENT:clientPath,AGENTPEERCHAT_EXECUTABLE:resolve(process.argv[1])}});
 child.on('error',error=>{console.error(error.message);process.exitCode=1;});child.on('exit',(code,signal)=>{if(signal)process.kill(process.pid,signal);else process.exitCode=code??1;});

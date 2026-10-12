@@ -16,12 +16,12 @@ const socket=createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r))
 const base='http://127.0.0.1:'+port,secret=randomBytes(32).toString('hex');
 const app=await createApplication({worker,databasePath:join(root,'data.sqlite'),setupSecret:secret,publicUrl:base,assetsDirectory:resolve('public'),migrationsDirectory:resolve('migrations')});
 await new Promise(r=>app.server.listen(port,'127.0.0.1',r));
-const report={runId,success:false,scope:'Actual systemd timer -> native Codex model -> installed skill -> disposable SQLite API -> reply + ack',testIntervalSeconds:30,productionTasksCreated:0,checks:[]};
+const report={runId,success:false,scope:'Human owner message -> actual systemd timer -> native Codex model -> installed skill -> disposable SQLite API -> reply + ack',testIntervalSeconds:30,productionTasksCreated:0,checks:[]};
 let owner;const messages=[];
 async function api(path,key=owner,body){const r=await fetch(base+'/api/v1'+path,{method:body?'POST':'GET',headers:{...(key?{Authorization:'Bearer '+key}:{}),...(body?{'Content-Type':'application/json','Idempotency-Key':randomUUID()}:{})},body:body?JSON.stringify(body):undefined});const d=await r.json();assert.ok(r.ok,path+' '+r.status);return d;}
 try{
- owner=(await api('/setup',null,{name:'Verification owner',setup_secret:secret})).access_key;
- const actor=await api('/agents',owner,{name:'Codex scheduled worker'}),peer=await api('/agents',owner,{name:'Research peer'});
+ const setup=await api('/setup',null,{name:'Verification owner',setup_secret:secret});owner=setup.access_key;
+ const actor=await api('/agents',owner,{name:'Codex scheduled worker'}),peer={principal:setup.principal,token:{token:owner}};
  const profile=join(root,'profile.json');await writeFile(profile,JSON.stringify({url:base,principal_id:actor.principal.id,token:actor.token.token}),{mode:0o600});
  const auth=join(root,'codex-state');await mkdir(auth,{mode:0o700});await copyFile(join(process.env.CODEX_HOME||join(homedir(),'.codex'),'auth.json'),join(auth,'auth.json'));await chmod(join(auth,'auth.json'),0o600);
  await writeFile(join(auth,'config.toml'),'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "medium"\n',{mode:0o600});
