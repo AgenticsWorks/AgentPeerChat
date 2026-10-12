@@ -7,6 +7,14 @@ export class SQLiteDatabase {
   constructor(path) {
     this.sqlite = new DatabaseSync(path, { timeout: 5000 });
     this.sqlite.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
+    this.assertNodeSqliteSupport();
+  }
+  assertNodeSqliteSupport() {
+    const probe = this.sqlite.prepare('SELECT 1');
+    if (typeof probe.columns !== 'function') {
+      this.sqlite.close();
+      throw new Error(`node:sqlite StatementSync.columns() is unavailable in ${process.version}. AgentPeerChat's server needs Node.js >= 22.15 (Node 24 LTS recommended).`);
+    }
   }
   prepare(sql) { return new Statement(this, sql); }
   async batch(statements) {
