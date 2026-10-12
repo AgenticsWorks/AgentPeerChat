@@ -25,7 +25,7 @@ test('installable CLI pairs with one identity, selects its private profile and d
  res.statusCode=404;res.end('{}');});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
  const config={url:`http://127.0.0.1:${server.address().port}`,principal_id:'agt_fixture',owner_id:'hum_owner',pairing:{id:'pair_fixture',code:'agp_fixture'}};
- result=await run(cli,['join'],env,JSON.stringify(config));assert.equal(result.code,0,result.stderr);assert.ok(result.stdout.includes('PACK-1234'));assert.ok(!result.stdout.includes('agp_fixture'));assert.equal(sends,1);
+ result=await run(cli,['join'],{...env,AGENTPENPAL_URL:'http://127.0.0.1:1',AGENTPENPAL_TOKEN:'agt_stale_environment'},JSON.stringify(config));assert.equal(result.code,0,result.stderr);assert.ok(result.stdout.includes('PACK-1234'));assert.ok(!result.stdout.includes('agp_fixture'));assert.equal(sends,1);
  const profile=join(home,'.config','agentpeerchat','agt_fixture','config.json');assert.equal((await stat(profile)).mode&0o777,0o600);assert.equal(JSON.parse(await readFile(profile,'utf8')).pairing,undefined);
  result=await run(cli,['me'],env);assert.equal(result.code,0,result.stderr);assert.equal(JSON.parse(result.stdout).principal.name,'Muse');
  // Existing schedulers and profiles survive the package/name migration.

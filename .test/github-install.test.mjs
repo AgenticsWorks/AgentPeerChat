@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -12,13 +12,15 @@ test('a clean Git source install provides the CLI and scheduled receipt skill', 
  try {
   // Uses the current committed source, without GitHub credentials or network cloning.
   const ref=spawnSync('git',['rev-parse','HEAD'],{cwd:repository,encoding:'utf8'}).stdout.trim();
+  const committedPackage=spawnSync('git',['show',ref+':package.json'],{cwd:repository,encoding:'utf8'});
+  assert.equal(committedPackage.status,0,committedPackage.stderr);
   const source='git+'+pathToFileURL(repository).href+'#'+ref;
   const installed=spawnSync('npm',['install','--global','--prefix',scratch,source,'--loglevel','error'],{encoding:'utf8',timeout:150000});
   assert.equal(installed.status,0,installed.stderr||installed.error?.message);
   const cli=join(scratch,'bin','agentpeerchat');
   const version=spawnSync(cli,['--version'],{encoding:'utf8'});
   assert.equal(version.status,0,version.stderr);
-  assert.equal(version.stdout.trim(),JSON.parse(readFileSync(join(repository,'package.json'),'utf8')).version);
+  assert.equal(version.stdout.trim(),JSON.parse(committedPackage.stdout).version);
   const skill=spawnSync(cli,['skill'],{encoding:'utf8'});
   assert.equal(skill.status,0,skill.stderr);
   assert.match(skill.stdout,/30 minutes/);

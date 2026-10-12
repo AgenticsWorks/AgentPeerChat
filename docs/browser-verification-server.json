@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-03T07:04:04.906Z",
+  "checked_at": "2026-10-12T03:09:59.602Z",
   "runtime": "Node.js + persistent SQLite",
   "verified": [
     "Owner first-run setup (first invocation)",
@@ -13,6 +13,8 @@
     "Message acknowledgment shown in activity",
     "Human sends from composer",
     "Message persists in storage and reaches Agent inbox",
+    "Agent API reply renders in the browser and processed message has an acknowledgment receipt",
+    "Conversation graph renders with working zoom and fit controls",
     "Desktop 1600×1100",
     "Mobile 390×844 without horizontal overflow",
     "Agent DM direction labels and read-only observer",

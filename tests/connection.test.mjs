@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { connect } from 'node:net';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connectionInstructions } from '../public/connection-kit.js';
@@ -117,6 +117,18 @@ test('summary persists membership discovery across restarts, finds an old group 
  if(process.platform==='linux'){
   result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:'/sys/agentpeerchat-summary-verification.json'});assert.equal(result.code,0,result.stderr);
   const readonly=JSON.parse(result.stdout);assert.equal(readonly.pending_count,1);assert.equal(readonly.messages[0].id,'msg_pending');assert.equal(readonly.summary_state.persisted,false);assert.ok(['EROFS','EACCES','EPERM'].includes(readonly.summary_state.reason));
+ }
+ for(const corrupt of ['{truncated', 'null', JSON.stringify({url:`http://127.0.0.1:${server.address().port}/api/v1`,principal_id:'agt_fixture',thread_ids:{bad:true}})]) {
+  await writeFile(override,corrupt);
+  result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:override});assert.equal(result.code,0,result.stderr);
+  const recovered=JSON.parse(result.stdout);assert.equal(recovered.pending_count,1);assert.equal(recovered.summary_state.persisted,true);assert.equal(recovered.summary_state.recovered,true);
+  assert.deepEqual(recovered.new_chats.map(chat=>chat.id),['thr_first','thr_old']);
+ }
+ result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:join(path,'invalid-child.json')});assert.equal(result.code,0,result.stderr);assert.equal(JSON.parse(result.stdout).pending_count,1);assert.equal(JSON.parse(result.stdout).summary_state.persisted,false);
+ const privateProfile=await readFile(path,'utf8');
+ result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:path});assert.equal(result.code,0,result.stderr);assert.equal(JSON.parse(result.stdout).summary_state.reason,'PROFILE_COLLISION');assert.equal(await readFile(path,'utf8'),privateProfile);assert.equal(JSON.parse(result.stdout).pending_count,1);
+ for(const invalid of ['Infinity','999999999999','NaN']) {
+  result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_POLL_SECONDS:invalid});assert.equal(result.code,1);assert.match(result.stderr,/poll.*seconds|POLL_SECONDS/i);
  }
  assert.ok(calls.every(call=>call.startsWith('GET ')));assert.equal((await stat(path+'.summary.json')).mode&0o777,0o600);
 });

@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-10-03T12:33:43.382701+00:00",
+  "auditedAt": "2026-10-12T03:14:37.414656+00:00",
   "complete": false,
   "requirements": [
     {
@@ -23,11 +23,11 @@
     },
     {
       "requirement": "Public one-click deployment",
-      "status": "incomplete",
+      "status": "public source and installer redirect verified; interactive provisioning remains unverified",
       "evidence": [
         "docs/deploy-button-verification.json"
       ],
-      "remaining": "GitHub repository is currently private. Public import needs public source; then actual browser authorization, provisioning, migrations and owner initialization must be verified."
+      "remaining": "Source is now public. The authenticated Cloudflare browser authorization, provisioning, migrations and first-owner initialization through the Deploy button still need their own end-to-end verification."
     },
     {
       "requirement": "Owner can observe all Agent conversations and understand sender/recipient without pretending to be an Agent",
@@ -41,7 +41,9 @@
       "checks": [
         "Owner observes an Agent-only DM with directional sender labels",
         "Observer composer is read-only",
-        "Joining creates a separate group and preserves original DM"
+        "Joining creates a separate group and preserves original DM",
+        "Native Agent perspective remains read-only and retains the owner session",
+        "Force Graph canvas and zoom/fit controls render in the real browser"
       ]
     },
     {
@@ -57,14 +59,14 @@
     },
     {
       "requirement": "Open source and private ownership",
-      "status": "private ownership implemented; MIT licensed, public source release incomplete",
+      "status": "public MIT repository; account-owned private deployment",
       "evidence": [
         "LICENSE",
         "README.md",
         "src/index.ts",
-        "src/security.ts"
-      ],
-      "remaining": "Source repository remains private; do not equate an MIT license with public availability."
+        "src/security.ts",
+        "docs/deploy-button-verification.json"
+      ]
     },
     {
       "requirement": "Real Agent communication via one CLI and skill",
@@ -74,5 +76,10 @@
       ],
       "limit": "Claude Code client used GLM; Grok/Muse/Dots/Cue account execution has not been tested."
     }
+  ],
+  "version": "0.1.8",
+  "limits": [
+    "The audit does not certify unavailable Dots/Grok Bot/Muse/Cue accounts or their host schedulers.",
+    "A CLI connection and installed skill are distinct from a verified recurring model wake-up."
   ]
 }

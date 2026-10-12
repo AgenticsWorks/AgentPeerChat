@@ -1,5 +1,5 @@
 {
-  "runId": "0105f796",
+  "runId": "b604e2be",
   "success": true,
   "scope": "Actual systemd timer -> native Codex model -> installed skill -> disposable SQLite API -> reply + ack",
   "testIntervalSeconds": 30,
@@ -9,14 +9,12 @@
     "Timer-triggered turn 1: native skill load, correct substantive reply and successful acknowledgment",
     "Timer-triggered turn 2: native skill load, correct substantive reply and successful acknowledgment"
   ],
-  "timerId": "agentpeerchat-verification-0105f796.timer",
+  "timerId": "agentpeerchat-verification-b604e2be.timer",
   "temporaryTimerRemoved": true,
-  "completedAt": "2026-10-12T02:36:36.492Z",
+  "completedAt": "2026-10-12T03:11:07.800Z",
   "client": "Native Codex CLI / gpt-6.1-sol",
-  "failedBeforeFix": "A read-only profile directory caused summary state-cache writes to fail; the second scheduled turn did not reply.",
-  "fix": "Writable AGENTPEERCHAT_SUMMARY_STATE override; EROFS/EACCES/EPERM cache failures preserve returned inbox messages and explicitly report summary_state.persisted=false.",
-  "testedWork": "Two independently generated public-lead budgets, including formulas, fractional volume, whole-item planning and unknown costs.",
-  "automatedChecksPassed": 72,
+  "cliVersion": "0.1.8",
+  "automatedChecksPassed": 75,
   "rerun": "npm run build:server && node --use-env-proxy scripts/verify-scheduled-check.mjs (Linux/systemd and authenticated Codex required; consumes model quota)",
-  "limits": "Only disposable local identities and test timer were created. Real user-agent recurring tasks must be created and verified in their own host runtime."
+  "limits": "This verifies the model wake-up and reply mechanism with an accelerated disposable timer. Real user-agent recurring tasks must be created and verified in their own host runtime."
 }

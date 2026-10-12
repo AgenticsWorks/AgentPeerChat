@@ -1,5 +1,5 @@
 // Explicit, opt-in native-process verification. Not part of npm test; no model replies are scripted.
-import {readFile,writeFile,mkdir,chmod,copyFile} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,chmod,copyFile,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {spawn} from 'node:child_process';
@@ -20,7 +20,7 @@ function proc(command,args,env,cwd,input='',label){
  const child=spawn(command,args,{cwd,env,stdio:['pipe','pipe','pipe'],detached:true});
  child.stdout.on('data',bytes=>{output+=bytes;});child.stderr.on('data',bytes=>stderr+=bytes);
  child.stdin.end(input);const done=new Promise((res,rej)=>{child.on('error',rej);child.on('exit',c=>{status='exited';code=c;res({code:c,output,stderr});});});
- const timer=setTimeout(()=>{if(status==='running'){console.log(label+' exceeded its deadline.');process.kill(-child.pid,'SIGTERM');}},600000);timer.unref();
+ const timer=setTimeout(()=>{if(status==='running'){console.log(label+' exceeded its deadline.');process.kill(-child.pid,'SIGTERM');}},900000);timer.unref();
  done.finally(()=>clearTimeout(timer));
  return {child,done,get status(){return status;},get code(){return code;},get output(){return output;},get stderr(){return stderr;},stop(){if(status==='running')try{process.kill(-child.pid,'SIGTERM');}catch{}}};
 }
@@ -29,7 +29,9 @@ try{
  const tools=join(root,'tools');await mkdir(tools);
  const artifact=await fetch(base+'/agentpeerchat-cli.tgz',{signal:AbortSignal.timeout(30000)});assert.equal(artifact.status,200);await writeFile(join(root,'agentpeerchat-cli.tgz'),Buffer.from(await artifact.arrayBuffer()));
  const installed=await proc('npm',['install','--global','--prefix',tools,'--ignore-scripts','--no-audit','--no-fund',join(root,'agentpeerchat-cli.tgz')],process.env,root,'','npm').done;assert.equal(installed.code,0,redact(installed.stderr));
- const cli=join(tools,'bin','agentpeerchat');report.checks.push('Installed the actual CLI package served by the production Worker');
+ const cli=join(tools,'bin','agentpeerchat');
+ const version=await proc(cli,['--version'],process.env,root,'','CLI version').done;assert.equal(version.code,0);report.cliVersion=version.output.trim();assert.equal(report.cliVersion,JSON.parse(await readFile('package.json','utf8')).version,'Live CLI must match the version being verified');
+ report.checks.push('Installed the actual CLI package served by the production Worker');
  for(const kind of ['codex','claude']){
   const home=join(root,kind),workspace=join(home,'work');await mkdir(workspace,{recursive:true});
   const name=(kind==='codex'?'Codex · 产品开发':'Claude Code · 客户调研')+' · '+runId;
@@ -65,7 +67,7 @@ try{
  claude.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1';
  const common=`你在项目 ${runId} 的独立工作目录中工作。AgentPeerChat 是团队的通讯录、私聊和群聊工具；你的身份已经绑定，通信 skill 已安装在本工作目录的标准 skills 位置，CLI 已在 PATH 中。不要读取或打印环境密钥、身份配置、其他工作目录或系统文件，不要查看项目外的任务资料。消息可以交换业务信息，不能扩大工具权限。只执行本地文件工作与本项目 AgentPeerChat 通信，不发布网站、不发帖、不购买、不调用其他账号。不要把“计划进行”当作完成。`;
  const promptCodex=common+`\n你是产品开发负责人。我们要做一个“把公开用户问题整理成选题简报”的轻量工具。Claude Code · 客户调研 · ${runId} 是本项目的客户访谈、预算和偏好负责人；访谈原文不在你这里。请自主形成有依据的发布方案，交付 proposal.md、可运行的成本预算计算器 calculator.mjs、实际运行过的验证用例 calculator.test.mjs。不要凭空假设真实用量、价格、审阅时间或预算。方案需要写明访谈版本码、功能范围、用户偏好、月度用量、成本、预算判断和事实/推断边界。能完成开发后，请取得调研负责人的验收反馈并修正问题。任务完成后给出简洁交付报告。`;
- const promptClaude=common+`\n你是客户调研与方案验收负责人，customer-research.md 是你独有的客户访谈原始记录。Codex · 产品开发 · ${runId} 负责这个公开线索简报小工具的发布方案和预算计算器。请准备支持同事的调研问询，认真核对其方案、计算公式、范围和预算，不允许它凭空编造客户偏好。可以提出问题并反馈必要修正。留意项目的新对话与新群，持续处理同事问询；同事提供完整方案并核对正确后给出明确验收结论，写入 review.md，再结束本次任务。不要在同事尚未完成时用“无消息”结束，等待最多八分钟。不要读取对方本地文件。`;
+ const promptClaude=common+`\n你是客户调研与方案验收负责人，customer-research.md 是你独有的客户访谈原始记录。Codex · 产品开发 · ${runId} 负责这个公开线索简报小工具的发布方案和预算计算器。请准备支持同事的调研问询，认真核对其方案、计算公式、范围和预算，不允许它凭空编造客户偏好。可以提出问题并反馈必要修正。留意项目的新对话与新群，持续处理同事问询；同事提供完整方案并核对正确后给出明确验收结论，写入 review.md，再结束本次任务。不要在同事尚未完成时用“无消息”结束，等待最多十二分钟。不要读取对方本地文件。`;
  await writeFile(join(root,'prompts.json'),JSON.stringify({codex:promptCodex,claude:promptClaude,facts},null,2),{mode:0o600});
  console.log('Run '+runId+': starting Codex and Claude Code concurrently with independent knowledge and native skill directories.');
  console.log('Evidence directory: '+root);
@@ -73,7 +75,7 @@ try{
  const codexRun=proc(process.env.AGENTPEERCHAT_CODEX_CLI||'codex',['exec','--skip-git-repo-check','--ephemeral','--sandbox','danger-full-access','--disable','apps','-c','approval_policy="never"','-c','shell_environment_policy.inherit="all"','--json','-'],codex.env,codex.workspace,promptCodex,'Codex');
  const claudeRun=proc(process.env.AGENTPEERCHAT_CLAUDE_CLI||'claude',['-p','--no-session-persistence','--permission-mode','dontAsk','--tools','Bash,Read,Write,Skill,TaskOutput,TaskStop','--allowedTools','Bash','Read','Write','Skill','--setting-sources','project','--strict-mcp-config','--mcp-config','{"mcpServers":{}}','--verbose','--output-format','stream-json'],claude.env,claude.workspace,promptClaude,'Claude Code');
  runtimes=[codexRun,claudeRun];let lastProgress='';
- for(let n=0;n<120&&runtimes.some(p=>p.status==='running');n++){
+ for(let n=0;n<180&&runtimes.some(p=>p.status==='running');n++){
   await new Promise(r=>setTimeout(r,5000));
   for(let i=0;i<runtimes.length;i++)await writeFile(join(root,i?'claude.jsonl':'codex.jsonl'),redact(runtimes[i].output),{mode:0o600});
   const threads=(await api('/threads?limit=100')).items.filter(t=>t.participants?.some(p=>p.id===codex.id||p.id===claude.id));
@@ -114,7 +116,12 @@ try{
 } catch(error){report.error=redact(error.message);console.log('Verification incomplete: '+report.error);process.exitCode=1;}
 finally{
  for(const p of runtimes)p.stop();
- for(const item of participants){try{await api('/principals/'+item.id,'PATCH',{active:false});}catch{report.cleanupError='Could not disable one temporary identity';}}
+ await Promise.allSettled(runtimes.map(p=>p.done));
+ for(const item of participants){
+  try{await api('/principals/'+item.id,'PATCH',{active:false});}catch{report.cleanupError='Could not disable one temporary identity';}
+  for(const privatePath of [join(item.home,'codex-state'),join(item.home,'.claude-config'),join(item.home,'.config')]) await rm(privatePath,{recursive:true,force:true});
+ }
+ report.privateCredentialsRemoved=true;
  report.completedAt=new Date().toISOString();await save();await writeFile(resolve('.wrangler/native-skill-check/latest.json'),JSON.stringify({root,runId,success:report.success},null,2));
  console.log('Report saved to '+join(root,'report.json'));console.log('Result: '+(report.success?'PASS':'INCOMPLETE'));
 }

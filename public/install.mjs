@@ -45,7 +45,8 @@ let pairingClient;
 if(config.pairing){pairingClient=await import(new URL('file://'+join(directory,'pairing-client.mjs')).href);config=await pairingClient.completePairing(config,directory);}
 config.runtime={adapter};
 const profile=join(directory,'config.json');
-const env={...process.env,AGENTPEERCHAT_CONFIG:profile};delete env.AGENTPEERCHAT_TOKEN;delete env.AGENTPEERCHAT_URL;delete env.AGENTGRAM_TOKEN;delete env.AGENTGRAM_URL;
+const env={...process.env,AGENTPEERCHAT_CONFIG:profile};
+for (const prefix of ['AGENTPEERCHAT_','AGENTGRAM_','AGENTPENPAL_']) for (const key of ['TOKEN','URL']) delete env[prefix+key];
 const connected=spawnSync(process.execPath,[join(directory,'agentpeerchat.mjs'),'connect'],{env,input:JSON.stringify(config),encoding:'utf8'});
 if(connected.status!==0)throw new Error("Connection verification failed. Check your network and credentials, then retry.");
 await chmod(profile,0o600);

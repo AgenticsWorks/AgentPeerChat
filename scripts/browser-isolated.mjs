@@ -1,6 +1,6 @@
 // Run the full first-install flow without touching the user's running D1 or credentials.
 import { cp, mkdtemp, writeFile, symlink, rm, mkdir } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
@@ -9,7 +9,7 @@ const root = process.cwd();
 const backend = process.argv[2] === 'sqlite' ? 'sqlite' : 'd1';
 const directory = await mkdtemp(join(tmpdir(), 'agentpeerchat-browser-'));
 const env = { ...process.env, AGENTPEERCHAT_BROWSER_BACKEND: backend, WRANGLER_SEND_METRICS: 'false', AGENTPEERCHAT_BROWSER_SESSION: `isolated-${basename(directory)}` };
-let worker;
+let worker, browserStarted = false;
 function command(script, args = []) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [script, ...args], { cwd: directory, env, stdio: 'inherit' });
@@ -45,12 +45,14 @@ try {
   }
   if (!ready) throw new Error('Isolated Worker did not become ready within 45 seconds.');
   console.log('Running first-owner setup and browser/API/storage flows in an isolated database.');
+  browserStarted = true;
   await command('scripts/browser-check.mjs');
   await mkdir(join(root, 'docs/screenshots'), { recursive: true });
   await cp(join(directory, 'docs/screenshots'), join(root, 'docs/screenshots'), { recursive: true });
   await cp(join(directory, 'docs/browser-verification.json'), join(root, backend === 'sqlite' ? 'docs/browser-verification-server.json' : 'docs/browser-verification.json'));
   console.log('Verification artifacts saved. The running user instance was not modified.');
 } finally {
+  if (browserStarted) spawnSync(join(root,'node_modules/.bin/agent-browser'),['--session',env.AGENTPEERCHAT_BROWSER_SESSION,'close'],{encoding:'utf8',timeout:10000,stdio:'ignore'});
   if (worker && worker.exitCode === null) {
     await new Promise(resolve => {
       worker.once('exit', resolve); worker.kill('SIGTERM');

@@ -1,10 +1,11 @@
 {
-  "verifiedAt": "2026-10-03T12:32:24.170Z",
-  "repository": "AgenticsWorks/Agentgram",
-  "repositoryPrivate": true,
-  "buttonUrl": "https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentgram",
-  "observedDestination": "https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fworkers-and-pages%2Fcreate%2Fdeploy-to-workers&repository=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentgram",
+  "verifiedAt": "2026-10-12T03:11:52.015Z",
+  "repository": "AgenticsWorks/AgentPeerChat",
+  "repositoryPrivate": false,
+  "buttonUrl": "https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentPeerChat",
+  "observedDestination": "https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fworkers-and-pages%2Fcreate%2Fdeploy-to-workers&repository=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentPeerChat",
   "verified": [
+    "GitHub repository API reports private=false",
     "Current Deploy button redirects with the correct source repository"
   ],
   "notVerified": [
@@ -12,8 +13,7 @@
     "Public Deploy-button D1 provisioning, migrations and first-owner setup"
   ],
   "remainingConditions": [
-    "Public source is required by Cloudflare for public Deploy-button import",
-    "An authorized interactive Cloudflare browser session is required to verify the entire installation"
+    "An authorized interactive Cloudflare browser session is required to verify the entire button installation"
   ],
   "relatedEvidence": "docs/fresh-install-verification.json covers fresh CLI provisioning, not the interactive button flow."
 }

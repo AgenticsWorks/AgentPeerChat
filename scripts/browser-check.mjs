@@ -30,11 +30,11 @@ if (!status.initialized) {
   await waitFor('#auth-submit');
   const secret = /^SETUP_SECRET=(.+)$/m.exec(await readFile('.dev.vars', 'utf8'))[1];
   browse('fill', '#auth-name', 'Alex'); browse('fill', '#auth-key', secret); browse('click', '#auth-submit');
-  await waitFor('#saved-key');
+  await waitFor('#field-secret');
   const key = browserValue('document.querySelector("#field-secret").value');
   credentials = { owner: key };
   await writeFile('.wrangler/demo-secrets.json', JSON.stringify(credentials), { mode: 0o600 });
-  browse('check', '#saved-key'); browse('click', '#modal-submit'); await waitFor('#shell:not([hidden])');
+  browse('click', '#modal-submit'); await waitFor('#shell:not([hidden])');
 } else {
   credentials = JSON.parse(await readFile('.wrangler/demo-secrets.json', 'utf8'));
   browse('wait', '--fn', '!document.querySelector("#shell").hidden || !document.querySelector("#onboarding").hidden');
@@ -44,9 +44,10 @@ if (!status.initialized) {
 }
 const me = (await api('/me', credentials.owner)).principal;
 if (!credentials.group) {
-  assert.equal(browserValue('document.querySelector("#connect-agent-name").required'),false);
-  // Create the first agent through the product UI, including the one-time key dialog.
-  browse('click', '#connect-agent-form button'); await waitFor('#saved-key');
+  // Create an unnamed agent through the current product UI.
+  browse('click', '#connect-agent-button'); await waitFor('#field-name');
+  assert.equal(browserValue('document.querySelector("#field-name").required'),false);
+  browse('click', '#modal-submit'); await waitFor('#field-secret');
   const packet = browserValue('document.querySelector("#field-secret").value');
   const connection = JSON.parse(packet.match(/AGENTPEERCHAT_CONFIG_JSON'\n([\s\S]*?)\nAGENTPEERCHAT_CONFIG_JSON/)[1]);
   assert.equal(connection.register_name,true); assert.ok(packet.includes(' summary'));
@@ -54,7 +55,7 @@ if (!credentials.group) {
   const key = 'agt_'+randomUUID().replaceAll('-','');
   const requested=await api('/pairings/request',null,'POST',{code:connection.pairing.code,token_hash:createHash('sha256').update(key).digest('hex')});
   const unauthorized=await fetch(base+'/api/v1/me',{headers:{Authorization:'Bearer '+key}});assert.equal(unauthorized.status,401);
-  browse('check', '#saved-key'); browse('click', '#modal-submit');
+  browse('click', '#modal-submit');
   await waitFor('#pairing-list .pairing-request');
   assert.ok(browserValue('document.querySelector("#pairing-list").textContent').includes(requested.pairing.verification_code));
   browse('click','#pairing-list .primary');
@@ -111,6 +112,15 @@ browse('wait', '--fn', 'document.querySelector("#message-text").value === ""');
 const messages = (await api(`/threads/${smoke.id}?limit=100`, credentials.owner)).items;
 assert.ok(messages.some(m => m.sender_id === me.id && m.content === unique));
 assert.ok((await api('/inbox', credentials.codex.key)).items.some(m => m.content === unique));
+const humanMessage=messages.find(m=>m.sender_id===me.id&&m.content===unique);
+const reply='I will retain owner confirmation before publishing and calculate the daily request budget for this plan.';
+await api('/messages',credentials.codex.key,'POST',{thread_id:smoke.id,type:'text',content:reply},true);
+await api('/messages/'+humanMessage.id+'/ack',credentials.codex.key,'POST');
+browse('open',base);await waitFor('#shell:not([hidden])');
+browse('find','text',unique,'click');await waitFor('[data-message-id]');
+browse('wait','--fn',`document.querySelector('#message-list').textContent.includes(${JSON.stringify(reply)})`);
+assert.ok((await api('/messages/'+humanMessage.id,credentials.owner)).receipts.some(r=>r.recipient_id===credentials.codex.id&&r.acked_at));
+
 browse('find', 'text', 'AgentPeerChat · Launch crew', 'click'); await waitFor('[data-message-id]');
 evaluate('document.querySelector("#message-list").scrollTop = 0');
 browse('screenshot', 'docs/screenshots/conversation-desktop.png');
@@ -133,6 +143,14 @@ browse('fill','#message-text','Please include the free-tier limits and explain w
 browse('wait','--fn',`document.querySelector('#message-list').textContent.includes('Please include the free-tier limits')`);
 for(const agent of [credentials.codex,credentials.researcher]) assert.ok((await api('/inbox',agent.key)).items.some(m=>m.thread_id===joined.id&&m.sender_id===me.id));
 const original=await api(`/threads/${dm.thread.id}`,credentials.owner);assert.equal(original.thread.members.length,2);assert.equal(original.items.length,1);
+browse('select','#identity-perspective',credentials.codex.id);await waitFor('#observe-actions:not([hidden])');
+assert.equal(browserValue('document.querySelector("#message-text").disabled'),true);
+assert.equal(browserValue('document.querySelector("#join-discussion").hidden'),true);
+assert.equal(browserValue('document.querySelector("#my-name").textContent'),me.name);
+browse('select','#identity-perspective','all');await waitFor('#compose-form:not([hidden])');
+assert.equal(browserValue('document.querySelector("#message-text").disabled'),false);
+
+navigate('graph');await waitFor('#conversation-graph canvas');assert.ok(browserValue('document.querySelector("#graph-summary").textContent').length);browse('click','#graph-zoom-in');browse('click','#graph-fit');browse('screenshot','docs/screenshots/graph-desktop.png');
 navigate('network'); browse('screenshot', 'docs/screenshots/network-desktop.png');
 navigate('conversations');
 browse('set', 'viewport', '390', '844');
@@ -146,7 +164,7 @@ assert.ok(urls.every(url => new URL(url).origin === base), 'Unexpected third-par
 const protocol = await fetch(base + '/protocol.html'); assert.equal(protocol.status, 200); assert.ok((await protocol.text()).includes('Receive and acknowledge'));
 const spec = await fetch(base + '/openapi.json'); assert.equal(spec.status, 200); assert.equal((await spec.json()).openapi, '3.1.0');
 await writeFile('docs/browser-verification.json', JSON.stringify({ checked_at: new Date().toISOString(), runtime: process.env.AGENTPEERCHAT_BROWSER_BACKEND === 'sqlite' ? 'Node.js + persistent SQLite' : 'Wrangler + local D1',
-  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Owner-invited Agent pairs through UI; proof rejected until explicit approval', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
+  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Owner-invited Agent pairs through UI; proof rejected until explicit approval', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Agent API reply renders in the browser and processed message has an acknowledgment receipt', 'Conversation graph renders with working zoom and fit controls', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'Agent perspective is read-only and never changes the signed-in owner identity', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
   demo_note: 'Demo messages are fixtures posted through the real API, not autonomous LLM outputs.' }, null, 2));
 browse('close');
 console.log('Browser → API → storage → Agent inbox verified. Screenshots saved in docs/screenshots.');
