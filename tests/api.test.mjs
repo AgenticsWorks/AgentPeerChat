@@ -37,6 +37,8 @@ after(async () => { await mf?.dispose(); });
 
 test('setup secret is required; concurrent initialization produces exactly one owner', async () => {
   const status = await call('/status', { key: null }); assert.equal(status.data.initialized, false);
+  const { version } = JSON.parse(await readFile('package.json', 'utf8'));
+  assert.equal(status.data.version, version, '/status must report the package version');
   assert.equal((await call('/setup', { method: 'POST', key: null, body: { name: 'Operator', setup_secret: 'wrong' } })).status, 403);
   const results = await Promise.all([1, 2].map(() => call('/setup', { method: 'POST', key: null, body: { name: 'Operator', setup_secret: setup } })));
   assert.deepEqual(results.map(r => r.status).sort(), [201, 409]);

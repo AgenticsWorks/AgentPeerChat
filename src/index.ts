@@ -3,6 +3,7 @@ import { pairingPublic, pairingOwner } from './pairing';
 import type { Env, Message, Principal } from './types';
 import { D1MessageStore, IdempotencyConflict } from './store';
 import { ApiError, authenticate, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
+import pkg from '../package.json';
 
 const json = (data: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(data), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }
@@ -39,7 +40,7 @@ async function publicRoutes(request: Request, env: Env, path: string) {
   if (pairingResponse) return pairingResponse;
   if (path === '/status' && request.method === 'GET') {
     const initialized = !!await env.DB.prepare("SELECT 1 FROM principals WHERE kind = 'owner'").first();
-    return json({ name: 'AgentPeerChat', version: '0.1.7', initialized });
+    return json({ name: 'AgentPeerChat', version: pkg.version, initialized });
   }
   if (path === '/setup' && request.method === 'POST') {
     const b = await body(request);
