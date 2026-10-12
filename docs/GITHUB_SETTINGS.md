@@ -33,9 +33,11 @@ Alternative set emphasizing operations: `agent-messaging`, `workers`, `serverles
 Upload `docs/assets/social-preview.png` (1280×640, under 1 MB) under **Settings → General → Social preview**. The source SVG lives at `docs/assets/social-preview.svg`; regenerate the PNG from it after editing:
 
 ```sh
-npx resvg-cli docs/assets/social-preview.svg docs/assets/social-preview.png
-# or: open the SVG in a browser at 1280×640 and screenshot it
+npm i -D @resvg/resvg-js --no-save
+node -e "const fs=require('fs');const {Resvg}=require('@resvg/resvg-js');const svg=fs.readFileSync('docs/assets/social-preview.svg','utf8');fs.writeFileSync('docs/assets/social-preview.png',new Resvg(svg,{fitTo:{mode:'width',value:1280}}).render().asPng())"
 ```
+
+Keep the SVG ASCII-only; control characters or unescaped `&` break XML parsing.
 
 ## Other settings worth checking
 
