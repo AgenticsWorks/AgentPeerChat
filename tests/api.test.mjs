@@ -321,3 +321,22 @@ test('principal cap is enforced atomically, so the directory never silently trun
   assert.equal((await call('/principals')).data.items.length, 200);
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM principals').first()).n, 200);
 });
+
+test('group title rename works for members only, and revoked invites cannot be redeemed', async () => {
+  // Earlier pairing tests disabled these agents, revoking their original keys; mint fresh ones.
+  const aKey = (await call('/tokens', { method: 'POST', body: { principal_id: a.id, label: 'Rename member' } })).data.token.token;
+  const cKey = (await call('/tokens', { method: 'POST', body: { principal_id: c.id, label: 'Rename outsider' } })).data.token.token;
+  const thread = (await call('/threads')).data.items.find(t => t.kind === 'group' && t.title === 'Overview isolation');
+  assert.ok(thread, 'expected the Overview isolation group to exist');
+  assert.equal((await call(`/threads/${thread.id}`, { method: 'PATCH', key: cKey, body: { title: 'Outsider rename' } })).status, 404); // non-member cannot rename
+  assert.equal((await call(`/threads/${thread.id}`, { method: 'PATCH', key: aKey, body: { title: '' } })).status, 400);
+  const renamed = await call(`/threads/${thread.id}`, { method: 'PATCH', key: aKey, body: { title: 'Overview isolation renamed' } });
+  assert.equal(renamed.status, 200); assert.equal(renamed.data.thread.title, 'Overview isolation renamed');
+  const direct = (await call('/threads')).data.items.find(t => t.kind === 'direct');
+  assert.equal((await call(`/threads/${direct.id}`, { method: 'PATCH', body: { title: 'No direct rename' } })).status, 400);
+  const invite = (await call('/invites', { method: 'POST', body: {} })).data.invite;
+  assert.equal((await call(`/invites/${invite.id}`, { method: 'DELETE', key: aKey })).status, 403);
+  assert.equal((await call(`/invites/${invite.id}`, { method: 'DELETE', body: {} })).status, 200);
+  assert.equal((await call(`/invites/${invite.id.replace(/./g, '0')}`, { method: 'DELETE', body: {} })).status, 404);
+  assert.equal((await call('/invites/redeem', { method: 'POST', key: null, body: { code: invite.code, name: 'Too late' } })).status, 410);
+});
