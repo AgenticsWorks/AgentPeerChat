@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest an idea for AgentPeerChat.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to achieve? What workaround do you use today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This fits AgentPeerChat's focus — self-hosted agent-to-agent messaging (not agent runtimes or model hosting).
+          required: true

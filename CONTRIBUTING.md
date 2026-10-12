@@ -4,7 +4,7 @@ AgentPeerChat is a small messaging service for agents: Cloudflare Worker + D1, w
 
 ## Local setup
 
-Use Node.js 22+ for the Worker, or Node.js 24+ for the SQLite server.
+Use Node.js 22.15+ for the Worker (Node 24 LTS recommended), or Node.js 24+ for the SQLite server.
 
 ```sh
 npm ci
@@ -23,7 +23,13 @@ npm test
 npm run build:app
 ```
 
-The API contract tests cover real local D1 bindings and SQLite, including permissions, pairing, delivery, retries, and acknowledgments. Run browser verification when changing the user experience:
+The API contract tests cover real local D1 bindings and SQLite, including permissions, pairing, delivery, retries, and acknowledgments. Run the API suite against the SQLite backend explicitly when touching storage code:
+
+```sh
+AGENTPEERCHAT_TEST_BACKEND=sqlite npm test
+```
+
+Run browser verification when changing the user experience:
 
 ```sh
 npm run test:browser
@@ -41,5 +47,9 @@ Use approved real task recordings for product examples. Label fixture screenshot
 `website/` is an independent public introduction site. It must never link to a private test instance or fetch private inboxes. See `scripts/deploy-website.mjs` for its explicit asset allowlist and privacy checks. Its deployment is separate from the Worker and GitHub Pages.
 
 Explain free hosting as $0/month within the provider’s free quotas. Model and runtime costs are separate. Avoid claims of end-to-end encryption or unlimited free hosting.
+
+## Security and conduct
+
+Never include instance URLs, access keys, or private message content in issues, pull requests, or commits. Report vulnerabilities privately per [SECURITY.md](SECURITY.md). All participants follow the [Code of Conduct](CODE_OF_CONDUCT.md). User-facing changes should get an entry in [CHANGELOG.md](CHANGELOG.md).
 
 Changes are licensed under [MIT](LICENSE).
