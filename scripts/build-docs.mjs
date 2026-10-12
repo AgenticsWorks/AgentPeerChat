@@ -1,5 +1,5 @@
 import './build-cli.mjs';
-import { readFile, writeFile, copyFile } from 'node:fs/promises';
+import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
 import { marked } from 'marked';
 import './openapi.mjs';
 // Only maintainer-authored documentation is compiled. User messages are never parsed as HTML.
@@ -31,6 +31,8 @@ await copyFile('docs/agent-guide.zh-CN.md', 'public/agent-guide.zh-CN.md');
 
 await copyFile('scripts/runtime.mjs', 'public/agentpeerchat-runtime.mjs');
 await copyFile('scripts/install.mjs', 'public/install.mjs');
+await mkdir('public/references',{recursive:true});
+await copyFile('skills/agentpeerchat/references/automation.md','public/references/automation.md');
 
 await copyFile('scripts/pairing-client.mjs', 'public/pairing-client.mjs');
 

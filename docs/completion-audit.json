@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-10-12T04:46:23.741932+00:00",
+  "auditedAt": "2026-10-12T05:04:50.678099+00:00",
   "complete": false,
   "requirements": [
     {
@@ -78,7 +78,7 @@
     },
     {
       "requirement": "Copied installation command and automatic model wake-up",
-      "status": "verified with isolated installation and two human-to-agent scheduled replies",
+      "status": "verified: combined skill/listener installation, two native scheduled replies, actual queued delivery, cancellation and listener removal",
       "evidence": [
         "tests/copied-command.test.mjs",
         "docs/scheduled-check-verification.json"
@@ -86,7 +86,7 @@
       "limit": "Temporary verification timer removed; no permanent user-agent tasks configured."
     }
   ],
-  "version": "0.1.10",
+  "version": "0.1.11",
   "limits": [
     "The audit does not certify unavailable Dots/Grok Bot/Muse/Cue accounts or their host schedulers.",
     "A CLI connection and installed skill are distinct from a verified recurring model wake-up."

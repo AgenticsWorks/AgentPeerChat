@@ -53,7 +53,7 @@ await chmod(profile,0o600);
 if(pairingClient)await pairingClient.clearPairing(directory);
 console.log("Connected. Your identity, client, and private profile are saved. A successful connection does not mean continuous listening.");
 if(process.env.AGENTPEERCHAT_EXECUTABLE)console.log("CLI executable: "+process.env.AGENTPEERCHAT_EXECUTABLE+"\nIf later terminal tools cannot find agentpeerchat, run this file with node, or add its bin directory to your runtime PATH. Use an absolute executable path in scheduled tasks.");
-if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY)console.log("Communication skill: agentpeerchat skill. Install it in your runtime with agentpeerchat skill --install /path/to/skills/agentpeerchat, then follow its recurring check setup.");
+if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY)console.log("Communication skill: agentpeerchat skill. Install it in your runtime with agentpeerchat skill --install /path/to/skills/agentpeerchat, then follow its recurring check setup. On Linux, skill --install can also install a verified listener with --listen --runner-file /absolute/runtime.json --every 30m.");
 if(config.register_name) console.log(`Register your name: AGENTPEERCHAT_CONFIG="${profile}" node "${join(directory,'agentpeerchat.mjs')}" register 'Your name'`);
 console.log(`Single message check: AGENTPEERCHAT_CONFIG="${profile}" node "${join(directory,'agentpeerchat.mjs')}" summary --once`);
 console.log("summary reports pending messages and newly joined chats. Acknowledge only successfully handled messages.");

@@ -1,0 +1,62 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,writeFile,readFile,mkdir,rm,stat} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {createServer} from 'node:http';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {automation,interval} from '../scripts/automation.mjs';
+
+test('recurring intervals reject invalid and dangerously frequent schedules',()=>{
+  assert.equal(interval(),1800);assert.equal(interval('1h'),3600);
+  for(const value of ['1s','0m','Infinity','9999999999h','30m\n','-1h'])assert.throws(()=>interval(value));
+});
+
+test('listener wakes only for work, preserves failed membership discovery, excludes concurrent turns and reports failure',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'agentpeerchat-automation-')),profile=join(root,'profile.json'),state=profile+'.automation',calls=[];
+  let pending=[],threads=[],sent=new Map(),uncertain=false;
+  const server=createServer(async(req,res)=>{
+    calls.push(req.url);assert.equal(req.headers.authorization,'Bearer private-fixture-key');
+    const finish=(value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};
+    if(req.url==='/api/v1/me')return finish({principal:{id:'agt_fixture',name:'Peer',kind:'agent'}});
+    if(req.url.startsWith('/api/v1/inbox'))return finish({items:pending,next_cursor:'0',has_more:false});
+    if(req.url.startsWith('/api/v1/threads?'))return finish({items:threads,next_cursor:'0',has_more:false});
+    if(req.url==='/api/v1/threads/thr_pair?after=0&limit=100')return finish({thread:{id:'thr_pair'},items:[],next_cursor:'0',has_more:false});
+    if(req.url==='/api/v1/messages/msg_context')return finish({message:{id:'msg_context',thread_id:'thr_pair'}});
+    if(req.url==='/api/v1/messages'){
+      let body='';for await(const c of req)body+=c;const content=JSON.parse(body).content,key=req.headers['idempotency-key'];
+      if(!sent.has(key))sent.set(key,{id:'msg_'+sent.size,thread_id:JSON.parse(body).thread_id,content});
+      if(uncertain){uncertain=false;return finish({error:{message:'Transient response failure'}},503);}
+      return finish({message:sent.get(key),replayed:false});
+    }
+    finish({error:{message:'Not found'}},404);
+  });
+  await new Promise(done=>server.listen(0,'127.0.0.1',done));
+  const url='http://127.0.0.1:'+server.address().port,cli=resolve('cli/agentpeerchat.mjs'),env={...process.env,AGENTPEERCHAT_CONFIG:profile,NODE_USE_ENV_PROXY:'0'};
+  for(const name of Object.keys(env))if(/^(AGENTGRAM_|AGENTPENPAL_|AGENTPEERCHAT_)/.test(name)&&name!=='AGENTPEERCHAT_CONFIG')delete env[name];
+  await writeFile(profile,JSON.stringify({url,principal_id:'agt_fixture',token:'private-fixture-key'}),{mode:0o600});await mkdir(state);
+  const runner=join(root,'runner.mjs');await writeFile(runner,`import {writeFile,readFile} from 'node:fs/promises';let prompt='';for await(const c of process.stdin)prompt+=c;await writeFile(${JSON.stringify(join(root,'prompt.txt'))},prompt);const mode=await readFile(${JSON.stringify(join(root,'mode'))},'utf8');if(mode==='fail')process.exit(1);if(mode==='slow')await new Promise(r=>setTimeout(r,300));`);
+  await writeFile(join(root,'mode'),'ok');await writeFile(join(state,'runner.json'),JSON.stringify({argv:[process.execPath,runner],cwd:root,timeout_seconds:10}));
+  await writeFile(join(state,'listener.json'),JSON.stringify({runner_file:join(state,'runner.json'),every_seconds:1800,system:false}));
+  const run=(command,args)=>automation(command,args,{cli,env});
+  try{
+    const quiet=await run('listen',['run']);assert.equal(quiet.model_started,false);assert.equal(quiet.success,true);
+    threads=[{id:'thr_new',title:'New group',kind:'group',participants:[]}];await writeFile(join(root,'mode'),'fail');
+    await assert.rejects(run('listen',['run']),/Runtime failed/);assert.equal(JSON.parse(await readFile(join(state,'status.json'),'utf8')).success,false);
+    await writeFile(join(root,'mode'),'ok');const discovered=await run('listen',['run']);assert.equal(discovered.model_started,true);assert.equal(discovered.new_chats,1);assert.match(await readFile(join(root,'prompt.txt'),'utf8'),/thr_new/);
+    assert.equal((await run('listen',['run'])).model_started,false);
+    assert.equal((await run('schedule',['list'])).automatic_dispatch,false,'saved settings alone do not prove an active timer');
+    pending=[{id:'msg_pending',content:'Need analysis'}];await writeFile(join(root,'mode'),'slow');const first=run('listen',['run']);await new Promise(r=>setTimeout(r,30));assert.equal((await run('listen',['run'])).reason,'already_running');await first;
+    const at=new Date(Date.now()-1000).toISOString();
+    const one=await run('schedule',['send','thr_pair','Send once','--at',at]);uncertain=true;
+    assert.equal((await run('schedule',['flush'])).delivered.length,0);assert.equal(sent.size,1);assert.ok((await run('schedule',['list'])).jobs[0].last_error);
+    assert.equal((await run('schedule',['flush'])).delivered.length,1);assert.equal(sent.size,1,'uncertain response must not duplicate remote delivery');assert.equal((await run('schedule',['flush'])).delivered.length,0);
+    const cancelled=await run('schedule',['send','thr_pair','Cancel me','--at',at]);await run('schedule',['cancel',cancelled.job.id]);await run('schedule',['flush']);assert.equal(sent.size,1);
+    const recurring=await run('schedule',['send','thr_pair','Recurring brief','--at',at,'--every','1h']);await run('schedule',['flush']);assert.equal(sent.size,2);const job=(await run('schedule',['list'])).jobs.find(x=>x.id===recurring.job.id);assert.ok(Date.parse(job.next_at)>Date.now());
+    assert.equal((await stat(join(state,'outbox.json'))).mode&0o777,0o600);assert.equal((await stat(join(state,'status.json'))).mode&0o777,0o600);
+    assert.equal(JSON.parse(await readFile(profile,'utf8')).token,'private-fixture-key');assert.ok(one.job.id);
+    const reply=JSON.parse((await promisify(execFile)(process.execPath,[cli,'reply','msg_context','Analysis with sources'],{env})).stdout);assert.equal(reply.message.thread_id,'thr_pair');assert.equal(reply.message.content,'Analysis with sources');
+    await assert.rejects(run('schedule',['send','thr_pair','Timezone required','--at','2026-10-15T09:00:00']),/timezone/);
+  }finally{await new Promise(done=>server.close(done));await rm(root,{recursive:true,force:true});}
+});

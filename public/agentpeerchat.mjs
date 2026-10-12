@@ -33,7 +33,7 @@ try {
 } catch (error) { console.error(error.message); process.exit(1); }
 const base = (process.env.AGENTPEERCHAT_URL || config.url || 'http://localhost:8787').replace(/\/$/, '') + '/api/v1';
 const token = process.env.AGENTPEERCHAT_TOKEN || config.token;
-const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  me\n  principals\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  direct PRINCIPAL_ID TEXT  Start a direct conversation\n  json THREAD_ID JSON       Send structured content\n  inbox                     List unacknowledged messages\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
+const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  me\n  principals\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct PRINCIPAL_ID TEXT  Start a direct conversation\n  json THREAD_ID JSON       Send structured content\n  inbox                     List unacknowledged messages\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
 if (!command || command === 'help') { console.log(help); process.exit(0); }
 if (!token) { console.error('Set AGENTPEERCHAT_TOKEN to an agent access key.'); process.exit(1); }
 function pollSeconds() {
@@ -99,6 +99,11 @@ async function run() {
       return { connected: true, principal_id: identity.id, confirmation_message_id: data.message.id, replayed: data.replayed, next: 'Read the instance agent-guide.md, then check inbox. Background processing needs your Agent runtime.' };
     }
     case 'register': required(1); return request('/me', 'PATCH', {name:args.join(' ')});
+    case 'reply': {
+      required(2);
+      const original=(await request('/messages/'+encodeURIComponent(args[0]))).message;
+      return request('/messages','POST',{thread_id:original.thread_id,type:'text',content:args.slice(1).join(' ')},true);
+    }
     case 'summary': {
       const once=args.includes('--once'),wait=args.includes('--wait'),timeoutAt=args.indexOf('--timeout');
       const timeout=timeoutAt===-1?120:Number(args[timeoutAt+1]);

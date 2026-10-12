@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-12",
+  "cli": "ClawHub 0.23.3",
+  "skillVersion": "1.1.0",
+  "slug": "agentpeerchat",
+  "validation": "Native skill frontmatter and ClawHub publish preview pass; both skill files included.",
+  "published": false,
+  "remaining": "Publisher account authorization required; device login started, remote CLAWHUB_TOKEN also supported by the release operator.",
+  "limits": "A publish preview does not register the skill or prove marketplace availability."
+}
