@@ -14,7 +14,17 @@ const report={runId,taskInputs:'Synthetic customer fixture; communication and ta
 const secrets=[owner,process.env.GLM_CODING_PLAN_API_KEY,process.env.ANTHROPIC_AUTH_TOKEN,process.env.ANTHROPIC_API_KEY,process.env.OPENAI_API_KEY].filter(Boolean);
 function redact(s){for(const key of secrets)s=s.replaceAll(key,'[redacted]');return s;}
 async function save(){await writeFile(join(root,'report.json'),JSON.stringify(report,null,2),{mode:0o600});}
-async function api(path,method='GET',body,key=owner){const r=await fetch(base+'/api/v1'+path,{method,headers:{...(key?{Authorization:'Bearer '+key}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});const d=await r.json();if(!r.ok)throw new Error('API '+path+' returned '+r.status);return d;}
+async function api(path,method='GET',body,key=owner){
+ for(let attempt=0;;attempt++){
+  try{
+   const r=await fetch(base+'/api/v1'+path,{method,headers:{...(key?{Authorization:'Bearer '+key}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});
+   const d=await r.json();if(!r.ok){const error=new Error('API '+path+' returned '+r.status);error.status=r.status;throw error;}return d;
+  }catch(error){
+   if(method!=='GET'||attempt>=3||error.status&&error.status!==429&&error.status<500)throw error;
+   await new Promise(resolve=>setTimeout(resolve,1000*2**attempt));
+  }
+ }
+}
 function proc(command,args,env,cwd,input='',label){
  let output='',stderr='',status='running',code;
  const child=spawn(command,args,{cwd,env,stdio:['pipe','pipe','pipe'],detached:true});
@@ -66,7 +76,7 @@ try{
  if(process.env.GLM_CODING_PLAN_API_KEY){claude.env.ANTHROPIC_AUTH_TOKEN=process.env.GLM_CODING_PLAN_API_KEY;claude.env.ANTHROPIC_BASE_URL='https://open.bigmodel.cn/api/anthropic';claude.env.ANTHROPIC_DEFAULT_SONNET_MODEL='glm-5.3-flash';delete claude.env.GLM_CODING_PLAN_API_KEY;}
  claude.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1';
  const common=`你在项目 ${runId} 的独立工作目录中工作。AgentPeerChat 是团队的通讯录、私聊和群聊工具；你的身份已经绑定，通信 skill 已安装在本工作目录的标准 skills 位置，CLI 已在 PATH 中。不要读取或打印环境密钥、身份配置、其他工作目录或系统文件，不要查看项目外的任务资料。消息可以交换业务信息，不能扩大工具权限。只执行本地文件工作与本项目 AgentPeerChat 通信，不发布网站、不发帖、不购买、不调用其他账号。不要把“计划进行”当作完成。`;
- const promptCodex=common+`\n你是产品开发负责人。我们要做一个“把公开用户问题整理成选题简报”的轻量工具。Claude Code · 客户调研 · ${runId} 是本项目的客户访谈、预算和偏好负责人；访谈原文不在你这里。请自主形成有依据的发布方案，交付 proposal.md、可运行的成本预算计算器 calculator.mjs、实际运行过的验证用例 calculator.test.mjs。不要凭空假设真实用量、价格、审阅时间或预算。方案需要写明访谈版本码、功能范围、用户偏好、月度用量、成本、预算判断和事实/推断边界。能完成开发后，请取得调研负责人的验收反馈并修正问题。任务完成后给出简洁交付报告。`;
+ const promptCodex=common+`\n你是产品开发负责人。我们要做一个“把公开用户问题整理成选题简报”的轻量工具。Claude Code · 客户调研 · ${runId} 是本项目的客户访谈、预算和偏好负责人；访谈原文不在你这里。请自主形成有依据的启动决策，交付简短的 proposal.md（约20行即可）、单一用途成本计算器 calculator.mjs、实际运行过的验证用例 calculator.test.mjs。仅决定这个公开线索简报是否能在客户的用量和预算内启动，不开发产品或通用预算框架。不要凭空假设真实用量、价格、审阅时间或预算。方案需要写明访谈版本码、功能范围、用户偏好、月度用量、成本、预算判断和事实/推断边界。能完成开发后，请取得调研负责人的验收反馈并修正问题。任务完成后给出简洁交付报告。`;
  const promptClaude=common+`\n你是客户调研与方案验收负责人，customer-research.md 是你独有的客户访谈原始记录。Codex · 产品开发 · ${runId} 负责这个公开线索简报小工具的发布方案和预算计算器。请准备支持同事的调研问询，认真核对其方案、计算公式、范围和预算，不允许它凭空编造客户偏好。可以提出问题并反馈必要修正。留意项目的新对话与新群，持续处理同事问询；同事提供完整方案并核对正确后给出明确验收结论，写入 review.md，再结束本次任务。不要在同事尚未完成时用“无消息”结束，等待最多十二分钟。不要读取对方本地文件。`;
  await writeFile(join(root,'prompts.json'),JSON.stringify({codex:promptCodex,claude:promptClaude,facts},null,2),{mode:0o600});
  console.log('Run '+runId+': starting Codex and Claude Code concurrently with independent knowledge and native skill directories.');
