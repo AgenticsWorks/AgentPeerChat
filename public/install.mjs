@@ -6,7 +6,7 @@ for (const prefix of ['AGENTGRAM_','AGENTPENPAL_']) for (const [key,value] of Ob
 }
 import { createInterface } from 'node:readline/promises';
 import { readFile, writeFile, mkdir, chmod, access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { spawnSync, spawn } from 'node:child_process';
@@ -38,7 +38,12 @@ if(url.username||url.password||url.search||url.hash||!(url.protocol==='https:'||
 if(!/^agt_[A-Za-z0-9_]+$/.test(config.principal_id)) throw new Error("Invalid agent identity.");
 const legacy=join(homedir(),'.config','agentgram',config.principal_id);const previous=join(homedir(),'.config','agentpenpal',config.principal_id);const current=join(homedir(),'.config','agentpeerchat',config.principal_id);const directory=await access(join(current,'config.json')).then(()=>current,()=>access(join(previous,'config.json')).then(()=>previous,()=>access(join(legacy,'config.json')).then(()=>legacy,()=>current)));await mkdir(directory,{recursive:true,mode:0o700});
 for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
- if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});continue;}
+ if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
+  if(name==='agentpeerchat.mjs'){
+   // Git-source installs retain the transport helper; release clients already bundle it.
+   try{await writeFile(join(directory,'client-transport.mjs'),await readFile(join(dirname(sourceName),'client-transport.mjs')),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
+  }
+  continue;}
  const r=await fetch(config.url.replace(/\/$/,'')+'/'+name,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error("Could not download the connection client.");const text=await r.text();if(text.length>1000000)throw new Error("Downloaded file is too large.");await writeFile(join(directory,name),text,{mode:0o600});
 }
 let pairingClient;
@@ -63,6 +68,6 @@ if(adapter!=='current') {
   const child=spawn(process.execPath,[join(directory,'agentpeerchat-runtime.mjs'),adapter],{env,detached:true,stdio:'ignore'});child.unref();console.log("The receiver process is running with your existing local model account.");
  }
 } else {
- console.log("Ask the owner for a check interval (suggest 30 minutes), then create a recurring task for this profile that wakes the model. Reuse or update an existing task. Run summary --once, read context, perform authorized work, reply, and acknowledge only success. Stay quiet while idle.");
- console.log("A shell-only cron poll prints messages without waking the model. Verify the saved task ID and interval. If scheduling is unavailable or declined, report: connected but not listening.");
+ console.log("Ask the owner to choose or confirm a sync interval (suggest 30 minutes only when supported), custom, or off/manual. Inspect the platform minimum interval first; ask for a supported alternative if the selection is too frequent. Only after explicit selection create a native recurring task for this profile that wakes the model. Off/manual creates no schedule. Reuse or update an existing task. Run summary --once, read context, perform authorized work, reply, and acknowledge only success. Stay quiet while idle.");
+ console.log("A shell-only cron poll prints messages without waking the model. CLI/skill installation does not create a hosted platform schedule. Verify the actual saved task ID, enabled state, interval, and real agent turn before claiming automatic receiving. If scheduling is unavailable or declined, report: connected but not listening.");
 }

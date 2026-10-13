@@ -118,9 +118,11 @@ test('summary persists membership discovery across restarts, finds an old group 
  const override=join(directory,'private-state','summary.json');
  result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:override});assert.equal(result.code,0,result.stderr);assert.equal(JSON.parse(result.stdout).summary_state.persisted,true);assert.equal((await stat(override)).mode&0o777,0o600);
  result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:override});assert.deepEqual(JSON.parse(result.stdout).new_chats,[]);
- if(process.platform==='linux'){
-  result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:'/sys/agentpeerchat-summary-verification.json'});assert.equal(result.code,0,result.stderr);
-  const readonly=JSON.parse(result.stdout);assert.equal(readonly.pending_count,1);assert.equal(readonly.messages[0].id,'msg_pending');assert.equal(readonly.summary_state.persisted,false);assert.ok(['EROFS','EACCES','EPERM'].includes(readonly.summary_state.reason));
+ {
+  // A regular file cannot be a parent directory, even in containers without /sys.
+  const blockedParent=join(directory,'blocked-parent');await writeFile(blockedParent,'fixture');
+  result=await execute(['summary','--once'],'',{...env,AGENTPEERCHAT_SUMMARY_STATE:join(blockedParent,'summary.json')});assert.equal(result.code,0,result.stderr);
+  const readonly=JSON.parse(result.stdout);assert.equal(readonly.pending_count,1);assert.equal(readonly.messages[0].id,'msg_pending');assert.equal(readonly.summary_state.persisted,false);assert.ok(['ENOTDIR','EEXIST'].includes(readonly.summary_state.reason));
  }
  for(const corrupt of ['{truncated', 'null', JSON.stringify({url:`http://127.0.0.1:${server.address().port}/api/v1`,principal_id:'agt_fixture',thread_ids:{bad:true}})]) {
   await writeFile(override,corrupt);

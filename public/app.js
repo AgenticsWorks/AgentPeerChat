@@ -36,7 +36,7 @@ async function allPages(path, initial = '0') {
 }
 function authMode(mode) {
   state.authMode = mode;
-  $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
+  $('.skip-link').href = '#onboarding'; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
   $('#auth-kicker').textContent = setup ? t("MAKE IT YOURS") : invite ? t("YOU’RE INVITED") : t("WELCOME HOME");
   $('#auth-title').textContent = setup ? t("Create your private network") : invite ? t("Join the conversation") : t("Open your network");
@@ -105,7 +105,7 @@ function showSecret(title, description, value, extra = '', options = {}) {
 }
 
 async function enter() {
-  state.me = (await api('/me')).principal;
+  state.me = (await api('/me')).principal; $('.skip-link').href = '#conversations';
   $('#onboarding').hidden = true; $('#shell').hidden = false; state.perspective = 'all'; $('#perspective-toolbar').hidden = false; $('#menu-toggle').hidden = false;
   $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? t("拥有者") : t("联系人");
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
@@ -118,7 +118,7 @@ async function refresh() {
   renderPerspective(); renderThreads(); renderPrincipals(); renderGraph();
   if (state.selected) await loadMessages();
   if(state.me.kind==='owner') await renderPairings();
-  $('#sync-state').textContent = '';
+  $('#sync-state').textContent = t('Up to date'); $('#sync-state').classList.remove('sync-warning');
 
 }
 function schedulePoll() {
@@ -128,7 +128,7 @@ function schedulePoll() {
     try { await refresh(); state.pollDelay = 30000; }
     catch (error) {
       if (error.status === 401) { state.me = null; authMode('login'); toast(t("Session ended. Sign in again.")); return; }
-      state.pollDelay = Math.min(state.pollDelay * 2, 300000); $('#sync-state').textContent = t("连接中…");
+      state.pollDelay = Math.min(state.pollDelay * 2, 300000); $('#sync-state').textContent = t('Sync paused · retrying'); $('#sync-state').classList.add('sync-warning');
     }
     schedulePoll();
   }, state.pollDelay + Math.random() * 5000);
@@ -138,7 +138,7 @@ $('#logout').addEventListener('click', async () => {
   try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 function showView(view) {
-  state.view = view; toggleMenu(false);
+  state.view = view; $('.skip-link').href = `#${view}`; toggleMenu(false);
   for (const name of ['conversations', 'network', 'access', 'graph']) $(`#${name}`).hidden = name !== view;
   document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   if (view === 'graph') renderGraph();
@@ -171,8 +171,8 @@ async function selectThread(threadId) {
   state.selected = threadId; state.currentThread = null; state.messages = []; state.cursor = '0';
   $('#observe-actions').hidden = true; $('#message-text').disabled = true; $('#send-button').disabled = true;
   $('#compose-error').textContent = ''; $('#message-text').value = ''; $('#compose-form').dataset.pendingKey = ''; $('#compose-form').dataset.pendingSignature = '';
-  $('#chat-empty').hidden = true; $('#chat-active').hidden = false; renderThreads(); $('#message-list').replaceChildren();
-  try { await loadMessages(true); } catch (error) { toast(error.message); }
+  $('#chat-empty').hidden = true; $('#chat-active').hidden = false; $('#chat-title').textContent = t('Loading conversation…'); $('#chat-members').textContent = ''; renderThreads(); $('#message-list').replaceChildren(el('p', 'empty-list', t('Loading messages…'))); $('#message-list').setAttribute('aria-busy', 'true');
+  try { await loadMessages(true); } catch (error) { if (state.selected === threadId) { $('#message-list').replaceChildren(el('p', 'empty-list error', t('Could not load this conversation. Select it again to retry.'))); toast(error.message); } } finally { if (state.selected === threadId) $('#message-list').setAttribute('aria-busy', 'false'); }
 }
 async function loadMessages(forceScroll = false) {
   const threadId = state.selected, cursor = state.cursor;
@@ -285,12 +285,12 @@ function renderMessages(forceScroll = false) {
       if (message.type === 'artifact') { bubble.classList.add('artifact-message'); bubble.prepend(el('span', 'artifact-icon', '↗'), el('span', 'eyebrow', 'DELIVERABLE')); }
     }
     const footer = el('div', 'message-id'); footer.append(timestamp);
-    const receipts = el('button', 'receipt-button', '✓'); receipts.type = 'button'; receipts.title = t("消息状态"); receipts.setAttribute('aria-label', t("消息状态"));
+    const receipts = el('button', 'receipt-button', t('Saved · details')); receipts.type = 'button'; receipts.title = t("消息状态"); receipts.setAttribute('aria-label', t("消息状态"));
     receipts.addEventListener('click', async () => {
       try {
         const result = await api(`/messages/${message.id}`);
-        const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? t("已接收 ") + time(r.acked_at) : t("等待接收")}`).join('\n');
-        openModal(t("消息状态"), t("查看消息的接收情况。"), async () => { $('#modal').close(); });
+        const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? t("Acknowledged ") + time(r.acked_at) : t("Pending acknowledgment")}`).join('\n');
+        openModal(t("消息状态"), t("Saved by this instance. An acknowledgment confirms processing, not completion of the overall task. Pending does not mean offline. This service does not wake hosted agents."), async () => { $('#modal').close(); });
         $('#modal-fields').append(el('p', 'key-hint', summary || t("没有收件人。")));
         const mine = result.receipts.find(r => r.recipient_id === state.me.id);
         if (mine && !mine.acked_at) {
@@ -350,14 +350,14 @@ function startThread(preselected) {
   $('#modal-fields').append(contacts); $('#modal-submit').textContent = t("取消");
 }
 $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start').addEventListener('click', () => startThread());
-async function showAgentConnection(principal, token, pairing) {
+async function showAgentConnection(principal, token, pairing, syncPreference) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
-  const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, pairing, ownerId });
+  const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, pairing, ownerId, syncPreference });
   await showSecret(principal.nameRequired ? t("一键连接你的 Agent") : t("连接 {0}", principal.name), t("把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。"), instructions, t("这段指令仅供这个 Agent 使用。"), { finishOnCopy:true, copyLabel: t("复制接入指令给 Agent") });
 }
-async function connectNewAgent(name = '', avatar = null) {
+async function connectNewAgent(name = '', avatar = null, syncPreference) {
   const result = await api('/pairings', {method:'POST',data:{name:name.trim(),avatar}});
-  await showAgentConnection({...result.principal,nameRequired:result.name_required}, null, result.pairing);
+  await showAgentConnection({...result.principal,nameRequired:result.name_required}, null, result.pairing, syncPreference);
   await refresh(); toast(t("把指令交给 Agent，收到配对码后回来确认连接。"));
 }
 function avatarPicker(initial = null) {
@@ -383,8 +383,14 @@ function avatarPicker(initial = null) {
 }
 function connectAgentDialog() {
   let avatar;
-  openModal(t('Connect your agent'),t('Choose a name and icon, then copy the connection instructions to your agent.'),async data=>{await connectNewAgent(data.get('name')||'',avatar());});
-  const name=field(t('Agent name (optional)'),'name');name.required=false;name.maxLength=80;avatar=avatarPicker();$('#modal-submit').textContent=t('Generate instructions');
+  openModal(t('Connect your agent'),t('Choose a name and icon, then copy the connection instructions to your agent.'),async data=>{const mode=data.get('sync'); const syncPreference=mode==='custom'?{mode:'interval',minutes:Number(data.get('sync_minutes'))}:['ask','manual'].includes(mode)?{mode}:{mode:'interval',minutes:Number(mode)}; await connectNewAgent(data.get('name')||'',avatar(),syncPreference);});
+  const name=field(t('Agent name (optional)'),'name');name.required=false;name.maxLength=80;avatar=avatarPicker();
+  const schedule=field(t('Inbox check preference'),'sync','','select');
+  for(const [value,label] of [['ask','Ask my agent to confirm'],['1','Every minute'],['5','Every 5 minutes'],['15','Every 15 minutes'],['60','Every hour'],['custom','Custom interval'],['manual','Manual only']]){const option=el('option','',t(label));option.value=value;schedule.append(option);}
+  const custom=field(t('Interval in minutes'),'sync_minutes'); custom.type='number';custom.min='1';custom.max='10080';custom.step='1';custom.value='15';custom.required=false;custom.disabled=true;custom.parentElement.hidden=true;
+  schedule.addEventListener('change',()=>{custom.parentElement.hidden=schedule.value!=='custom';custom.required=schedule.value==='custom';custom.disabled=schedule.value!=='custom';});
+  $('#modal-fields').append(el('p','schedule-notice',t('Preference only · No schedule created here. Your agent must check its platform’s minimum interval, set up the native schedule with your chosen preference, and verify a real wake. Unsupported intervals require your approval of an alternative.')));
+  $('#modal-submit').textContent=t('Generate instructions');
 }
 $('#connect-agent-button').addEventListener('click',connectAgentDialog);
 $('#create-agent').addEventListener('click',connectAgentDialog);
@@ -475,6 +481,7 @@ async function boot() {
     if (!status.initialized) { authMode('setup'); return; }
     try { await enter(); } catch (error) { authMode('login'); if (error.status !== 401) $('#auth-error').textContent = error.message; }
   } catch (error) { authMode('login'); $('#auth-error').textContent = error.message; }
+  finally { $('#boot-state').hidden = true; }
 }
 $('#identity-perspective').addEventListener('change', () => setPerspective($('#identity-perspective').value).catch(error => toast(error.message)));
 $('#refresh-map').addEventListener('click', () => refresh().catch(error => toast(error.message)));

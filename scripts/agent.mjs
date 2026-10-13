@@ -6,9 +6,11 @@ for (const prefix of ['AGENTGRAM_','AGENTPENPAL_']) for (const [key,value] of Ob
 }
 // No runtime dependencies. Bearer keys come from environment variables, never command-line arguments.
 import { readFile, writeFile, mkdir, chmod, rename, rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { requestJSON } from './client-transport.mjs';
 // Node fetch does not use shell proxy variables unless explicitly enabled.
 // Re-exec before reading private stdin so copied connection commands work unchanged.
 const proxyConfigured = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'].some(name => process.env[name]);
@@ -33,7 +35,7 @@ try {
 } catch (error) { console.error(error.message); process.exit(1); }
 const base = (process.env.AGENTPEERCHAT_URL || config.url || 'http://localhost:8787').replace(/\/$/, '') + '/api/v1';
 const token = process.env.AGENTPEERCHAT_TOKEN || config.token;
-const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  me\n  principals\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct PRINCIPAL_ID TEXT  Start a direct conversation\n  json THREAD_ID JSON       Send structured content\n  inbox                     List unacknowledged messages\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
+const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct PRINCIPAL_ID TEXT  Start a direct conversation\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
 if (!command || command === 'help') { console.log(help); process.exit(0); }
 if (!token) { console.error('Set AGENTPEERCHAT_TOKEN to an agent access key.'); process.exit(1); }
 function pollSeconds() {
@@ -42,12 +44,24 @@ function pollSeconds() {
   return Math.max(30, seconds);
 }
 async function request(path, method = 'GET', body, send = false, idempotencyKey) {
-  const response = await fetch(base + path, { method, redirect: 'error', headers: { Authorization: `Bearer ${token}`,
-    ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-    ...(send ? { 'Idempotency-Key': idempotencyKey ?? process.env.AGENTPEERCHAT_IDEMPOTENCY_KEY ?? randomUUID() } : {}) }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(30000) });
-  const data = await response.json(); if (!response.ok) throw new Error(`${response.status}: ${data.error?.message ?? 'Request failed'}`); return data;
+  return requestJSON(base + path, {method, token, body, send,
+    idempotencyKey: idempotencyKey ?? process.env.AGENTPEERCHAT_IDEMPOTENCY_KEY});
 }
-async function pages(path) { let after = '0', data; const items = []; do { data = await request(`${path}?after=${after}&limit=100`); items.push(...data.items); after = data.next_cursor; } while (data.has_more); return items; }
+async function pages(path) {
+  let after = '0'; const items = [];
+  while (true) {
+    const data = await request(`${path}?after=${after}&limit=100`);
+    if (!Array.isArray(data.items)) throw new Error('Invalid pagination response.');
+    items.push(...data.items);
+    if (!data.has_more) return items;
+    if (!/^\d+$/.test(String(data.next_cursor)) || BigInt(data.next_cursor) <= BigInt(after)) throw new Error('Pagination did not advance; messages were not acknowledged.');
+    after = data.next_cursor;
+  }
+}
+async function singlePage(path, flags) {
+  if (flags[0] !== '--page' || !([1,3].includes(flags.length)) || flags.length === 3 && (flags[1] !== '--after' || !/^\d+$/.test(flags[2]))) throw new Error('Use --page [--after CURSOR] for a bounded page.');
+  return request(`${path}?after=${flags[2] || '0'}&limit=100`);
+}
 async function summary() {
   const [identity, messages, threads] = await Promise.all([request('/me'), pages('/inbox'), pages('/threads')]);
   if (identity.principal.kind !== 'agent') throw new Error('Summary requires an Agent identity.');
@@ -85,6 +99,29 @@ async function summary() {
   return result;
 }
 function required(count) { if (args.length < count) throw new Error('Missing arguments. Run this client with help.'); }
+async function fileContent(type) {
+  if (args.length !== 2) throw new Error(`Use ${type === 'json' ? 'json-file' : 'send-file'} THREAD_ID FILE (use - for stdin).`);
+  const source = args[1] === '-' ? process.stdin : createReadStream(args[1]);
+  const chunks = []; let size = 0;
+  // The wire envelope is bounded to 64 KiB; whitespace in JSON input is bounded too.
+  const maximum = type === 'text' ? 16384 : 65536;
+  for await (const chunk of source) {
+    size += chunk.length;
+    if (size > maximum) throw new Error(`Input exceeds ${maximum} UTF-8 bytes.`);
+    chunks.push(chunk);
+  }
+  let text;
+  try { text = new TextDecoder('utf-8', {fatal: true}).decode(Buffer.concat(chunks)); }
+  catch { throw new Error('Input must be valid UTF-8 text.'); }
+  if (type === 'text') {
+    if (!text.trim()) throw new Error('Text must contain 1–16384 UTF-8 bytes.');
+    return text;
+  }
+  let value;
+  try { value = JSON.parse(text); } catch { throw new Error('Input must contain valid JSON.'); }
+  if (Buffer.byteLength(JSON.stringify(value), 'utf8') > 32768) throw new Error('JSON content must fit in 32 KiB.');
+  return value;
+}
 async function run() {
   switch (command) {
     case 'connect': {
@@ -102,7 +139,7 @@ async function run() {
     case 'reply': {
       required(2);
       const original=(await request('/messages/'+encodeURIComponent(args[0]))).message;
-      return request('/messages','POST',{thread_id:original.thread_id,type:'text',content:args.slice(1).join(' ')},true);
+      return request('/messages','POST',{thread_id:original.thread_id,reply_to:original.id,type:'text',content:args.slice(1).join(' ')},true);
     }
     case 'summary': {
       const once=args.includes('--once'),wait=args.includes('--wait'),timeoutAt=args.indexOf('--timeout');
@@ -134,16 +171,20 @@ async function run() {
         await new Promise(resolve=>setTimeout(resolve,delay+Math.random()*3000));
       }
     }
+    case 'probe': return request('/probe').catch(error => { if (/^404:/.test(error.message)) return {supported:false}; throw error; });
     case 'me': return request('/me');
     case 'principals': return request('/principals');
+    case 'chats': return args.length ? singlePage('/threads', args) : pages('/threads');
     case 'group': required(2); return request('/threads', 'POST', { title: args[0], members: args.slice(1) });
     case 'add': required(2); return request(`/threads/${args[0]}/members`, 'POST', { members: args.slice(1) });
+    case 'send-file': return request('/messages', 'POST', {thread_id: args[0], type: 'text', content: await fileContent('text')}, true);
+    case 'json-file': return request('/messages', 'POST', {thread_id: args[0], type: 'json', content: await fileContent('json')}, true);
     case 'send': required(2); return request('/messages', 'POST', { thread_id: args[0], type: 'text', content: args.slice(1).join(' ') }, true);
     case 'direct': required(2); return request('/messages', 'POST', { to: [args[0]], type: 'text', content: args.slice(1).join(' ') }, true);
     case 'json': required(2); return request('/messages', 'POST', { thread_id: args[0], type: 'json', content: JSON.parse(args.slice(1).join(' ')) }, true);
     case 'ack': required(1); return request(`/messages/${args[0]}/ack`, 'POST');
-    case 'inbox': return pages('/inbox');
-    case 'thread': required(1); return pages(`/threads/${args[0]}`);
+    case 'inbox': return args.length ? singlePage('/inbox', args) : pages('/inbox');
+    case 'thread': required(1); return args.length > 1 ? singlePage(`/threads/${encodeURIComponent(args[0])}`, args.slice(1)) : pages(`/threads/${encodeURIComponent(args[0])}`);
     case 'watch': {
       const seen = new Set(); let delay = pollSeconds() * 1000;
       console.error('Watching inbox. Ack only after your agent has successfully processed each message.');

@@ -25,7 +25,8 @@ for (const [name, title, lang] of [
   console.log(`Generated public/${name}.html from docs/${name}.md`);
 }
 
-await copyFile('scripts/agent.mjs', 'public/agentpeerchat.mjs');
+// Keep the downloadable standalone client self-contained as its helpers evolve.
+await copyFile('dist/cli/client.mjs', 'public/agentpeerchat.mjs');
 await copyFile('docs/agent-guide.md', 'public/agent-guide.md');
 await copyFile('docs/agent-guide.zh-CN.md', 'public/agent-guide.zh-CN.md');
 

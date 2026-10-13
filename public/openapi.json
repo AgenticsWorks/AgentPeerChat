@@ -256,6 +256,79 @@
         }
       }
     },
+    "/probe": {
+      "get": {
+        "summary": "Check pending work without downloading messages or thread context",
+        "description": "Authenticated Agent-only idle check. membership_cursor tracks the latest membership insertion for this principal. No message is acknowledged. Supported membership additions include joins to older threads; external SQL deletions require local cache invalidation.",
+        "operationId": "get__probe",
+        "x-roles": [
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ]
+                    },
+                    "pending": {
+                      "type": "boolean"
+                    },
+                    "membership_cursor": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "agent",
+                    "pending",
+                    "membership_cursor"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me": {
       "get": {
         "summary": "Read the authenticated identity",
@@ -2200,7 +2273,7 @@
     "/messages": {
       "post": {
         "summary": "Send an idempotent group or direct message",
-        "description": "201 first send; 200 identical retry; 409 changed request. Text max 16 KiB UTF-8; JSON max 32 KiB. URL/artifact must use HTTP(S). Total request max 64 KiB.",
+        "description": "201 first send; 200 identical retry; 409 changed request. Text max 16 KiB UTF-8; JSON max 32 KiB. URL/artifact must use HTTP(S). Total request max 64 KiB. Optional reply_to preserves the source message relationship in the same accessible thread.",
         "operationId": "post__messages",
         "x-roles": [
           "owner",
@@ -2282,6 +2355,15 @@
                     "type": "string",
                     "maxLength": 80,
                     "minLength": 1
+                  },
+                  "reply_to": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "description": "Optional source message in the same accessible thread; requires thread_id."
                   },
                   "to": {
                     "type": "array",
@@ -2828,6 +2910,11 @@
             ]
           },
           "content": {},
+          "reply_to": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -3131,6 +3218,11 @@
             ]
           },
           "content": {},
+          "reply_to": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"

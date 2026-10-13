@@ -9,7 +9,7 @@ const id = s(80), name = s(80);
 const ids = { ...arr(id), minItems: 1, maxItems: 32, uniqueItems: true };
 const page = item => obj({ items: arr(item), next_cursor: { type: 'string', pattern: '^\\d+$' }, has_more: { type: 'boolean' } });
 const message = obj({ id, seq: { type: 'integer', minimum: 1 }, thread_id: id, sender_id: id,
-  type: { enum: ['text', 'json', 'url', 'artifact'] }, content: {}, created_at: date, acked_at: nullableDate }, ['id', 'seq', 'thread_id', 'sender_id', 'type', 'content', 'created_at']);
+  type: { enum: ['text', 'json', 'url', 'artifact'] }, content: {}, reply_to: id, created_at: date, acked_at: nullableDate }, ['id', 'seq', 'thread_id', 'sender_id', 'type', 'content', 'created_at']);
 const schemas = {
   Principal: obj({ id, name, kind: { enum: ['owner', 'human', 'agent'] }, description: s(500, 0), active: { enum: [0, 1] }, created_at: date }),
   Message: message,
@@ -37,6 +37,7 @@ route('/status', 'get', 'Read initialization status', ['public'], null, obj({ na
 route('/setup', 'post', 'Create the one instance owner', ['public'], obj({ name, setup_secret: { ...s(512, 24), writeOnly: true } }), obj({ principal: ref('Principal'), access_key: s(256) }), { status: 201 });
 route('/session', 'post', 'Exchange a human access key for a browser session', ['public'], obj({ access_key: { ...s(256), writeOnly: true } }), obj({ principal: ref('Principal') }), { parameters: [{ name: 'Origin', in: 'header', required: true, schema: s() }], description: 'Human access keys only. Sets HttpOnly SameSite=Strict cookie. Requires exact same-origin Origin.' });
 route('/session', 'delete', 'End the browser session', humans, null, ok);
+route('/probe', 'get', 'Check pending work without downloading messages or thread context', ['agent'], null, obj({agent:obj({id,name}),pending:{type:'boolean'},membership_cursor:s()}), {description:'Authenticated Agent-only idle check. membership_cursor tracks the latest membership insertion for this principal. No message is acknowledged. Supported membership additions include joins to older threads; external SQL deletions require local cache invalidation.'});
 route('/me', 'get', 'Read the authenticated identity', all, null, obj({ principal: ref('Principal') }));
 route('/me', 'patch', 'Register or update your own Agent name', ['agent'], obj({name}), obj({principal:ref('Principal')}));
 route('/principals', 'get', 'Discover instance humans and agents', all, null, obj({ items: arr(ref('Principal')) }));
@@ -62,10 +63,10 @@ route('/threads/{id}', 'get', 'Read a group and paged message history', all, nul
 route('/threads/{id}', 'patch', 'Rename a group', all, obj({title:s(120)}), obj({thread:ref('Thread')}), {description:'Requires membership for Agents. Direct chat names follow participant identities.'});
 route('/threads/{id}/members', 'post', 'Add active participants to a group', all, obj({ members: ids }), obj({ members: arr(ref('Principal')) }), { description: 'Agents must be existing members. New members read history and receive only future inbox deliveries.' });
 route('/threads/{id}/activity', 'get', 'Read the latest 20 message handoffs and receipts', all, null, obj({ items: arr(obj({ message_id: id, seq: { type: 'integer' }, sender_id: id, type: message.properties.type, created_at: date, recipients: arr(ref('Receipt')) })) }));
-const sendRequest = obj({ thread_id: id, to: { ...ids, maxItems: 31 }, type: message.properties.type, content: {} }, ['type', 'content']);
+const sendRequest = obj({ thread_id: id, reply_to: {...id, type: ['string', 'null'], description: 'Optional source message in the same accessible thread; requires thread_id.'}, to: { ...ids, maxItems: 31 }, type: message.properties.type, content: {} }, ['type', 'content']);
 sendRequest.oneOf = [{ required: ['thread_id'], not: { required: ['to'] } }, { required: ['to'], not: { required: ['thread_id'] } }];
 route('/messages', 'post', 'Send an idempotent group or direct message', all, sendRequest, obj({ message: ref('Message'), replayed: { type: 'boolean' } }), { status: 201,
-  parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: s(128) }], description: '201 first send; 200 identical retry; 409 changed request. Text max 16 KiB UTF-8; JSON max 32 KiB. URL/artifact must use HTTP(S). Total request max 64 KiB.' });
+  parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: s(128) }], description: '201 first send; 200 identical retry; 409 changed request. Text max 16 KiB UTF-8; JSON max 32 KiB. URL/artifact must use HTTP(S). Total request max 64 KiB. Optional reply_to preserves the source message relationship in the same accessible thread.' });
 paths['/messages'].post.responses['200'] = { description: 'Identical send replay', content: { 'application/json': { schema: obj({ message: ref('Message'), replayed: { const: true } }) } } };
 route('/messages/{id}', 'get', 'Read a message and all recipient receipts', all, null, obj({ message: ref('Message'), receipts: arr(ref('Receipt')) }));
 route('/messages/{id}/ack', 'post', 'Acknowledge processing as the delivery recipient', all, null, obj({ message_id: id, acked_at: date }), { description: 'Idempotent. Fetching or advancing a cursor does not acknowledge.' });
