@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, rm, stat, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
@@ -39,7 +39,7 @@ test('server persists messages, acknowledgments and keys across restart; HTTP pr
   const inbox = await call('/api/v1/inbox?include_acked=0', { key: agentKey }); assert.equal(inbox.status, 200); assert.ok(!inbox.data.items.some(message => message.id === sent.data.message.id));
   const history = await call(`/api/v1/messages/${sent.data.message.id}`, { key }); assert.ok(history.data.receipts.find(receipt => receipt.recipient_id === agent.data.principal.id).acked_at);
   const replay = await call('/api/v1/messages', { method: 'POST', key, body: { to: [agent.data.principal.id], type: 'text', content: 'Survives a restart' }, headers: { 'Idempotency-Key': 'persistent-message' } }); assert.equal(replay.status, 200); assert.equal(replay.data.message.id, sent.data.message.id);
-  assert.equal((await app.database.prepare('SELECT COUNT(*) AS n FROM agentgram_migrations').first()).n, 5);
+  assert.equal((await app.database.prepare('SELECT COUNT(*) AS n FROM agentgram_migrations').first()).n, (await readdir(options.migrationsDirectory)).filter(file=>file.endsWith('.sql')).length);
  } finally { if (app) await app.close(); await rm(directory, { recursive: true, force: true }); }
 });
 test('server refuses weak setup secrets and public HTTP origins before creating storage', async () => {
@@ -47,7 +47,7 @@ test('server refuses weak setup secrets and public HTTP origins before creating 
  await assert.rejects(createApplication({ ...options, databasePath: '/unused', publicUrl: 'http://public.example' }), /HTTPS/);
 });
 
-test('real installer waits for pairing approval then saves credentials and delivers its connection message', {timeout:20000}, async t => {
+for(const installMode of ['download','source']) test(`${installMode} installer waits for pairing approval and saves a runnable private client`, {timeout:20000}, async t => {
  const {spawn}=await import('node:child_process');const {readFile}=await import('node:fs/promises');
  const directory=await mkdtemp(join(tmpdir(),'agentpeerchat-pair-install-'));
  const app=await createApplication({...options,databasePath:join(directory,'store.sqlite')});
@@ -58,7 +58,7 @@ test('real installer waits for pairing approval then saves credentials and deliv
  const owner=await call('/setup',null,{name:'Owner',setup_secret:secret});
  const issued=await call('/pairings',owner.access_key,{name:'Installer Agent'});
  const profile=join(directory,'.config','agentpeerchat',issued.principal.id,'config.json');
- const child=spawn(process.execPath,['scripts/install.mjs','--from-stdin'],{env:{...process.env,HOME:directory,AGENTPEERCHAT_CONFIG:profile,AGENTPEERCHAT_TOKEN:'',AGENTPEERCHAT_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
+ const child=spawn(process.execPath,(installMode==='source'?['cli/agentpeerchat.mjs','join']:['scripts/install.mjs','--from-stdin']),{env:{...process.env,HOME:directory,AGENTPEERCHAT_CONFIG:profile,AGENTPEERCHAT_TOKEN:'',AGENTPEERCHAT_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
  t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL');});
  let out='',err='',approval;
  child.stdout.on('data',bytes=>{out+=bytes;const code=/Pairing code: ([A-F0-9]{4}-[A-F0-9]{4})/.exec(out)?.[1];if(code&&!approval)approval=call(`/pairings/${issued.pairing.id}/approve`,owner.access_key,{verification_code:code});});child.stderr.on('data',bytes=>err+=bytes);
@@ -66,6 +66,9 @@ test('real installer waits for pairing approval then saves credentials and deliv
  const result=await new Promise(resolve=>child.on('close',resolve));await approval;assert.equal(result,0,err);
  const saved=JSON.parse(await readFile(profile,'utf8'));assert.equal(saved.pairing,undefined);assert.equal((await stat(profile)).mode&0o777,0o600);assert.ok(!out.includes(saved.token));
  assert.equal((await call('/me',saved.token)).principal.id,issued.principal.id);
+ const {execFile}=await import('node:child_process');const {promisify}=await import('node:util');
+ const checked=await promisify(execFile)(process.execPath,[join(directory,'.config','agentpeerchat',issued.principal.id,'agentpeerchat.mjs'),'me'],{env:{...process.env,AGENTPEERCHAT_CONFIG:profile,AGENTPEERCHAT_URL:'',AGENTPEERCHAT_TOKEN:'',NODE_USE_ENV_PROXY:'0'}});
+ assert.equal(JSON.parse(checked.stdout).principal.id,issued.principal.id);
  assert.ok((await call('/inbox',owner.access_key)).items.some(m=>m.sender_id===issued.principal.id));
  await assert.rejects(stat(join(directory,'.config','agentpeerchat',issued.principal.id,'pending-pairing.json')));
 });

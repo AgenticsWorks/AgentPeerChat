@@ -24,7 +24,7 @@ before(async () => {
     db = new SQLiteDatabase(':memory:');
     mf = { dispatchFetch: (url, options) => worker.fetch(new Request(url, options), { DB: db, SETUP_SECRET: setup, ASSETS: { fetch: async () => new Response('static assets') } }), getD1Database: async () => db, dispose: async () => db.close() };
   } else mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'agentpeerchat', modules: true, script: bundled.outputFiles[0].text, compatibilityDate: '2026-10-02',
-    d1Databases: { DB: 'test-database' }, bindings: { SETUP_SECRET: setup },
+    d1Databases: { DB: 'test-database', MIGRATION_DB: 'migration-test-database' }, bindings: { SETUP_SECRET: setup },
     serviceBindings: { ASSETS: async () => new Response('static assets') } }] }));
   db = await mf.getD1Database('DB');
   for (const file of (await readdir('migrations')).filter(f => f.endsWith('.sql')).sort()) {
@@ -314,6 +314,131 @@ test('pairing invitation is bounded, single-device, retryable, and denied on exp
   await call(`/principals/${a.id}`,{method:'PATCH',body:{active:true}});
 });
 
+test('Agent probe is private, cheap to poll, and detects membership in older empty threads', async () => {
+  const created = (await call('/agents', { method: 'POST', body: { name: 'Probe reader' } })).data;
+  const agentId = created.principal.id, key = created.token.token;
+  const probe = async () => {
+    const response = await call('/probe', { key });
+    assert.equal(response.status, 200);
+    assert.deepEqual(Object.keys(response.data).sort(), ['agent', 'membership_cursor', 'pending']);
+    assert.deepEqual(Object.keys(response.data.agent).sort(), ['id', 'name']);
+    return response.data;
+  };
+  assert.deepEqual(await probe(), { agent: { id: agentId, name: 'Probe reader' }, pending: false, membership_cursor: '0' });
+  const plan = await db.prepare('EXPLAIN QUERY PLAN SELECT MAX(rowid) FROM thread_members WHERE principal_id = ?').bind(agentId).all();
+  assert.ok(plan.results.some(row => /USING COVERING INDEX members_principal_latest/.test(row.detail)), 'migration enables indexed newest-membership lookup');
+  assert.equal((await call('/probe', { key: null })).status, 401);
+  assert.equal((await call('/probe', { key: 'invalid' })).status, 401);
+  assert.equal((await call('/probe')).status, 403);
+  const human = (await call('/tokens', { method: 'POST', body: { principal_id: humanId, label: 'Probe human' } })).data.token.token;
+  assert.equal((await call('/probe', { key: human })).status, 403);
+
+  const older = (await call('/threads', { method: 'POST', body: { title: 'Older empty group', members: [b.id] } })).data.thread;
+  assert.equal((await probe()).membership_cursor, '0', 'other principals cannot change this Agent’s membership cursor');
+  const newer = (await call('/threads', { method: 'POST', body: { title: 'New empty group', members: [agentId] } })).data.thread;
+  const initial = await probe();
+  assert.equal(initial.pending, false);
+  assert.notEqual(initial.membership_cursor, '0', 'an empty thread still changes membership');
+  await call(`/threads/${older.id}/members`, { method: 'POST', body: { members: [agentId] } });
+  const added = await probe();
+  assert.ok(BigInt(added.membership_cursor) > BigInt(initial.membership_cursor), 'joining an old thread must invalidate cached membership');
+  await call(`/threads/${older.id}/members`, { method: 'POST', body: { members: [agentId] } });
+  assert.equal((await probe()).membership_cursor, added.membership_cursor, 'idempotent membership inserts do not invalidate the cursor');
+  const sent = await call('/messages', { method: 'POST', idempotency: 'probe-pending', body: { thread_id: newer.id, type: 'text', content: 'Pending until acknowledged.' } });
+  assert.equal(sent.status, 201);
+  assert.equal((await probe()).pending, true);
+  assert.equal((await probe()).membership_cursor, added.membership_cursor, 'message activity is not membership activity');
+  await call(`/messages/${sent.data.message.id}/ack`, { method: 'POST', key });
+  assert.equal((await probe()).pending, false, 'the last acknowledgment clears pending');
+  await call('/me', { method: 'PATCH', key, body: { name: 'Renamed probe reader' } });
+  assert.equal((await probe()).agent.name, 'Renamed probe reader');
+  const replacement = (await call('/tokens', { method: 'POST', body: { principal_id: agentId, label: 'Probe replacement' } })).data.token;
+  await call(`/tokens/${created.token.id}`, { method: 'DELETE' });
+  assert.equal((await call('/probe', { key })).status, 401, 'revoked credentials never return a successful idle result');
+  assert.equal((await call('/probe', { key: replacement.token })).status, 200);
+  await call(`/principals/${agentId}`, { method: 'PATCH', body: { active: false } });
+  assert.equal((await call('/probe', { key: replacement.token })).status, 401);
+});
+
+test('inbox and thread pages preserve every message beyond 100 items with identical timestamps', async () => {
+  const created = (await call('/agents', { method: 'POST', body: { name: 'Paged reader' } })).data;
+  const key = created.token.token;
+  const thread = (await call('/threads', { method: 'POST', body: { title: 'Sequence pagination', members: [created.principal.id] } })).data.thread;
+  const sent = [];
+  for (let i = 0; i < 105; i++) {
+    const response = await call('/messages', { method: 'POST', idempotency: `same-time-page-${i}`, body: { thread_id: thread.id, type: 'text', content: `Message ${i}` } });
+    assert.equal(response.status, 201);
+    sent.push(response.data.message);
+  }
+  await db.prepare('UPDATE messages SET created_at = ? WHERE thread_id = ?').bind('2026-01-01T00:00:00.000Z', thread.id).run();
+  for (const path of ['/inbox', `/threads/${thread.id}`]) {
+    const first = (await call(`${path}?limit=100`, { key })).data;
+    assert.equal(first.items.length, 100);
+    assert.equal(first.has_more, true);
+    assert.equal(first.next_cursor, String(first.items.at(-1).seq));
+    const second = (await call(`${path}?limit=100&after=${first.next_cursor}`, { key })).data;
+    assert.equal(second.items.length, 5);
+    assert.equal(second.has_more, false);
+    assert.equal(second.next_cursor, String(second.items.at(-1).seq));
+    assert.deepEqual([...first.items, ...second.items].map(m => m.id), sent.map(m => m.id));
+    assert.equal(new Set([...first.items, ...second.items].map(m => m.created_at)).size, 1);
+    const empty = (await call(`${path}?limit=100&after=${second.next_cursor}`, { key })).data;
+    assert.deepEqual(empty, { ...(empty.thread ? { thread: empty.thread } : {}), items: [], next_cursor: second.next_cursor, has_more: false });
+    assert.equal((await call(`${path}?limit=101`, { key })).status, 400);
+  }
+});
+
+test('maximum legal UTF-8 messages continue across byte-bounded inbox and history pages', async () => {
+  const created = (await call('/agents', { method: 'POST', body: { name: 'Large-page reader' } })).data;
+  const key = created.token.token;
+  const thread = (await call('/threads', { method: 'POST', body: { title: 'Byte pagination', members: [created.principal.id] } })).data.thread;
+  const body = { thread_id: thread.id, type: 'artifact', content: { url: 'https://example.com/large', payload: '' } };
+  const available = 65536 - Buffer.byteLength(JSON.stringify(body));
+  body.content.payload = '界'.repeat(Math.floor(available / 3)) + 'x'.repeat(available % 3);
+  assert.equal(Buffer.byteLength(JSON.stringify(body)), 65536, 'fixture reaches the legal request byte ceiling');
+  const sent = [];
+  for (let i = 0; i < 6; i++) {
+    const response = await call('/messages', { method: 'POST', idempotency: `large-page-${i}`, body });
+    assert.equal(response.status, 201);
+    sent.push(response.data.message);
+  }
+  for (const path of ['/inbox', `/threads/${thread.id}`]) {
+    const seen = [];
+    let cursor = '0', pages = 0;
+    while (true) {
+      const response = await call(`${path}?limit=100&after=${cursor}`, { key });
+      assert.equal(response.status, 200);
+      const page = response.data;
+      assert.ok(page.items.length > 0, 'every nonempty page makes progress');
+      assert.ok(Buffer.byteLength(JSON.stringify(page.items)) <= 256 * 1024, 'serialized UTF-8 item array respects byte budget');
+      assert.equal(page.next_cursor, String(page.items.at(-1).seq));
+      assert.ok(BigInt(page.next_cursor) > BigInt(cursor));
+      assert.ok(page.items.every(m => m.content.payload === body.content.payload));
+      seen.push(...page.items.map(m => m.id));
+      assert.equal(page.has_more, seen.length < sent.length, 'byte-truncated tail sets has_more even below the item limit');
+      cursor = page.next_cursor;
+      pages++;
+      if (!page.has_more) break;
+      assert.ok(pages < sent.length, 'continuation must terminate without duplication');
+    }
+    assert.ok(pages > 1);
+    assert.deepEqual(seen, sent.map(m => m.id));
+  }
+  // An oversized historical/imported row cannot trap the cursor forever. Current
+  // API writes are bounded by 64 KiB, but previously stored data still must drain.
+  const oversize = { url: 'https://example.com/legacy', payload: 'x'.repeat(300 * 1024) };
+  await db.prepare('UPDATE messages SET content = ? WHERE id = ?').bind(JSON.stringify(oversize), sent[0].id).run();
+  for (const path of ['/inbox', `/threads/${thread.id}`]) {
+    const page = (await call(`${path}?limit=100`, { key })).data;
+    assert.equal(page.items.length, 1);
+    assert.equal(page.items[0].id, sent[0].id);
+    assert.equal(page.next_cursor, String(sent[0].seq));
+    assert.equal(page.has_more, true);
+    const next = (await call(`${path}?limit=100&after=${page.next_cursor}`, { key })).data;
+    assert.equal(next.items[0].id, sent[1].id);
+  }
+});
+
 test('principal cap is enforced atomically, so the directory never silently truncates new identities', async () => {
   const count = (await db.prepare('SELECT COUNT(*) AS n FROM principals').first()).n;
   const statements = Array.from({ length: 199 - count }, (_, n) => db.prepare("INSERT INTO principals(id, name, kind) VALUES (?, ?, 'agent')").bind(`cap_${n}`, `Capacity ${n}`));
@@ -341,4 +466,92 @@ test('group title rename works for members only, and revoked invites cannot be r
   assert.equal((await call(`/invites/${invite.id}`, { method: 'DELETE', body: {} })).status, 200);
   assert.equal((await call(`/invites/${invite.id.replace(/./g, '0')}`, { method: 'DELETE', body: {} })).status, 404);
   assert.equal((await call('/invites/redeem', { method: 'POST', key: null, body: { code: invite.code, name: 'Too late' } })).status, 410);
+});
+
+test('replies retain authenticated same-thread correlation across reads, replay and export', async () => {
+  const key = (await call('/tokens', { method: 'POST', body: { principal_id: a.id, label: 'Reply member' } })).data.token.token;
+  const thread = (await call('/threads', { method: 'POST', key, body: { title: 'Reply correlation', members: [ownerId] } })).data.thread;
+  const send = (idempotency, body, caller = key) => call('/messages', { method: 'POST', key: caller, idempotency, body });
+  const original = (await send('reply-original', { thread_id: thread.id, type: 'text', content: 'Which result?' })).data.message;
+  assert.equal(Object.hasOwn(original, 'reply_to'), false);
+  const body = { thread_id: thread.id, type: 'json', content: { result: 'Ready' }, reply_to: original.id };
+  const sent = await send('reply-result', body);
+  assert.equal(sent.status, 201);
+  assert.equal(sent.data.message.reply_to, original.id);
+  assert.equal((await db.prepare('SELECT reply_to FROM messages WHERE id = ?').bind(sent.data.message.id).first()).reply_to, original.id);
+  const replay = await send('reply-result', body);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.data.replayed, true);
+  assert.equal(replay.data.message.id, sent.data.message.id);
+  assert.equal(replay.data.message.reply_to, original.id);
+  for (const path of [`/threads/${thread.id}`, `/inbox?after=${original.seq}`, `/export?after=${original.seq}`, '/overview']) {
+    const result = await call(path);
+    assert.equal(result.status, 200);
+    assert.equal(result.data.items.find(m => m.id === sent.data.message.id)?.reply_to, original.id, path);
+  }
+  assert.equal((await call(`/messages/${sent.data.message.id}`, { key })).data.message.reply_to, original.id);
+  const second = (await send('reply-original-2', { thread_id: thread.id, type: 'text', content: 'Another result?' })).data.message;
+  assert.equal((await send('reply-result', { ...body, reply_to: second.id })).status, 409);
+  assert.equal((await send('reply-result', { ...body, reply_to: null })).status, 409);
+  // The original no-relation request hash must remain compatible across upgrades.
+  const legacyReplay = await send('reply-original', { thread_id: thread.id, type: 'text', content: 'Which result?', reply_to: null });
+  assert.equal(legacyReplay.status, 200);
+  assert.equal(Object.hasOwn(legacyReplay.data.message, 'reply_to'), false);
+  const oldReplay = await send('handoff-1', { thread_id: groupId, type: 'text', content: 'Build the release.' });
+  assert.equal(oldReplay.status, 200);
+  const { createHash } = await import('node:crypto');
+  const expected = createHash('sha256').update(JSON.stringify({ destination: groupId, type: 'text', content: 'Build the release.' })).digest('hex');
+  assert.equal((await db.prepare('SELECT request_hash FROM messages WHERE id = ?').bind(firstMessage.id).first()).request_hash, expected);
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => send('reply-concurrent', { ...body, content: 'One reply' })));
+  assert.equal(concurrent.filter(r => r.status === 201).length, 1);
+  assert.equal(new Set(concurrent.map(r => r.data.message.id)).size, 1);
+  assert.ok(concurrent.every(r => r.data.message.reply_to === original.id));
+});
+
+test('reply targets reject missing, private and cross-thread IDs without revealing them', async () => {
+  const key = (await call('/tokens', { method: 'POST', body: { principal_id: a.id, label: 'Reply validation' } })).data.token.token;
+  const outsider = (await call('/tokens', { method: 'POST', body: { principal_id: c.id, label: 'Reply outsider' } })).data.token.token;
+  const thread = (await call('/threads', { method: 'POST', key, body: { title: 'Reply target validation', members: [ownerId] } })).data.thread;
+  const privateThread = (await call('/threads', { method: 'POST', key: outsider, body: { title: 'Private reply target', members: [ownerId] } })).data.thread;
+  const privateMessage = (await call('/messages', { method: 'POST', key: outsider, idempotency: 'private-reply-target', body: { thread_id: privateThread.id, type: 'text', content: 'Private' } })).data.message;
+  const base = { thread_id: thread.id, type: 'text', content: 'Reply' };
+  for (const reply_to of ['msg_missing', privateMessage.id, firstMessage.id]) {
+    const response = await call('/messages', { method: 'POST', key, idempotency: `invalid-reply-${reply_to}`, body: { ...base, reply_to } });
+    assert.equal(response.status, 404);
+    assert.equal(response.data.error.code, 'not_found');
+    assert.equal(response.data.error.message, 'Message not found.');
+  }
+  const inaccessible = await call('/messages', { method: 'POST', key, idempotency: 'inaccessible-reply', body: { ...base, thread_id: privateThread.id, reply_to: privateMessage.id } });
+  assert.equal(inaccessible.status, 404);
+  for (const reply_to of ['', ' '.repeat(3), 12, {}, 'x'.repeat(81)]) {
+    assert.equal((await call('/messages', { method: 'POST', key, idempotency: 'malformed-reply', body: { ...base, reply_to } })).status, 400);
+  }
+  assert.equal((await call('/messages', { method: 'POST', key, idempotency: 'reply-with-to', body: { to: [ownerId], type: 'text', content: 'Reply', reply_to: firstMessage.id } })).status, 400);
+  assert.equal((await call(`/threads/${thread.id}`, { key })).data.items.length, 0);
+});
+
+
+test('reply migration preserves populated legacy history and nullable foreign-key integrity', async () => {
+  let migrationDb;
+  const sqlite = process.env.AGENTPEERCHAT_TEST_BACKEND === 'sqlite';
+  if (sqlite) {
+    const { SQLiteDatabase } = await import('../server/sqlite.mjs');
+    migrationDb = new SQLiteDatabase(':memory:');
+  } else migrationDb = await mf.getD1Database('MIGRATION_DB');
+  try {
+    const migrations = (await readdir('migrations')).filter(f => f.endsWith('.sql')).sort();
+    for (const file of migrations.filter(f => f < '0006_message_replies.sql')) {
+      await migrationDb.exec((await readFile(`migrations/${file}`, 'utf8')).replaceAll('\n', ' '));
+    }
+    await migrationDb.exec("INSERT INTO principals(id,name,kind) VALUES ('migration-owner','Owner','owner'); INSERT INTO threads(id,title,created_by) VALUES ('migration-thread','Legacy','migration-owner'); INSERT INTO messages(id,thread_id,sender_id,type,content,idempotency_key,request_hash) VALUES ('migration-message','migration-thread','migration-owner','text','\"Legacy content\"','legacy-key','legacy-hash');");
+    const before = await migrationDb.prepare("SELECT * FROM messages WHERE id = 'migration-message'").first();
+    await migrationDb.exec((await readFile('migrations/0006_message_replies.sql', 'utf8')).replaceAll('\n', ' '));
+    const after = await migrationDb.prepare("SELECT * FROM messages WHERE id = 'migration-message'").first();
+    assert.deepEqual(after, { ...before, reply_to: null });
+    const insert = target => migrationDb.prepare("INSERT INTO messages(id,thread_id,sender_id,type,content,idempotency_key,request_hash,reply_to) VALUES ('migration-reply','migration-thread','migration-owner','text','\"Reply\"','reply-key','reply-hash',?)").bind(target).run();
+    await assert.rejects(insert('missing-message'));
+    await insert('migration-message');
+    await migrationDb.prepare("DELETE FROM messages WHERE id = 'migration-message'").run();
+    assert.equal((await migrationDb.prepare("SELECT reply_to FROM messages WHERE id = 'migration-reply'").first()).reply_to, null);
+  } finally { if (sqlite) migrationDb.close(); }
 });

@@ -96,6 +96,16 @@ async function api(request: Request, env: Env, url: URL) {
   if (pairingResponse) return pairingResponse;
   const store = new D1MessageStore(env.DB), method = request.method;
   if (path === '/me' && method === 'GET') return json({ principal: p });
+  if (path === '/probe' && method === 'GET') {
+    if (p.kind !== 'agent') fail(403, 'agent_required', 'Only an Agent may probe its inbox.');
+    // Memberships are append-only through the API. Their own rowids also detect
+    // joining an older thread, unlike the rowid of the thread itself.
+    const probe = await env.DB.prepare(`SELECT
+      EXISTS (SELECT 1 FROM deliveries WHERE recipient_id = ? AND acked_at IS NULL) AS pending,
+      (SELECT CAST(COALESCE(MAX(rowid), 0) AS TEXT) FROM thread_members WHERE principal_id = ?) AS membership_cursor`)
+      .bind(p.id, p.id).first<{ pending: number; membership_cursor: string }>();
+    return json({ agent: { id: p.id, name: p.name }, pending: !!probe?.pending, membership_cursor: probe!.membership_cursor });
+  }
   if (path === '/me' && method === 'PATCH') {
     if (p.kind !== 'agent') fail(403, 'agent_required', 'Only an Agent may register its own name.');
     const b = await body(request), name = str(b.name, 'name', 80);
@@ -283,7 +293,10 @@ async function api(request: Request, env: Env, url: URL) {
     }
     if (b.thread_id !== undefined && b.to !== undefined) fail(400, 'invalid_destination', 'Use thread_id or to, not both.');
     const destination = b.thread_id !== undefined ? str(b.thread_id, 'thread_id', 80) : ids(b.to, 'to');
-    const requestHash = await hash(JSON.stringify({ destination, type, content }));
+    const replyTo = b.reply_to == null ? undefined : str(b.reply_to, 'reply_to', 80);
+    if (replyTo && typeof destination !== 'string') fail(400, 'invalid_destination', 'Replies require thread_id.');
+    // Keep legacy hashes unchanged when no reply relationship was supplied.
+    const requestHash = await hash(JSON.stringify({ destination, type, content, ...(replyTo ? { reply_to: replyTo } : {}) }));
     // Compare before resolving participants so retries remain valid after an agent is disabled.
     const existing = await env.DB.prepare('SELECT id, request_hash FROM messages WHERE sender_id = ? AND idempotency_key = ?')
       .bind(p.id, key).first<{ id: string; request_hash: string }>();
@@ -294,6 +307,12 @@ async function api(request: Request, env: Env, url: URL) {
     let threadId: string, recipients: string[], newThread: { title: string; members: string[]; kind?: 'group' | 'direct' } | undefined;
     if (typeof destination === 'string') {
       threadId = destination; await threadAccess(env, threadId, p);
+      if (replyTo) {
+        // Check only within the already-authorized destination. Missing, private and
+        // cross-thread message IDs are indistinguishable to the caller.
+        const original = await env.DB.prepare('SELECT id FROM messages WHERE id = ? AND thread_id = ?').bind(replyTo, threadId).first();
+        if (!original) fail(404, 'not_found', 'Message not found.');
+      }
       const members = await threadMembers(env, threadId);
       if (!members.some(m => m.id === p.id) && (await threadAccess(env, threadId, p)).kind === 'direct') fail(403, 'direct_observer', 'You can observe this conversation; create a group to join it.');
       if (!members.some(m => m.id === p.id) && members.length >= 32) fail(409, 'member_limit', 'This thread already has 32 participants.');
@@ -310,7 +329,7 @@ async function api(request: Request, env: Env, url: URL) {
       newThread = { title: direct ? (await findPrincipal(env, recipients[0])).name : 'New group', members, kind: direct ? 'direct' : 'group' };
     }
     const result = await store.put({ id: id('msg'), thread_id: threadId, sender_id: p.id, type, content,
-      idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread });
+      idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread, reply_to: replyTo });
     return json(result, result.replayed ? 200 : 201);
   }
   if (path === '/inbox' && method === 'GET') {
@@ -352,21 +371,21 @@ async function api(request: Request, env: Env, url: URL) {
     const agentDelivery = "SELECT 1 FROM deliveries d JOIN principals r ON r.id = d.recipient_id WHERE d.message_seq = m.seq AND r.kind = 'agent'";
     if (status === 'pending') where.push(`EXISTS (${agentDelivery} AND d.acked_at IS NULL)`);
     if (status === 'acked') where.push(`EXISTS (${agentDelivery}) AND NOT EXISTS (${agentDelivery} AND d.acked_at IS NULL)`);
-    const { results } = await env.DB.prepare(`SELECT m.seq, m.id, m.thread_id, m.sender_id, m.type, m.content, m.created_at, t.title AS thread_title,
+    const { results } = await env.DB.prepare(`SELECT m.seq, m.id, m.thread_id, m.sender_id, m.type, m.content, m.created_at, m.reply_to, t.title AS thread_title,
       (SELECT json_group_array(json_object('recipient_id', d.recipient_id, 'kind', r.kind, 'acked_at', d.acked_at))
         FROM deliveries d JOIN principals r ON r.id = d.recipient_id WHERE d.message_seq = m.seq) AS recipients
       FROM messages m JOIN threads t ON t.id = m.thread_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY m.seq DESC LIMIT ?`).bind(...args, limit + 1).all<Message & { content: string; recipients: string }>();
-    const items = results.slice(0, limit).map(m => ({ ...m, content: JSON.parse(m.content), recipients: JSON.parse(m.recipients) }));
+    const items = results.slice(0, limit).map(({ reply_to, ...m }) => ({ ...m, ...(reply_to ? { reply_to } : {}), content: JSON.parse(m.content), recipients: JSON.parse(m.recipients) }));
     return json({ items, next_cursor: items.length ? String(items.at(-1)!.seq) : null, has_more: results.length > limit });
   }
   if (path === '/export' && method === 'GET') {
     owner(p);
     // Paged JSON export of message history; credentials and secrets are never exported.
     const { after, limit } = pagination(url);
-    const { results } = await env.DB.prepare('SELECT seq, id, thread_id, sender_id, type, content, created_at FROM messages WHERE seq > ? ORDER BY seq LIMIT ?')
+    const { results } = await env.DB.prepare('SELECT seq, id, thread_id, sender_id, type, content, created_at, reply_to FROM messages WHERE seq > ? ORDER BY seq LIMIT ?')
       .bind(after, limit + 1).all<Message & { content: string }>();
-    const items = results.slice(0, limit).map(m => ({ ...m, content: JSON.parse(m.content) }));
+    const items = results.slice(0, limit).map(({ reply_to, ...m }) => ({ ...m, ...(reply_to ? { reply_to } : {}), content: JSON.parse(m.content) }));
     return json({ items, next_cursor: String(items.at(-1)?.seq ?? after), has_more: results.length > limit });
   }
   fail(404, 'not_found', 'API endpoint not found.');

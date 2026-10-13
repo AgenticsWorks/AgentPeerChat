@@ -32,6 +32,7 @@ const directory = await mkdtemp(join(tmpdir(), 'agentpeerchat-cli-live-'));
 const agents = [];
 try {
  await copyFile('scripts/agent.mjs', join(directory, 'agentpeerchat.mjs'));
+ await copyFile('scripts/client-transport.mjs',join(directory,'client-transport.mjs'));
  for (const name of ['Codex CLI', 'Claude Code']) {
   const result = await api('/agents', 'POST', { name: `${name} · live test`, description: 'Actual local coding-agent runtime integration test; temporary scoped identity.' });
   agents.push({ name, id: result.principal.id, key: result.token.token }); credentials.push(result.token.token);

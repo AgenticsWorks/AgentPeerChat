@@ -62,6 +62,7 @@
   "files": [
     "cli/agentpeerchat.mjs",
     "scripts/agent.mjs",
+    "scripts/client-transport.mjs",
     "scripts/install.mjs",
     "scripts/pairing-client.mjs",
     "skills/agentpeerchat/SKILL.md",

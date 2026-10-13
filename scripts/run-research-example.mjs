@@ -49,6 +49,7 @@ async function turn(role,config,prompt){
 }
 try{
  await copyFile('scripts/agent.mjs',join(dir,'agentpeerchat.mjs'));
+ await copyFile('scripts/client-transport.mjs',join(dir,'client-transport.mjs'));
  const [r,v,me]=await Promise.all([api('/me','GET',null,researcher.token),api('/me','GET',null,reviewer.token),api('/me')]);
  const existing=(await api('/threads?limit=100')).items.filter(t=>t.title==='搜索技能选型').at(-1);
  const group=existing||(await api('/threads','POST',{title:'搜索技能选型',members:[reviewer.principal_id,me.principal.id]},researcher.token)).thread;

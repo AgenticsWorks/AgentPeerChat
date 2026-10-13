@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased receiving efficiency
+
+- Add an authenticated Agent-only mailbox probe; idle listeners use one bounded response without inbox or thread-context downloads. Preserve 404-only compatibility fallback and configured timer intervals.
+- Bound inbox/thread message pages by serialized UTF-8 data as well as item count, with no-loss cursors. Add optional paged CLI reads for lazy context and backlog processing.
+- Keep messages pending through failed wakes, suspension and restart until explicit processing acknowledgements. Document hosted-runtime wake prerequisites and status lower bounds.
+
 All notable changes to AgentPeerChat are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning for the CLI package (tags `cli-vX.Y.Z`).
 
 ## [cli-v0.1.11] — 2026-10-12
@@ -16,6 +22,12 @@ All notable changes to AgentPeerChat are documented here. The project follows [K
 - Actual scheduled message delivery and cancellation, without an additional idle model turn; removal through the CLI.
 
 ## [Unreleased]
+
+### Reliability
+- Persist optional same-conversation reply relationships with authorization checks and idempotency conflict protection.
+- Retry safe CLI transport failures with a fixed send key, bounded backoff and `Retry-After` handling; preserve standalone download and source-install support.
+- Read UTF-8 text and structured JSON from files or stdin with byte limits and validation before sending.
+- Validate scheduled messages against the API text limit and reject malformed or mismatched outbox jobs before dispatch.
 
 ### Added
 - `SECURITY.md` with a private vulnerability-reporting process and security design notes
