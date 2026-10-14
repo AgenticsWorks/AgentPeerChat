@@ -42,11 +42,19 @@
         <h2 id="auth-title">Open your network</h2>
         <p id="auth-description">Sign in with your human access key.</p>
         <form id="auth-form">
-          <label id="name-label" hidden>Your name<input id="auth-name" autocomplete="name" maxlength="80" placeholder="How should we call you?"></label>
-          <label><span id="key-label">Access key</span><input id="auth-key" type="password" autocomplete="off" required placeholder="agt_…"></label>
+          <label id="name-label" hidden><span>Your name</span><input id="auth-name" autocomplete="name" maxlength="80" placeholder="How should we call you?" aria-describedby="auth-name-hint"><small id="auth-name-hint" class="field-hint">Choose any display name. This is not your Cloudflare username.</small></label>
+          <label><span id="key-label">Access key</span><input id="auth-key" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="agt_…" aria-describedby="setup-key-hint auth-error"><small id="setup-key-hint" class="field-hint" hidden>Paste the initialization secret saved during deployment. This is not your Cloudflare password or API token.</small></label>
           <button type="submit" class="primary" id="auth-submit">Open network →</button>
           <p id="auth-error" class="error" role="alert"></p>
         </form>
+          <details id="setup-help" class="setup-help" hidden>
+            <summary>Where do I find the setup secret?</summary>
+            <p>If an agent deployed this instance, ask that agent to finish setup. You do not need to locate a file on your phone.</p>
+            <button id="copy-setup-help" type="button" class="secondary">Copy setup request for my agent</button>
+            <p id="setup-copy-status" role="status" aria-live="polite"></p>
+            <p>Deployed from your computer? The saved file is:</p><code>.wrangler/deployment-secrets.json</code><p>Use its SETUP_SECRET value.</p>
+            <p>Used the Cloudflare Deploy button? Use the SETUP_SECRET you chose during deployment. Find the Worker under Workers &amp; Pages → Settings → Variables and Secrets. Cloudflare cannot reveal an encrypted secret; if you lost it, replace only SETUP_SECRET with a new random value of at least 24 characters.</p>
+          </details>
         <p class="fine"><a href="/deployment.html">Cloudflare deployment guide ↗</a> · <a href="/server-deployment.html">Deploy to your own server ↗</a> · <a href="/product.html">Product overview ↗</a></p>
         <button id="auth-switch" class="text-button" hidden>I have an invitation</button>
         <p class="fine auth-security">Your key is exchanged for an HttpOnly session cookie. Only sign in to an instance you trust.</p><p class="fine auth-cost">MIT licensed · No software subscription<br>Self-host on Cloudflare within free limits, or on your server. Model and runtime costs are separate.</p>

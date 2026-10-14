@@ -1,8 +1,14 @@
 {
-  "checked_at": "2026-10-12T03:14:30.277Z",
+  "checked_at": "2026-10-14T15:10:59.790Z",
   "runtime": "Wrangler + local D1",
   "verified": [
     "Owner first-run setup (first invocation)",
+    "Setup at 320/375/390/430/768/1600px without horizontal overflow",
+    "Wrong initialization secret rejected without creating an owner",
+    "Initialization help and Chinese/English field explanations",
+    "Agent setup request excludes entered and configured secrets",
+    "Clipboard success and denied-permission manual-copy fallback",
+    "Whitespace around copied setup secret is trimmed before initialization",
     "Human browser session",
     "Owner-invited Agent pairs through UI; proof rejected until explicit approval",
     "Agent-created group",

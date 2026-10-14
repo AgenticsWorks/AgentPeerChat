@@ -17,7 +17,8 @@ function evaluate(code) { return browse('eval', code); }
 function browserValue(code) { return JSON.parse(evaluate(code)); }
 async function waitFor(selector) { browse('wait', selector); }
 async function api(path, key, method = 'GET', data, send = false) {
-  const r = await fetch(base + '/api/v1' + path, { method, headers: { ...(key ? { Authorization: `Bearer ${key}` } : {}),
+  // Synchronous browser commands can outlive HTTP keep-alive while blocking Node's event loop.
+  const r = await fetch(base + '/api/v1' + path, { method, headers: { Connection:'close', ...(key ? { Authorization: `Bearer ${key}` } : {}),
     ...(data === undefined ? {} : { 'Content-Type': 'application/json' }), ...(send ? { 'Idempotency-Key': randomUUID() } : {}) }, body: data === undefined ? undefined : JSON.stringify(data) });
   const result = await r.json(); assert.ok(r.ok, `${path}: ${r.status} ${JSON.stringify(result)}`); return result;
 }
@@ -29,7 +30,30 @@ let credentials;
 if (!status.initialized) {
   await waitFor('#auth-submit');
   const secret = /^SETUP_SECRET=(.+)$/m.exec(await readFile('.dev.vars', 'utf8'))[1];
-  browse('fill', '#auth-name', 'Alex'); browse('fill', '#auth-key', secret); browse('click', '#auth-submit');
+  for (const width of [320,375,390,430,768,1600]) {
+    browse('set','viewport',String(width),'844');
+    assert.equal(browserValue('document.documentElement.scrollWidth > innerWidth'),false,'Setup must fit viewport '+width);
+    assert.ok(browserValue('document.querySelector("#auth-submit").getBoundingClientRect().right <= innerWidth'),'Setup button must remain visible');
+    if(width<=430)assert.ok(browserValue('document.querySelector("#auth-submit").getBoundingClientRect().bottom <= innerHeight'),'Primary setup action must fit the first phone screen');
+  }
+  browse('set','viewport','390','844');
+  browse('fill','#auth-name','Phone owner');browse('fill','#auth-key','wrong-setup-secret');browse('click','#auth-submit');
+  browse('wait','--fn','document.querySelector("#auth-error").textContent.length > 0');
+  assert.match(browserValue('document.querySelector("#auth-error").textContent'),/does not match/);
+  assert.equal((await api('/status')).initialized,false,'Wrong secret cannot create an owner');
+  assert.equal(browserValue('document.querySelector("#setup-help").open'),true);
+  evaluate('navigator.clipboard.writeText=async value=>{window.setupRequest=value}');browse('click','#copy-setup-help');
+  const request=browserValue('window.setupRequest');assert.ok(request.includes(base));assert.ok(request.includes('deployment-secrets.json'));assert.ok(!request.includes(secret));assert.ok(!request.includes('wrong-setup-secret'));
+  evaluate('navigator.clipboard.writeText=async()=>{throw new Error("Clipboard denied")}');browse('click','#copy-setup-help');await waitFor('#field-secret');
+  assert.equal(browserValue('document.querySelector("#field-secret").value'),request);browse('click','#modal-submit');
+  browse('select','[data-language-switch]','zh');
+  assert.match(browserValue('document.querySelector("#auth-name-hint").textContent'),/显示名字/);
+  assert.equal(browserValue('document.documentElement.scrollWidth > innerWidth'),false,'Chinese setup help must fit phone');
+  browse('screenshot','docs/screenshots/setup-mobile-zh.png');
+  browse('select','[data-language-switch]','en');browse('screenshot','docs/screenshots/setup-mobile-en.png');
+  browse('fill', '#auth-name', 'Alex'); browse('fill', '#auth-key', '  '+secret+'  '); browse('click', '#auth-submit');
+  browse('wait','--fn','document.querySelector("#modal").open || (!document.querySelector("#auth-submit").disabled && document.querySelector("#auth-error").textContent.length > 0)');
+  assert.equal(browserValue('document.querySelector("#auth-error").textContent'),'','Correct setup secret must create owner');
   await waitFor('#field-secret');
   const key = browserValue('document.querySelector("#field-secret").value');
   credentials = { owner: key };
@@ -54,7 +78,7 @@ if (!credentials.group) {
   assert.ok(!connection.token);assert.ok(connection.pairing.code);
   const key = 'agt_'+randomUUID().replaceAll('-','');
   const requested=await api('/pairings/request',null,'POST',{code:connection.pairing.code,token_hash:createHash('sha256').update(key).digest('hex')});
-  const unauthorized=await fetch(base+'/api/v1/me',{headers:{Authorization:'Bearer '+key}});assert.equal(unauthorized.status,401);
+  const unauthorized=await fetch(base+'/api/v1/me',{headers:{Connection:'close',Authorization:'Bearer '+key}});assert.equal(unauthorized.status,401);
   browse('click', '#modal-submit');
   await waitFor('#pairing-list .pairing-request');
   assert.ok(browserValue('document.querySelector("#pairing-list").textContent').includes(requested.pairing.verification_code));
@@ -161,10 +185,10 @@ const errors = browse('errors'); assert.ok(!errors.trim(), `Browser errors: ${er
 const resources = browserValue('JSON.stringify(performance.getEntriesByType("resource").map(r => r.name))');
 const urls = typeof resources === 'string' ? JSON.parse(resources) : resources;
 assert.ok(urls.every(url => new URL(url).origin === base), 'Unexpected third-party request');
-const protocol = await fetch(base + '/protocol.html'); assert.equal(protocol.status, 200); assert.ok((await protocol.text()).includes('Receive and acknowledge'));
-const spec = await fetch(base + '/openapi.json'); assert.equal(spec.status, 200); assert.equal((await spec.json()).openapi, '3.1.0');
+const protocol = await fetch(base + '/protocol.html',{headers:{Connection:'close'}}); assert.equal(protocol.status, 200); assert.ok((await protocol.text()).includes('Receive and acknowledge'));
+const spec = await fetch(base + '/openapi.json',{headers:{Connection:'close'}}); assert.equal(spec.status, 200); assert.equal((await spec.json()).openapi, '3.1.0');
 await writeFile('docs/browser-verification.json', JSON.stringify({ checked_at: new Date().toISOString(), runtime: process.env.AGENTPEERCHAT_BROWSER_BACKEND === 'sqlite' ? 'Node.js + persistent SQLite' : 'Wrangler + local D1',
-  verified: ['Owner first-run setup (first invocation)', 'Human browser session', 'Owner-invited Agent pairs through UI; proof rejected until explicit approval', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Agent API reply renders in the browser and processed message has an acknowledgment receipt', 'Conversation graph renders with working zoom and fit controls', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'Agent perspective is read-only and never changes the signed-in owner identity', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
+  verified: ['Owner first-run setup (first invocation)', 'Setup at 320/375/390/430/768/1600px without horizontal overflow', 'Wrong initialization secret rejected without creating an owner', 'Initialization help and Chinese/English field explanations', 'Agent setup request excludes entered and configured secrets', 'Clipboard success and denied-permission manual-copy fallback', 'Whitespace around copied setup secret is trimmed before initialization', 'Human browser session', 'Owner-invited Agent pairs through UI; proof rejected until explicit approval', 'Agent-created group', 'Agent adds another participant', 'Human creates group through UI', 'Human adds group participant through UI', 'Text / JSON / artifact rendering', 'Message acknowledgment shown in activity', 'Human sends from composer', 'Message persists in storage and reaches Agent inbox', 'Agent API reply renders in the browser and processed message has an acknowledgment receipt', 'Conversation graph renders with working zoom and fit controls', 'Desktop 1600×1100', 'Mobile 390×844 without horizontal overflow', 'Agent DM direction labels and read-only observer', 'Observer creates separate three-person group and sends to both Agents', 'Original DM membership and history preserved', 'Agent perspective is read-only and never changes the signed-in owner identity', 'No browser errors', 'No third-party browser requests', 'In-app protocol guide and OpenAPI served'],
   demo_note: 'Demo messages are fixtures posted through the real API, not autonomous LLM outputs.' }, null, 2));
 browse('close');
 console.log('Browser → API → storage → Agent inbox verified. Screenshots saved in docs/screenshots.');

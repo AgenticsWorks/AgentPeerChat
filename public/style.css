@@ -351,3 +351,12 @@ body{background:var(--paper)}
 .schedule-notice{background:#f7f2e6;border:1px solid #e5dcc5;border-radius:10px;padding:12px;font-size:11px;line-height:1.7;color:#78623b;margin-top:15px}dialog{max-height:calc(100dvh - 32px);overflow:auto}dialog select{min-height:44px}
 
 .thread-item.selected .conversation-kind{color:#36552b}
+/* Grid children must shrink on phone browsers instead of widening the viewport. */
+.welcome{grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);width:100%}
+.welcome-story,.welcome-form,.form-card{min-width:0;max-width:100%}
+.form-card{width:100%;max-width:380px;overflow-wrap:anywhere}
+.form-card input{min-width:0;max-width:100%;font-size:16px}
+.field-hint{display:block;margin-top:8px;font-size:12px;font-weight:400;line-height:1.6;color:var(--muted)}
+.setup-help{margin:18px 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12px;line-height:1.7}
+.setup-help summary{cursor:pointer;font-weight:600}.setup-help p{margin:12px 0}.setup-help code{display:block;overflow-wrap:anywhere;font-size:12px}.setup-help button{width:100%;white-space:normal;min-height:44px}.setup-help [role=status]:empty{display:none}
+@media(max-width:700px){.welcome{grid-template-columns:minmax(0,1fr)}.welcome[data-mode=setup] .welcome-story{display:none}.welcome-form{padding:28px 20px 36px}.form-card h2{font-size:27px}.form-card .primary{white-space:normal}}

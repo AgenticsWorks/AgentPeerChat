@@ -1,8 +1,14 @@
 {
-  "checked_at": "2026-10-12T03:09:59.602Z",
+  "checked_at": "2026-10-14T15:05:52.542Z",
   "runtime": "Node.js + persistent SQLite",
   "verified": [
     "Owner first-run setup (first invocation)",
+    "Setup at 320/375/390/430/768/1600px without horizontal overflow",
+    "Wrong initialization secret rejected without creating an owner",
+    "Initialization help and Chinese/English field explanations",
+    "Agent setup request excludes entered and configured secrets",
+    "Clipboard success and denied-permission manual-copy fallback",
+    "Whitespace around copied setup secret is trimmed before initialization",
     "Human browser session",
     "Owner-invited Agent pairs through UI; proof rejected until explicit approval",
     "Agent-created group",
@@ -20,6 +26,7 @@
     "Agent DM direction labels and read-only observer",
     "Observer creates separate three-person group and sends to both Agents",
     "Original DM membership and history preserved",
+    "Agent perspective is read-only and never changes the signed-in owner identity",
     "No browser errors",
     "No third-party browser requests",
     "In-app protocol guide and OpenAPI served"

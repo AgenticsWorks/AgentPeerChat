@@ -38,6 +38,8 @@ function authMode(mode) {
   state.authMode = mode;
   $('.skip-link').href = '#onboarding'; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
+  $('#onboarding').dataset.mode = mode;
+  $('#setup-help').hidden = !setup; $('#setup-key-hint').hidden = !setup;
   $('#auth-kicker').textContent = setup ? t("MAKE IT YOURS") : invite ? t("YOU’RE INVITED") : t("WELCOME HOME");
   $('#auth-title').textContent = setup ? t("Create your private network") : invite ? t("Join the conversation") : t("Open your network");
   $('#auth-description').textContent = setup ? t("Use the setup secret from your deployment to create the owner.") : invite ? t("Redeem a one-time invitation to join as a human.") : t("Sign in with your human access key.");
@@ -48,12 +50,17 @@ function authMode(mode) {
   $('#auth-switch').hidden = setup; $('#auth-switch').textContent = invite ? t("I already have an access key") : t("I have an invitation");
 }
 $('#auth-switch').addEventListener('click', () => authMode(state.authMode === 'invite' ? 'login' : 'invite'));
+$('#copy-setup-help').addEventListener('click', async () => {
+  const request = t("Find the initialization secret for my instance at {0}. Verify this URL matches the instance you deployed. Read the SETUP_SECRET value from that deployment's .wrangler/deployment-secrets.json, or use the initialization secret you configured. I authorize you to send only this initialization secret to me privately so I can paste it into the setup page on my phone. Finding the file path alone is not enough. Keep Cloudflare API tokens and other credentials private. If you cannot access the saved secret, tell me before changing it.", location.origin + appBase);
+  try { await navigator.clipboard.writeText(request); $('#setup-copy-status').textContent = t("Copied. Send this request to the agent that deployed your instance."); }
+  catch { await showSecret(t("Setup request"), t("Copy this request to the agent that deployed your instance. It contains no secret."), request); }
+});
 $('#auth-form').addEventListener('submit', async event => {
   event.preventDefault(); $('#auth-error').textContent = ''; $('#auth-submit').disabled = true;
   try {
-    let accessKey = $('#auth-key').value;
+    let accessKey = $('#auth-key').value.trim();
     if (state.authMode === 'setup' || state.authMode === 'invite') {
-      const name = $('#auth-name').value;
+      const name = $('#auth-name').value.trim();
       const result = await api(state.authMode === 'setup' ? '/setup' : '/invites/redeem', {
         method: 'POST', data: state.authMode === 'setup' ? { name, setup_secret: accessKey } : { name, code: accessKey }
       });
@@ -62,7 +69,10 @@ $('#auth-form').addEventListener('submit', async event => {
     }
     await api('/session', { method: 'POST', data: { access_key: accessKey } });
     $('#auth-key').value = ''; await enter();
-  } catch (error) { $('#auth-error').textContent = error.message; }
+  } catch (error) {
+    $('#auth-error').textContent = state.authMode === 'setup' && error.status === 403 ? t("The initialization secret does not match this instance. Use the saved SETUP_SECRET, not a Cloudflare password or API token. Open the help below or ask your deployment agent.") : error.message;
+    if (state.authMode === 'setup') $('#setup-help').open = true;
+  }
   finally { $('#auth-submit').disabled = false; }
 });
 
