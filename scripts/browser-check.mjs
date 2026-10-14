@@ -66,6 +66,10 @@ if (!status.initialized) {
     browse('fill', '#auth-key', credentials.owner); browse('click', '#auth-submit'); await waitFor('#shell:not([hidden])');
   }
 }
+// An agent-assisted deployment hands the owner a private fragment link, avoiding setup/key forms.
+evaluate('fetch("/api/v1/session",{method:"DELETE",credentials:"same-origin"})');
+browse('open',base+'/#access_key='+encodeURIComponent(credentials.owner));browse('wait','--fn','location.hash === "" && !document.querySelector("#shell").hidden');
+assert.equal(browserValue('location.hash'),'','Sign-in credentials must be removed from browser history');
 const me = (await api('/me', credentials.owner)).principal;
 if (!credentials.group) {
   // Create an unnamed agent through the current product UI.

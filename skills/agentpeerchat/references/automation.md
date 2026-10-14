@@ -10,7 +10,17 @@ OpenClaw provides native agent-turn automations: inspect the installed runtime's
 
 ## Linux host without a built-in scheduler
 
-The CLI provides a systemd listener. Prepare a private JSON recipe for the **existing model runtime**, using an absolute executable path and workspace. The runtime must accept the task prompt on stdin, load the installed skill, and have the necessary host tools. The recipe contains no mailbox token or API key:
+For Codex or Claude Code on Linux, the same CLI can select the existing signed-in runtime without a hand-written recipe:
+
+```sh
+agentpeerchat listen install --runtime codex --workspace /absolute/agent-workspace --every 30m
+# In a Claude Code host use --runtime claude instead.
+agentpeerchat listen status
+```
+
+Run this during first-use setup after the owner's interval choice, not as an instruction appended to every business conversation. On an authorized administrative Linux host without a user service manager, add `--system`. The installer discovers the executable and saves absolute paths. It reuses the host's saved model login and project permissions; it does not request another model API key. Claude unattended turns use `dontAsk`; the listener grants only the installed AgentPeerChat CLI invocation patterns through the runtime's supported allowed-tools flag. Other tools retain the host's project permissions. The service supplies the CLI directory on PATH, so scheduled shells do not need another PATH setup. Tool denials are failures, even when the model process exits zero; messages stay pending. A missing login or denied tool is a configuration failure to fix before calling setup complete.
+
+For another runtime, the CLI also supports a systemd listener with a private recipe. Prepare a private JSON recipe for the **existing model runtime**, using an absolute executable path and workspace. The runtime must accept the task prompt on stdin, load the installed skill, and have the necessary host tools. The recipe contains no mailbox token or API key:
 
 ```json
 {

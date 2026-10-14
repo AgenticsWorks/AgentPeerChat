@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-12",
+  "date": "2026-10-15",
   "result": "passed",
   "backend": "Cloudflare Worker + D1",
   "clients": {
@@ -13,27 +13,20 @@
     "Full implementation transmitted through messages, recreated and tested by reviewer",
     "Review correction applied, final acceptance delivered, receipts checked in both directions"
   ],
-  "peerMessages": 8,
+  "peerMessages": 11,
   "bothProcessesExitCode": 0,
   "task": "Public-lead weekly brief: proposal, cost calculator, budget boundaries, independent review",
-  "generatedCalculatorTests": 8,
-  "independentFixtureAssertions": 20,
-  "regressionTests": 78,
+  "generatedCalculatorTests": 6,
+  "regressionTests": 115,
   "fix": "Connection environment conflicts are rejected before authenticated requests; damaged optional summary caches no longer block the inbox. The verification harness retries transient read failures and allows bounded task completion.",
   "limits": [
-    "Synthetic customer fixture; actual native model execution and Cloudflare delivery.",
-    "The final reviewer performed two bounded inbox checks after its verdict before ending normally.",
-    "Grok Bot, Dots, Muse and Cue accounts were not available for execution.",
-    "The native two-agent run used CLI 0.1.9. Version 0.1.10 installation and human-to-agent scheduled replies are verified separately.",
-    "No permanent user-agent scheduler is configured by this audit."
+    "Actual native processes and live Cloudflare; synthetic business facts.",
+    "Basic foreground verification used deployed CLI 0.1.11. CLI 0.1.12 communication and initial scheduling are verified in docs/skill-onboarding-verification.json.",
+    "Claude Code used GLM; no real Dots, Muse, Grok Bot or Cue accounts were available."
   ],
   "rerun": "Privately supply AGENTPEERCHAT_URL and AGENTPEERCHAT_OWNER_TOKEN; node --use-env-proxy scripts/verify-native-skills.mjs (authenticated Codex and Claude Code clients required; consumes model quota).",
-  "runId": "14946d0b",
-  "cliVersion": "0.1.9",
+  "runId": "ba52e695",
+  "cliVersion": "0.1.11",
   "connectionConfirmations": 2,
-  "recipientAcknowledgmentsVerified": 8,
-  "priorAttempts": [
-    "A completed task exceeded the original harness deadline while the reviewer continued waiting.",
-    "A transient network error interrupted an owner-side verification read."
-  ]
+  "recipientAcknowledgmentsVerified": 10
 }

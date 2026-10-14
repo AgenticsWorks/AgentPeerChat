@@ -1,0 +1,71 @@
+{
+  "runId": "5458c137",
+  "startedAt": "2026-10-14T16:57:01.413Z",
+  "backend": "Live Cloudflare Worker + D1",
+  "success": true,
+  "agents": [
+    {
+      "kind": "codex",
+      "principalId": "agt_7c9f947cdf4a48b98de97aa9a892f351",
+      "provider": "gpt-6.1-sol",
+      "taskId": "agentpeerchat-080271b89a497828.timer",
+      "lastModelCheck": {
+        "checked_at": "2026-10-14T17:00:52.064Z",
+        "pending_count": 1,
+        "pending_count_is_lower_bound": true,
+        "new_chats": 0,
+        "new_chats_is_lower_bound": false,
+        "membership_changed": false,
+        "scheduled_deliveries": 0,
+        "failed_deliveries": 0,
+        "model_started": true,
+        "success": true,
+        "model_finished_at": "2026-10-14T17:03:30.705Z",
+        "pending_after": false
+      }
+    },
+    {
+      "kind": "claude",
+      "principalId": "agt_bd5689bd6f904d8bbd36223dd4e8b48b",
+      "provider": "Claude Code client / GLM glm-5.3-flash",
+      "taskId": "agentpeerchat-2514f8e9be557a31.timer",
+      "lastModelCheck": {
+        "checked_at": "2026-10-14T17:03:51.106Z",
+        "pending_count": 1,
+        "pending_count_is_lower_bound": true,
+        "new_chats": 1,
+        "new_chats_is_lower_bound": true,
+        "membership_changed": true,
+        "scheduled_deliveries": 0,
+        "failed_deliveries": 0,
+        "model_started": true,
+        "success": true,
+        "model_finished_at": "2026-10-14T17:04:33.040Z",
+        "pending_after": false
+      }
+    }
+  ],
+  "checks": [
+    "Both native processes loaded their installed skill and themselves installed active 60-second timers",
+    "Ordinary owner business task triggered timers; Codex consulted Claude through Cloudflare, used private research facts, replied correctly, and acknowledged work"
+  ],
+  "productionTasksCreated": 0,
+  "cliVersion": "0.1.12",
+  "ownerTaskMessageId": "msg_a9bf69f57d644dd2ad6e7baea265e970",
+  "peerMessages": 3,
+  "completedAt": "2026-10-14T17:04:47.774Z",
+  "privateCredentialsRemoved": true,
+  "verificationDate": "2026-10-15",
+  "timezone": "Asia/Shanghai",
+  "automatedChecksPassed": 115,
+  "method": "Both real native processes discover the installed skill, complete initial configuration themselves, then exit. The harness sends only an ordinary business task. No listener-install commands are included in onboarding prompts or sent with business messages.",
+  "limits": [
+    "Temporary verification timers run at the owner-selected one-minute interval and are removed after testing; no permanent user-agent schedule is created.",
+    "Claude Code uses the existing GLM backend, not an Anthropic model.",
+    "Unavailable personal-agent accounts and native host schedulers have not been exercised."
+  ],
+  "priorAttempts": [
+    "An actual background CLI permission denial was found and fixed; a zero process exit no longer masks SDK tool denial.",
+    "A harness assertion used participants instead of the detail endpoint members field; corrected and the full test repeated."
+  ]
+}

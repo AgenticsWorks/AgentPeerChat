@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, stat, chmod } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import {createServer} from 'node:http';
 const script = resolve('scripts/deploy-cli.mjs');
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'agentpeerchat-deploy-'));
@@ -23,10 +24,10 @@ if (args[0] === 'd1' && args[1] === 'migrations' && process.env.FAIL_MIGRATION) 
 `);
   return directory;
 }
-function run(directory, extra = {}) {
+function run(directory, extra = {}, args = []) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, AGENTPEERCHAT_SETUP_SECRET: '', FAIL_MIGRATION: '', ...extra };
-    const child = spawn(process.execPath, [script], { cwd: directory, env });
+    const child = spawn(process.execPath, [script,...args], { cwd: directory, env });
     let stdout = '', stderr = ''; child.stdout.on('data', d => stdout += d); child.stderr.on('data', d => stderr += d);
     child.on('error', reject); child.on('close', code => resolve({ code, stdout, stderr }));
   });
@@ -65,4 +66,19 @@ test('failed migrations stop upload; retry keeps resources and the saved setup s
   const retry = await run(directory); assert.equal(retry.code, 0);
   assert.equal(await readFile(join(directory, '.wrangler/deployment-secrets.json'), 'utf8'), saved);
   assert.equal((await calls(directory)).filter(args => args[1] === 'create').length, 1);
+});
+
+test('agent-assisted deploy initializes the owner and saves its private link without printing credentials',async t=>{
+ const directory=await fixture(t);let initialized=false,setupCalls=0,readinessChecks=0;
+ const key='agt_private_owner_fixture_key';const server=createServer(async(req,res)=>{
+  res.setHeader('Content-Type','application/json');
+  if(req.url==='/api/v1/status'){if(++readinessChecks<3){res.statusCode=503;res.setHeader('Content-Type','text/html');res.end('<!DOCTYPE html>not ready');return;}res.end(JSON.stringify({initialized}));return;}
+  if(req.url==='/api/v1/me'){assert.equal(req.headers.authorization,'Bearer '+key);res.end(JSON.stringify({principal:{id:'hum_owner',kind:'owner'}}));return;}
+  if(req.url==='/api/v1/setup'){let raw='';for await(const chunk of req)raw+=chunk;const data=JSON.parse(raw),saved=JSON.parse(await readFile(join(directory,'.wrangler/deployment-secrets.json')));assert.equal(data.setup_secret,saved.SETUP_SECRET);assert.equal(data.name,'Owner');setupCalls++;initialized=true;res.end(JSON.stringify({principal:{id:'hum_owner'},access_key:key}));return;}
+  res.statusCode=404;res.end('{}');
+ });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
+ const args=['--owner','Owner','--url','http://127.0.0.1:'+server.address().port];
+ const first=await run(directory,{},args);assert.equal(first.code,0,first.stderr);assert.ok(!first.stdout.includes(key));assert.ok(!first.stderr.includes(key));
+ const file=join(directory,'.wrangler/owner-access.json'),saved=JSON.parse(await readFile(file));assert.equal(saved.access_key,key);assert.equal((await stat(file)).mode&0o777,0o600);
+ assert.equal((await run(directory,{},args)).code,0);assert.equal(setupCalls,1);
 });

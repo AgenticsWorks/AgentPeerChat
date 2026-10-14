@@ -485,7 +485,14 @@ $('#export-history').addEventListener('click', async () => {
 
 async function boot() {
   try {
-    const invitation = new URLSearchParams(location.hash.slice(1)).get('invite');
+    const parameters=new URLSearchParams(location.hash.slice(1)),signInKey=parameters.get('access_key');
+    if(signInKey){
+      // Fragments are never sent to the server; remove them before any API or navigation.
+      history.replaceState(null,'',location.pathname+location.search);
+      try{await api('/session',{method:'POST',data:{access_key:signInKey}});await enter();}catch(error){authMode('login');$('#auth-error').textContent=error.message;}
+      return;
+    }
+    const invitation = parameters.get('invite');
     if (invitation) { history.replaceState(null, '', location.pathname); authMode('invite'); $('#auth-key').value = invitation; return; }
     const status = await api('/status');
     if (!status.initialized) { authMode('setup'); return; }
@@ -493,6 +500,13 @@ async function boot() {
   } catch (error) { authMode('login'); $('#auth-error').textContent = error.message; }
   finally { $('#boot-state').hidden = true; }
 }
+window.addEventListener('hashchange',()=>{
+ const params=new URLSearchParams(location.hash.slice(1));
+ if(params.has('access_key')||params.has('invite')){
+  clearTimeout(state.timer);$('#shell').hidden=true;$('#boot-state').hidden=false;
+  void boot();
+ }
+});
 $('#identity-perspective').addEventListener('change', () => setPerspective($('#identity-perspective').value).catch(error => toast(error.message)));
 $('#refresh-map').addEventListener('click', () => refresh().catch(error => toast(error.message)));
 function renderPerspective() {

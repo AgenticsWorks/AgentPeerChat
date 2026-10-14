@@ -6,7 +6,7 @@ import {join,resolve} from 'node:path';
 import {createServer} from 'node:http';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {automation,interval} from '../scripts/automation.mjs';
+import {automation,interval,runtimeRecipe} from '../scripts/automation.mjs';
 
 test('recurring intervals reject invalid and dangerously frequent schedules',()=>{
   assert.equal(interval(),1800);assert.equal(interval('1h'),3600);
@@ -37,7 +37,7 @@ test('listener wakes only for work, preserves failed membership discovery, exclu
   const url='http://127.0.0.1:'+server.address().port,cli=resolve('cli/agentpeerchat.mjs'),env={...process.env,AGENTPEERCHAT_CONFIG:profile,NODE_USE_ENV_PROXY:'0'};
   for(const name of Object.keys(env))if(/^(AGENTGRAM_|AGENTPENPAL_|AGENTPEERCHAT_)/.test(name)&&name!=='AGENTPEERCHAT_CONFIG')delete env[name];
   await writeFile(profile,JSON.stringify({url,principal_id:'agt_fixture',token:'private-fixture-key'}),{mode:0o600});await mkdir(state);
-  const runner=join(root,'runner.mjs');await writeFile(runner,`import {writeFile,readFile} from 'node:fs/promises';let prompt='';for await(const c of process.stdin)prompt+=c;await writeFile(${JSON.stringify(join(root,'prompt.txt'))},prompt);const mode=await readFile(${JSON.stringify(join(root,'mode'))},'utf8');if(mode==='fail')process.exit(1);if(mode==='slow')await new Promise(r=>setTimeout(r,300));`);
+  const runner=join(root,'runner.mjs');await writeFile(runner,`import {writeFile,readFile} from 'node:fs/promises';let prompt='';for await(const c of process.stdin)prompt+=c;await writeFile(${JSON.stringify(join(root,'prompt.txt'))},prompt);const mode=await readFile(${JSON.stringify(join(root,'mode'))},'utf8');if(mode==='fail')process.exit(1);if(mode==='denied'){console.log(JSON.stringify({type:'result',is_error:false,permission_denials:[{tool_name:'Bash'}]}));process.exit(0);}if(mode==='slow')await new Promise(r=>setTimeout(r,300));`);
   await writeFile(join(root,'mode'),'ok');await writeFile(join(state,'runner.json'),JSON.stringify({argv:[process.execPath,runner],cwd:root,timeout_seconds:10}));
   await writeFile(join(state,'listener.json'),JSON.stringify({runner_file:join(state,'runner.json'),every_seconds:1800,system:false}));
   const run=(command,args)=>automation(command,args,{cli,env});
@@ -54,6 +54,7 @@ test('listener wakes only for work, preserves failed membership discovery, exclu
     identityId='agt_other';await assert.rejects(run('listen',['run']),/saved profile identity/);identityId='agt_fixture';
     threads=[{id:'thr_new',title:'New group',kind:'group',participants:[]}];await writeFile(join(root,'mode'),'fail');
     await assert.rejects(run('listen',['run']),/Runtime failed/);assert.equal(JSON.parse(await readFile(join(state,'status.json'),'utf8')).success,false);
+    await writeFile(join(root,'mode'),'denied');await assert.rejects(run('listen',['run']),/denied required tools/);
     await writeFile(join(root,'mode'),'ok');const discovered=await run('listen',['run']);assert.equal(discovered.model_started,true);assert.equal(discovered.new_chats,1);assert.match(await readFile(join(root,'prompt.txt'),'utf8'),/Membership changed: true/);
     assert.equal((await run('listen',['run'])).model_started,false);
     assert.equal((await run('schedule',['list'])).automatic_dispatch,false,'saved settings alone do not prove an active timer');
@@ -73,4 +74,12 @@ test('listener wakes only for work, preserves failed membership discovery, exclu
     const reply=JSON.parse((await promisify(execFile)(process.execPath,[cli,'reply','msg_context','Analysis with sources'],{env})).stdout);assert.equal(reply.message.thread_id,'thr_pair');assert.equal(reply.message.content,'Analysis with sources');assert.equal(reply.message.reply_to,'msg_context');
     await assert.rejects(run('schedule',['send','thr_pair','Timezone required','--at','2026-10-15T09:00:00']),/timezone/);
   }finally{await new Promise(done=>server.close(done));await rm(root,{recursive:true,force:true});}
+});
+
+test('native runtime recipes resolve absolute executables and reuse saved host configuration',async()=>{
+ const env={PATH:process.env.PATH,AGENTPEERCHAT_CODEX_CLI:process.execPath,AGENTPEERCHAT_CLAUDE_CLI:process.execPath};
+ const codex=await runtimeRecipe('codex',process.cwd(),env),claude=await runtimeRecipe('claude',process.cwd(),env);
+ assert.equal(codex.argv[0],process.execPath);assert.equal(codex.cwd,process.cwd());assert.ok(codex.argv.includes('workspace-write'));assert.equal(codex.argv.at(-1),'-');
+ assert.ok(claude.argv.includes('user,project'));assert.ok(claude.argv.includes('dontAsk'));assert.ok(!claude.argv.includes('--dangerously-skip-permissions'));const scoped=await runtimeRecipe('claude',process.cwd(),env,'/absolute/agentpeerchat');assert.ok(scoped.argv.includes('Bash(agentpeerchat:*)'));assert.ok(scoped.argv.includes('Bash(node \"/absolute/agentpeerchat\":*)'));assert.ok(!scoped.argv.includes('Bash'));assert.ok(!claude.argv.includes('--tools'));
+ await assert.rejects(runtimeRecipe('missing',process.cwd(),env),/--runtime/);await assert.rejects(runtimeRecipe('codex',process.cwd(),{PATH:''}),/not installed/);
 });

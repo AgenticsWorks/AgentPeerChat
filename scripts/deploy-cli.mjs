@@ -6,10 +6,22 @@ for (const prefix of ['AGENTGRAM_','AGENTPENPAL_']) for (const [key,value] of Ob
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-function wrangler(...args) {
-  const result = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', ...args], { stdio: 'inherit' });
-  if (result.status !== 0) process.exit(result.status ?? 1);
+import { initializeOwner } from './owner-init.mjs';
+const useProxy=['HTTPS_PROXY','https_proxy','HTTP_PROXY','http_proxy'].some(name=>process.env[name]);
+if(useProxy&&process.env.NODE_USE_ENV_PROXY!=='0'&&process.env.NODE_USE_ENV_PROXY!=='1'&&!process.execArgv.includes('--use-env-proxy')&&process.allowedNodeEnvironmentFlags.has('--use-env-proxy')){
+ const env={...process.env,NO_PROXY:[process.env.NO_PROXY,'127.0.0.1','localhost','[::1]'].filter(Boolean).join(',')};
+ const child=spawnSync(process.execPath,['--use-env-proxy',...process.execArgv,...process.argv.slice(1)],{stdio:'inherit',env});process.exit(child.status??1);
 }
+function wrangler(...args) {
+  const capture=args[0]==='deploy';
+  const result = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', ...args], { stdio: capture?['inherit','pipe','inherit']:'inherit',encoding:'utf8' });
+  if(capture&&result.stdout)process.stdout.write(result.stdout);
+  if (result.status !== 0) process.exit(result.status ?? 1);
+  return result.stdout||'';
+}
+const ownerAt=process.argv.indexOf('--owner');
+const ownerName=ownerAt===-1?null:process.argv[ownerAt+1];
+if(ownerAt!==-1&&(!ownerName||ownerName.startsWith('--')||!ownerName.trim()||ownerName.length>80))throw new Error('Provide a display name of 1..80 characters after --owner.');
 let config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));
 let database = config.d1_databases.find(db => db.binding === 'DB');
 if (!database) throw new Error('DB binding is missing from wrangler.jsonc.');
@@ -30,5 +42,11 @@ if (!database.database_id) {
   if (!database?.database_id) throw new Error('D1 was not bound. Set the new database UUID in wrangler.jsonc before retrying.');
 }
 wrangler('d1', 'migrations', 'apply', 'DB', '--remote');
-wrangler('deploy', '--secrets-file', path);
-console.log('Open the workers.dev URL above. Your setup secret is saved locally in .wrangler/deployment-secrets.json; use it once to create the owner.');
+const deployed=wrangler('deploy', '--secrets-file', path);
+if(ownerAt!==-1){
+ const name=ownerName;
+ const urlAt=process.argv.indexOf('--url'),url=urlAt!==-1?process.argv[urlAt+1]:deployed.match(/https:\/\/[a-zA-Z0-9.-]+\.workers\.dev\b/)?.[0];
+ if(!url)throw new Error('Could not identify the deployed URL. Provide --url with your own instance URL.');
+ const result=await initializeOwner({url,name,setupSecret:secrets.SETUP_SECRET,directory:'.wrangler'});
+ console.log(result.requires_existing_login?'This instance already has an owner. Sign in with the existing owner key.':'Owner is ready. The private sign-in link is saved in '+result.file+'. Give it only to the owner; opening it completes browser sign-in without a setup form.');
+}else console.log('Open the workers.dev URL above. Your setup secret is saved locally in .wrangler/deployment-secrets.json; use it once to create the owner. Agent-assisted deploys can use --owner NAME to finish initialization automatically.');

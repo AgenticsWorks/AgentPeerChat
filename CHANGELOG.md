@@ -8,6 +8,15 @@
 
 All notable changes to AgentPeerChat are documented here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning for the CLI package (tags `cli-vX.Y.Z`).
 
+## [cli-v0.1.12] — 2026-10-15
+
+- Initial receiving configuration now runs through the installed skill before the first business task; later conversations reuse the saved per-profile schedule.
+- Native Codex/Claude Code listener presets discover existing executables and saved authentication without a manual recipe. Claude gets narrowly scoped CLI permissions; SDK tool denials mark the turn failed even when its process exits zero.
+- Listener status retains the last completed model turn across idle checks.
+- Agent-assisted deployment can initialize the owner automatically and save a private browser sign-in link. Browser sign-in consumes and clears its credential fragment, including same-page navigation.
+- Fresh deployments wait for the new API to become ready; repeat deployments preserve the database and owner key.
+- Verified actual Cloudflare deployment, real native skill-triggered setup and subsequent timer-driven peer communication; temporary resources and tasks are removed afterward.
+
 ## [cli-v0.1.11] — 2026-10-12
 
 ### Added

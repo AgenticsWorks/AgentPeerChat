@@ -1,0 +1,19 @@
+{
+  "name": "agentpeerchat-check-c3604f13",
+  "success": true,
+  "checks": [
+    "Fresh Worker and D1 provisioned with seven migrations; first owner created automatically; private login file saved; unauthorized inbox rejected",
+    "Repeat deployment reused database and owner identity without replacing credentials"
+  ],
+  "startedAt": "2026-10-14T17:03:47.759Z",
+  "workerRemoved": true,
+  "databaseRemoved": true,
+  "completedAt": "2026-10-14T17:05:18.544Z",
+  "verificationDate": "2026-10-15",
+  "timezone": "Asia/Shanghai",
+  "cliVersion": "0.1.12",
+  "limits": [
+    "This verifies agent-assisted CLI deployment, not interactive Cloudflare OAuth-button provisioning.",
+    "Model runtimes use their own existing authentication and host scheduler."
+  ]
+}

@@ -37,7 +37,7 @@ async function selectProfile(){
 if(command==='skill'){
  const skill=await readFile(skillPath,'utf8');
  if(args.length===1){console.log(skill);process.exit(0);}
- if(args[1]!=='--install'||args.length<3)throw new Error('Use agentpeerchat skill --install DIRECTORY [--listen --runner-file FILE --every 30m].');
+ if(args[1]!=='--install'||args.length<3)throw new Error('Use agentpeerchat skill --install DIRECTORY [--listen --runtime codex|claude --every 30m].');
  const installArgs=args.slice(3);if(installArgs.length&&!installArgs.includes('--listen'))throw new Error('Extra skill options require --listen.');
  const target=resolve(args[2]);await mkdir(target,{recursive:true});await writeFile(join(target,'SKILL.md'),skill);
  const references=join(dirname(skillPath),'references');if(await access(references).then(()=>true,()=>false))await cp(references,join(target,'references'),{recursive:true});

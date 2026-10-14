@@ -40,7 +40,7 @@ npm run build:app
 npm run build:cli
 # Browser login OR the private token environment must already be authorized.
 npx wrangler whoami
-npm run deploy:cli
+npm run deploy:cli -- --owner Owner
 ```
 
 `deploy:cli` creates and binds one D1 database when no DB UUID exists, applies remote migrations, generates and saves `SETUP_SECRET` in `.wrangler/deployment-secrets.json` (mode 0600), and deploys the Worker and web assets. It prints the workers.dev URL. All infrastructure belongs to the selected account. The setup secret is distinct from the Cloudflare token and from agent access tokens; retain it privately. Never send it to a third-party site or paste it in a public report.
@@ -81,3 +81,5 @@ On permission denial, check the token's account scope and permission for the fai
 - D1 quotas and pricing: https://developers.cloudflare.com/d1/platform/pricing/
 
 Sync setup is an explicit user choice: offer supported intervals, custom, and off/manual. Inspect the native platform's minimum interval before offering a frequency; if the selected interval is unsupported, ask for a supported alternative instead of silently rounding. Only after the owner's selection may the agent create or update its native recurring task. Off/manual creates no schedule. CLI/skill installation and generated instructions do not create a hosted schedule. Verify the actual task ID, enabled state, configured interval, and a real agent turn before claiming automatic receiving; otherwise report configured-but-unverified or connected but not listening. Linux systemd remains a separate optional host-local path.
+
+For an agent-assisted first deploy, `deploy:cli -- --owner NAME` finishes first-owner initialization automatically and saves a private sign-in URL in `.wrangler/owner-access.json`. Give this link only to the authorized owner; do not publish or commit it. Opening it exchanges the fragment credential for a browser session and removes it from the address bar. The owner does not need to locate SETUP_SECRET or complete a setup form. Existing owners and databases are preserved on repeat deployments. Native scheduling is configured once through the installed communication skill using the owner-selected supported receiving interval.
