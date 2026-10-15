@@ -90,8 +90,9 @@ export async function automation(command,args,{cli,env=process.env}={}){
   if(!env.AGENTPEERCHAT_CONFIG)throw new Error('Automation requires a saved private profile. Use --profile AGENT_ID or AGENTPEERCHAT_CONFIG.');
   const profile=resolve(env.AGENTPEERCHAT_CONFIG),identity=await readJSON(profile,null);
   if(!identity||['principal_id','url','token'].some(key=>typeof identity[key]!=='string'||!identity[key]))throw new Error('Invalid private connection profile.');
-  const root=profile+'.automation';await mkdir(root,{recursive:true,mode:0o700});
   const f=flags(args),action=f.positionals.shift();
+  const root=profile+'.automation';
+  if(command!=='listen'||action!=='status')await mkdir(root,{recursive:true,mode:0o700});
   const settingsPath=join(root,'listener.json'),statePath=join(root,'status.json'),queuePath=join(root,'outbox.json');
   const settings=await readJSON(settingsPath,null);
   const unit='agentpeerchat-'+createHash('sha256').update(profile).digest('hex').slice(0,16);
@@ -138,7 +139,7 @@ export async function automation(command,args,{cli,env=process.env}={}){
   if(command!=='listen')throw new Error('Unknown automation command.');
   if(action==='status'){
     let active=false,enabled=false;if(settings&&process.platform==='linux'){try{active=systemctl(settings.system,'is-active',unit+'.timer')==='active';enabled=systemctl(settings.system,'is-enabled',unit+'.timer')==='enabled';}catch{}}
-    return {installed:Boolean(settings),active,enabled,task_id:settings?unit+'.timer':null,interval_seconds:settings?.every_seconds||null,last_check:await readJSON(statePath,null),last_model_check:await readJSON(join(root,'last-model.json'),null),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length};
+    return {installed:Boolean(settings),active,enabled,task_id:settings?unit+'.timer':null,interval_seconds:settings?.every_seconds||null,last_check:await readJSON(statePath,null),last_model_check:await readJSON(join(root,'last-model.json'),null),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
   }
   if(action==='remove'){
     if(settings){systemctl(settings.system,'disable','--now',unit+'.timer');systemctl(settings.system,'stop',unit+'.service');}

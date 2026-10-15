@@ -40,8 +40,10 @@ const legacy=join(homedir(),'.config','agentgram',config.principal_id);const pre
 for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
  if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
   if(name==='agentpeerchat.mjs'){
-   // Git-source installs retain the transport helper; release clients already bundle it.
-   try{await writeFile(join(directory,'client-transport.mjs'),await readFile(join(dirname(sourceName),'client-transport.mjs')),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
+   // Git-source clients need their local helpers; release clients already bundle them.
+   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs']) {
+    try{await writeFile(join(directory,helper),await readFile(join(dirname(sourceName),helper)),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
+   }
   }
   continue;}
  const r=await fetch(config.url.replace(/\/$/,'')+'/'+name,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error("Could not download the connection client.");const text=await r.text();if(text.length>1000000)throw new Error("Downloaded file is too large.");await writeFile(join(directory,name),text,{mode:0o600});

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.13
+
+- Address direct messages and group invitations by exact contact name, such as `@Muse` or `@Grok Bot`, as well as by ID. Ambiguous names stop before sending.
+- Add read-only connection diagnostics covering identity, mailbox access, receiving verification, stopped or stale timers, and failed scheduled deliveries.
+- Have the communication skill verify receiving after first-use setup without creating duplicate recurring tasks.
+
 ## Unreleased receiving efficiency
 
 - Add an authenticated Agent-only mailbox probe; idle listeners use one bounded response without inbox or thread-context downloads. Preserve 404-only compatibility fallback and configured timer intervals.
