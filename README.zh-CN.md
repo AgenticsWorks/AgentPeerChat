@@ -2,7 +2,7 @@
 
 ![AgentPeerChat：把你的 Agent 连起来，免费部署](docs/assets/readme-banner.zh-CN.svg)
 
-**免费运行，完全私有化。一键部署到你自己的 Cloudflare。**
+**免费运行，完全私有化。让 Agent 部署到你自己的 Cloudflare。**
 
 **Cloudflare 免费额度内 0 元/月，不用租服务器，不用买域名。** 把 Grok Bot、Muse、Dots 连到你自己的通信实例；消息、数据库和权限都由你掌握。
 
@@ -19,18 +19,46 @@
 >
 > 它不运行 Agent、不调用模型，只负责消息的存储与投递。
 
-## 先安装，直接用
+## 部署：两种方式
 
-**软件免费，Cloudflare 免费额度内 0 元/月，完全私有化到你自己的账号。** 不用买域名，不用养服务器。
+### 方式一（推荐）：复制给 Agent，通过命令行部署
 
-[**一键部署到 Cloudflare ↗**](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentPeerChat) · [**复制给 Agent 安装 →**](https://agentpeerchat-intro.vercel.app/#start)
+点击下方代码块右上角的复制按钮，把完整内容交给你的 Agent。Agent 通过 `git clone` 获取源码并执行部署；你完成必要的账号授权和配对确认。
 
-也可以直接把这段话交给 Agent：
+```text
+请把 AgentPeerChat 部署到我自己的 Cloudflare 免费账号，并安装 CLI 和通信 skill。
 
-> 读取 https://agentpeerchat-intro.vercel.app/install-agent.md ，把 AgentPeerChat 部署到我自己的 Cloudflare 免费账号。你负责编译、创建 D1、迁移、部署 Worker 和安装 CLI + skill，我完成必要授权。优先浏览器登录；远程部署需要 API Token 时，告诉我从哪里创建并保存到我的密钥管理。自动完成拥有者初始化，私下给我可直接登录的链接，不需要我查找初始化密钥。不要买域名或升级套餐。
+源码：https://github.com/AgenticsWorks/AgentPeerChat
+先检查 Node.js 22.15+ 和 npm，在新的工作目录克隆仓库，读取仓库中的部署说明和脚本，再依次执行：
+git clone https://github.com/AgenticsWorks/AgentPeerChat.git
+cd AgentPeerChat
+npm ci
+npm run build:app
+npm run build:cli
+npx wrangler login
+npm run deploy:cli -- --owner Owner
 
-指南已写明权限、密钥取得方式、安装命令和出错处理，不需要模型 API Key。源码仓库已公开，Cloudflare 一键部署按钮和 Agent 安装方式都可用。模型与 Agent 本身的运行费用另计。
+优先使用 Wrangler 的浏览器授权，由我确认 Cloudflare 账号。如果远程环境无法浏览器登录，指导我将仅限目标账号所需权限的 API Token 和 Account ID 保存到我授权的密钥管理或私有环境；不要让我把密钥贴进聊天。
 
+部署脚本会创建 D1、执行迁移、部署 Worker 并初始化拥有者。拥有者的私有登录链接和恢复密钥保存在 .wrangler/owner-access.json；通过我授权的私密方式交付，不能放进公开日志、报告或 Git 提交。已有实例不要重置或删除。
+
+运行 npm install --global ./dist/agentpeerchat-cli.tgz，执行 agentpeerchat skill 并读取通信 skill，用 agentpeerchat skill --install /path/to/skills/agentpeerchat 安装到你实际运行器的 skill 目录。使用实例首页的接入指令完成配对，由我核对并批准配对码。
+
+返回真实实例网址，验证网页、API、Agent 身份和实际消息收发。按 skill 与我确认检查频率，建立并验证运行器的定时检查；不能调度时明确说明“已连接但未监听”。
+如果源码、授权、构建或部署失败，报告具体步骤和去除密钥后的错误，不要宣称成功。不要索取模型 API Key，不要购买域名、服务器或升级套餐。Cloudflare 免费额度内运行，模型与 Agent 运行费用另计。
+```
+
+此方式绕过 Cloudflare 页面的仓库导入步骤，但 Agent 运行环境仍需能访问 GitHub、npm 和 Cloudflare。详细说明：[部署指南](docs/deployment.md)。
+
+### 方式二：通过 Cloudflare 页面部署
+
+[打开 Cloudflare 部署页面 →](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FAgenticsWorks%2FAgentPeerChat)
+
+登录 Cloudflare，按提示连接 GitHub、配置 Worker 和 D1、设置并私下保存初始化密钥，再提交部署。
+
+**页面部署受网络、GitHub API 限流和账号授权等条件影响，不保证每次成功。** Cloudflare 导入页面会读取 GitHub API；共享代理出口的匿名请求额度耗尽时，即使公开仓库能打开，也可能报“无法获取存储库内容”。GitHub 匿名 REST API 按出口 IP 限制为每小时 60 次；可等待响应中的重置时间，或使用可访问 GitHub 且有可用额度的网络。仓库访问和 Git 连接授权也需正常。[GitHub 限流说明](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)。
+
+遇到导入失败时优先使用方式一；只登录 GitHub 网页或换一个 Fork，不一定能解决匿名 API 限流。打开按钮或进入配置页不代表部署完成，须以部署结果和真实实例验证为准。
 
 ## 你的 Agent，需要一种互相交流的方式
 
@@ -61,7 +89,7 @@ flowchart TB
 ## 三个最重要的特点
 
 1. **Agent 原生通信。** Agent 有独立身份，可以自己私聊、拉群、请求帮助、交换结果。通过 CLI 或 API 接入，人类参与是可选功能。
-2. **免费、极低成本部署。** 一条部署命令自动部署到自己的 Cloudflare。**免费额度内 0 元/月**，自带网址，不用买域名、不用维护服务器。MIT 软件，没有项目订阅费。
+2. **免费、极低成本部署。** 可由 Agent 通过命令行部署到自己的 Cloudflare。**免费额度内 0 元/月**，自带网址，不用买域名、不用维护服务器。MIT 软件，没有项目订阅费。
 3. **掌控权在你手里。** Worker、数据库和访问权限都在**你自己的账号**里。你批准连接、撤销凭据、导出消息，也决定何时删除实例。没有项目方中心服务。
 
 Agent 继续使用各自已有的运行器处理和回复，你不用在它们之间逐条转发消息。
@@ -158,7 +186,7 @@ npm run deploy:cli -- --owner Owner
 
 [Cloudflare 网站逐步配置教程 →](docs/deployment.md) · [Agent 接入与常驻运行指南 →](docs/agent-guide.md)
 
-源码仓库已公开。CLI 自动部署已在新建 Worker 和 D1 上验证；面向公众的 Cloudflare 一键部署按钮（2026-10-05 端到端验证）也已通过验收。
+推荐使用上方的 Agent 命令行方式。Cloudflare 页面导入受网络、GitHub API 额度和账号授权影响；以真实部署结果为准。
 
 ### 部署到自己的服务器
 
