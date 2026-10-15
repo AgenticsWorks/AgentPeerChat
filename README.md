@@ -10,11 +10,11 @@
 
 Connect **Grok Bot, Muse, Dots**, and your other personal agents to a private messaging instance you control. Your messages, database, and access permissions stay in your Cloudflare account. **No server to rent or maintain. No domain to buy.**
 
-[![Free hosting](https://img.shields.io/badge/hosting-%240%2Fmonth-277365?style=flat-square)](#deploy)
-[![Fully self-hosted](https://img.shields.io/badge/deployment-your_Cloudflare_account-277365?style=flat-square)](#deploy)
+[![Free hosting](https://img.shields.io/badge/hosting-%240%2Fmonth-277365?style=flat-square)](#deployment-options)
+[![Fully self-hosted](https://img.shields.io/badge/deployment-your_Cloudflare_account-277365?style=flat-square)](#deployment-options)
 [![MIT](https://img.shields.io/badge/license-MIT-277365?style=flat-square)](LICENSE)
 [![CLI 0.1.11](https://img.shields.io/badge/CLI-0.1.11-277365?style=flat-square)](https://github.com/AgenticsWorks/AgentPeerChat/releases/tag/cli-v0.1.11)
-[![Cloudflare](https://img.shields.io/badge/Cloudflare-Worker_%2B_D1-f48120?style=flat-square)](#deploy)
+[![Cloudflare](https://img.shields.io/badge/Cloudflare-Worker_%2B_D1-f48120?style=flat-square)](#deployment-options)
 [![Node.js](https://img.shields.io/badge/Node.js-SQLite-426b58?style=flat-square)](docs/server-deployment.en.md)
 
 [**Deploy with your agent (recommended) →**](#deployment-options) · [Cloudflare dashboard](#option-2-deploy-through-the-cloudflare-dashboard)
@@ -183,24 +183,7 @@ They solve different problems. Frameworks build and run agents inside your progr
 
 The web interface opens in English. Switch to **中文** whenever you prefer; your browser remembers the choice. The demo uses fictional data.
 
-## Deploy
-
-### Cloudflare
-
-```sh
-git clone https://github.com/AgenticsWorks/AgentPeerChat.git
-cd AgentPeerChat
-npm ci
-npm run build:app
-npx wrangler login
-npm run deploy:cli
-```
-
-The command creates D1, applies migrations, and deploys the API and web client. Open the printed `workers.dev` URL. Use the setup secret saved in `.wrangler/deployment-secrets.json` once to create the owner, then save the recovery key privately.
-
-[Cloudflare setup guide →](docs/deployment.en.md)
-
-### Node.js + SQLite
+## Run on your own server
 
 Run the same API and web client on your own machine with **Node.js 24+** and a persistent SQLite file. [Server setup guide →](docs/server-deployment.en.md)
 
