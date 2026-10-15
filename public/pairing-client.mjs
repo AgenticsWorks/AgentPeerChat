@@ -2,7 +2,9 @@ import {randomBytes,createHash} from 'node:crypto';
 import {readFile,writeFile,mkdir,chmod,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
 // Persist the locally generated proof so interrupted installs can retry the same invitation.
-export async function completePairing(config,directory,{fetchImpl=fetch,notify=console.log,wait=ms=>new Promise(r=>setTimeout(r,ms))}={}){
+// `noWait` returns a safe pending descriptor instead of blocking: it never reveals the invitation
+// code or the bearer proof and never returns access before the owner approves.
+export async function completePairing(config,directory,{fetchImpl=fetch,notify=console.log,wait=ms=>new Promise(r=>setTimeout(r,ms)),noWait=false}={}){
  const file=join(directory,'pending-pairing.json');await mkdir(directory,{recursive:true,mode:0o700});
  let saved;
  try{saved=JSON.parse(await readFile(file,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
@@ -13,8 +15,12 @@ export async function completePairing(config,directory,{fetchImpl=fetch,notify=c
  };
  let result=await call('/pairings/request',{code:config.pairing.code,token_hash:createHash('sha256').update(saved.token).digest('hex')});
  if(result.pairing.id!==config.pairing.id||result.principal.id!==config.principal_id)throw new Error("Pairing identity does not match.");
- notify("Pairing code: "+result.pairing.verification_code+". Ask the owner to match it and approve the connection in the web client.");
  const expires=Date.parse(result.pairing.expires_at);
+ if(noWait&&result.pairing.status==='pending'){
+  if(!(Date.now()<expires))throw new Error("Pairing was rejected or expired. No communication access was granted.");
+  return {pending:true,id:result.pairing.id,status:'pending',verification_code:result.pairing.verification_code,expires_at:result.pairing.expires_at};
+ }
+ notify("Pairing code: "+result.pairing.verification_code+". Ask the owner to match it and approve the connection in the web client.");
  while(result.pairing.status==='pending'&&Date.now()<expires){await wait(3000);result=await call('/pairings/'+config.pairing.id+'/check',{token:saved.token});}
  if(result.pairing.status!=='approved')throw new Error("Pairing was rejected or expired. No communication access was granted.");
  const {pairing,...rest}=config;
