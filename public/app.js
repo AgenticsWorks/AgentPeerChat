@@ -6,7 +6,7 @@ import { connectionInstructions } from './connection-kit.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null, perspective: 'all', inviteCode: null };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -40,6 +40,7 @@ function authMode(mode) {
   const setup = mode === 'setup', invite = mode === 'invite';
   $('#onboarding').dataset.mode = mode;
   $('#setup-help').hidden = !setup; $('#setup-key-hint').hidden = !setup;
+  $('#key-help').hidden = mode !== 'login'; renderKeyHelp();
   $('#auth-kicker').textContent = setup ? t("MAKE IT YOURS") : invite ? t("YOU’RE INVITED") : t("WELCOME HOME");
   $('#auth-title').textContent = setup ? t("Create your private network") : invite ? t("Join the conversation") : t("Open your network");
   $('#auth-description').textContent = setup ? t("Use the setup secret from your deployment to create the owner.") : invite ? t("Redeem a one-time invitation to join as a human.") : t("Sign in with your human access key.");
@@ -48,6 +49,16 @@ function authMode(mode) {
   $('#auth-key').placeholder = setup ? t("Your deployment setup secret") : invite ? 'agi_…' : 'agt_…';
   $('#auth-submit').textContent = setup ? t("Create network →") : invite ? t("Accept invitation →") : t("Open network →");
   $('#auth-switch').hidden = setup; $('#auth-switch').textContent = invite ? t("I already have an access key") : t("I have an invitation");
+}
+// Honest recovery help on the login page: a trusted Agent can mint a one-time link only when
+// the owner granted that permission; otherwise a previously saved key is the only path.
+function renderKeyHelp() {
+  const body = $('#key-help-body'); if (!body) return;
+  body.replaceChildren();
+  body.append(el('p', '', t("Ask a trusted connected Agent for a one-time sign-in link. It can only do this if you switched on “Allow helping me sign in” for it in the Contact view — off by default, because it grants access to your owner account.")));
+  const say = el('p'); say.append(t("Say: "), el('em', '', t("I forgot my AgentPeerChat token. Please run agentpeerchat web --login and send me the one-time sign-in link."))); body.append(say);
+  body.append(el('p', '', t("The link works once and expires in ten minutes. Your old key cannot be read back; after signing in you can create and save a replacement under Settings → Access keys.")));
+  body.append(el('p', '', t("No permission granted? Use a key you saved earlier, for example in a password manager. Without a saved key or a granted Agent, this account cannot be recovered automatically.")));
 }
 $('#auth-switch').addEventListener('click', () => authMode(state.authMode === 'invite' ? 'login' : 'invite'));
 $('#copy-setup-help').addEventListener('click', async () => {
@@ -121,6 +132,14 @@ async function enter() {
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
   await refresh(); schedulePoll();
+  await consumePendingThread();
+}
+// A deep link (#thread=…) survives manual sign-in: the target is held until a session exists.
+async function consumePendingThread() {
+  const target = state.pendingThread; if (!target) return;
+  state.pendingThread = null;
+  showView('conversations');
+  await selectThread(target);
 }
 async function refresh() {
   state.principals = (await api('/principals')).items;
@@ -436,6 +455,26 @@ function renderPrincipals() {
       permission.append(toggle, el('span', '', t("Allow Agent invitations")));
       footer.append(permission);
     }
+    if (state.me.kind === 'owner' && p.kind === 'agent') {
+      // Separate, higher-privilege switch: this Agent may mint one-time owner sign-in links.
+      // Confirm before enabling; withdrawing needs no extra ceremony and ends everything at once.
+      const loginPermission = el('label', 'invite-permission');
+      const loginToggle = el('input'); loginToggle.type = 'checkbox'; loginToggle.checked = p.can_help_owner_login === 1;
+      loginToggle.setAttribute('aria-label', t("Allow helping me sign in"));
+      loginToggle.addEventListener('change', async () => {
+        const next = loginToggle.checked; loginToggle.disabled = true;
+        try {
+          if (next && !confirm(t("Allow {0} to help you sign in? This grants access to your owner account: until you withdraw the permission, it can create one-time sign-in links for you. Enable it only for an Agent you trust.", p.name))) { loginToggle.checked = false; return; }
+          await api(`/principals/${p.id}`, { method: 'PATCH', data: { can_help_owner_login: next } });
+          await refresh();
+          toast(next ? t("{0} can now create one-time sign-in links for you. Withdrawing the permission ends them immediately.", p.name)
+                     : t("Sign-in help withdrawn. {0}’s open sign-in links and their sessions are ended.", p.name));
+        } catch (error) { loginToggle.checked = !next; toast(error.message); }
+        finally { loginToggle.disabled = false; }
+      });
+      loginPermission.append(loginToggle, el('span', '', t("Allow helping me sign in")));
+      footer.append(loginPermission);
+    }
     if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
       const connect = el('button', 'primary', t("连接 Agent")); connect.dataset.connectAgent = p.id;
       connect.addEventListener('click', async () => {
@@ -510,6 +549,20 @@ async function boot() {
       try{await api('/session',{method:'POST',data:{access_key:signInKey}});await enter();}catch(error){authMode('login');$('#auth-error').textContent=error.message;}
       return;
     }
+    const ownerLoginCode = parameters.get('owner-login');
+    if (ownerLoginCode) {
+      const target = parameters.get('thread');
+      // The one-time code leaves the address bar and history before any request is made.
+      history.replaceState(null, '', location.pathname + location.search);
+      await redeemOwnerLogin(ownerLoginCode, target);
+      return;
+    }
+    const threadTarget = parameters.get('thread');
+    if (threadTarget) {
+      // A plain conversation link carries no secret; hold the target through sign-in.
+      history.replaceState(null, '', location.pathname + location.search);
+      state.pendingThread = threadTarget;
+    }
     const agentInvitation = parameters.get('agent-invite');
     if (agentInvitation) {
       // The invitation code stays out of the address bar and history; retry uses the shared link again.
@@ -525,11 +578,40 @@ async function boot() {
   } catch (error) { authMode('login'); $('#auth-error').textContent = error.message; }
   finally { $('#boot-state').hidden = true; }
 }
+// A one-time owner sign-in link from a trusted Agent. Opening it never signs anyone in by
+// itself: the app POSTs the code same-origin, and an already signed-in owner must confirm
+// before a fresh session replaces anything, so no session is leaked silently.
+async function redeemOwnerLogin(code, target) {
+  if (state.me) {
+    const confirmed = confirm(t("You are already signed in. Redeem this one-time sign-in link and start a fresh session?"));
+    if (!confirmed) { try { await enter(); } catch {} toast(t("Sign-in link discarded. Your current session is unchanged.")); return; }
+  }
+  try {
+    await api('/owner-login/redeem', { method: 'POST', data: { code } });
+    await enter();
+    toast(t("Signed in with a one-time link from your Agent."));
+    if (target) { state.pendingThread = target; await consumePendingThread(); }
+  } catch (error) {
+    state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer);
+    authMode('login');
+    $('#auth-error').textContent = error.status === 410
+      ? t("This sign-in link expired, was withdrawn, or was already used. Ask your Agent for a new one.")
+      : error.message;
+    if (target) state.pendingThread = target;
+  }
+}
 window.addEventListener('hashchange',()=>{
  const params=new URLSearchParams(location.hash.slice(1));
- if(params.has('access_key')||params.has('invite')||params.has('agent-invite')){
+ if(params.has('access_key')||params.has('invite')||params.has('agent-invite')||params.has('owner-login')){
   clearTimeout(state.timer);$('#shell').hidden=true;$('#boot-state').hidden=false;
   void boot();
+  return;
+ }
+ const thread=params.get('thread');
+ if(thread){
+  history.replaceState(null,'',location.pathname+location.search);
+  state.pendingThread=thread;
+  if(state.me)void consumePendingThread();
  }
 });
 // A recipient landing page for short Agent invitation links. It resolves only public

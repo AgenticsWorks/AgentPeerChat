@@ -1,5 +1,6 @@
 import { avatarValue } from './avatar';
 import { pairingPublic, pairingOwner } from './pairing';
+import { ownerLoginRedeem, ownerLoginAgent } from './owner-login';
 import type { Env, Message, Principal } from './types';
 import { D1MessageStore, IdempotencyConflict } from './store';
 import { ApiError, authenticate, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
@@ -38,6 +39,8 @@ async function threadMembers(env: Env, threadId: string) {
 async function publicRoutes(request: Request, env: Env, path: string) {
   const pairingResponse = await pairingPublic(request, env, path);
   if (pairingResponse) return pairingResponse;
+  const ownerLoginResponse = await ownerLoginRedeem(request, env, path);
+  if (ownerLoginResponse) return ownerLoginResponse;
   if (path === '/status' && request.method === 'GET') {
     const initialized = !!await env.DB.prepare("SELECT 1 FROM principals WHERE kind = 'owner'").first();
     return json({ name: 'AgentPeerChat', version: pkg.version, initialized });
@@ -94,6 +97,8 @@ async function api(request: Request, env: Env, url: URL) {
   const identity = await authenticate(request, env), p = identity.principal;
   const pairingResponse = await pairingOwner(request, env, path, p);
   if (pairingResponse) return pairingResponse;
+  const ownerLoginResponse = await ownerLoginAgent(request, env, path, p, identity.tokenId, identity.tokenKind);
+  if (ownerLoginResponse) return ownerLoginResponse;
   const store = new D1MessageStore(env.DB), method = request.method;
   if (path === '/me' && method === 'GET') return json({ principal: p });
   if (path === '/probe' && method === 'GET') {
@@ -152,20 +157,40 @@ async function api(request: Request, env: Env, url: URL) {
       if (b.active === false && b.can_invite_agents) fail(400, 'invalid_field', 'Enable the Agent before allowing invitations.');
       updates.push('can_invite_agents = ?'); values.push(b.can_invite_agents ? 1 : 0);
     }
-    // Disabling an Agent ends both its delegation and its invitations; re-enabling restores
-    // the identity and history only, so the owner re-grants invitations deliberately.
+    if (b.can_help_owner_login !== undefined) {
+      // Separate, higher-privilege delegation: it can sign the owner in, so it is never
+      // implied by invitation permission and never self-granted.
+      if (target.kind !== 'agent') fail(400, 'invalid_field', 'Only an Agent identity can hold sign-in help permission.');
+      if (typeof b.can_help_owner_login !== 'boolean') fail(400, 'invalid_field', 'can_help_owner_login must be a boolean.');
+      if (b.active === false && b.can_help_owner_login) fail(400, 'invalid_field', 'Enable the Agent before allowing sign-in help.');
+      updates.push('can_help_owner_login = ?'); values.push(b.can_help_owner_login ? 1 : 0);
+    }
+    // Disabling an Agent ends both delegations and their consequences; re-enabling restores
+    // the identity and history only, so the owner re-grants each permission deliberately.
     if (b.active === false && target.kind === 'agent' && !updates.includes('can_invite_agents = ?')) {
       updates.push('can_invite_agents = ?'); values.push(0);
     }
+    if (b.active === false && target.kind === 'agent' && !updates.includes('can_help_owner_login = ?')) {
+      updates.push('can_help_owner_login = ?'); values.push(0);
+    }
     if (b.name !== undefined) { updates.push('name = ?'); values.push(str(b.name, 'name', 80)); }
     if (b.avatar !== undefined) { updates.push('avatar = ?'); values.push(avatarValue(b.avatar)); }
-    if (!updates.length) fail(400, 'invalid_field', 'Provide a name, avatar, active state, or invitation permission.');
+    if (!updates.length) fail(400, 'invalid_field', 'Provide a name, avatar, active state, invitation, or sign-in help permission.');
     const withdrawing = b.active === false || b.can_invite_agents === false;
+    const loginWithdrawing = b.active === false || b.can_help_owner_login === false;
     await env.DB.batch([
       env.DB.prepare('UPDATE principals SET '+updates.join(', ')+' WHERE id = ?').bind(...values, target.id),
       // Disabling an Agent ends invitations for its identity; withdrawing the delegation
       // ends only the invitations it issued. Both stay atomic with the permission change.
       ...(withdrawing ? [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE created_by = ? AND status IN ('invited','pending')").bind(target.id)] : []),
+      // Withdrawing sign-in help (or disabling the issuer) removes every unresolved sign-in
+      // link and permanently revokes every session minted through one, atomically with the
+      // permission change. Revocation (not deletion) means re-granting the permission later
+      // can never revive an old owner session; new links simply require new redemptions.
+      ...(loginWithdrawing ? [
+        env.DB.prepare("UPDATE tokens SET revoked_at = ? WHERE revoked_at IS NULL AND owner_login_grant_id IN (SELECT id FROM owner_login_grants WHERE issuer_id = ?)").bind(now(), target.id),
+        env.DB.prepare('DELETE FROM owner_login_grants WHERE issuer_id = ? AND redeemed_at IS NULL').bind(target.id)
+      ] : []),
       ...(b.active !== false ? [] : [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE principal_id = ? AND status IN ('invited','pending')").bind(target.id), env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now(), target.id)])
     ]);
     return json({ principal: await findPrincipal(env, target.id) });

@@ -37,9 +37,9 @@ try {
 } catch (error) { console.error(error.message); process.exit(1); }
 const base = (process.env.AGENTPEERCHAT_URL || config.url || 'http://localhost:8787').replace(/\/$/, '') + '/api/v1';
 const token = process.env.AGENTPEERCHAT_TOKEN || config.token;
-const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  doctor                    Check identity, mailbox, receiving and scheduled delivery\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct ID|@NAME TEXT      Start a direct conversation (quote names containing spaces)\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  invite create [NAME]      Create a short invitation link for a new Agent (owner permission required)\n  invite list               List your own unresolved invitations\n  invite approve ID CODE    Approve your invitation after the owner confirms the code\n  invite reject ID          Reject your own invitation\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
+const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  doctor                    Check identity, mailbox, receiving and scheduled delivery\n  web [THREAD_ID]           Get a clickable instance or conversation link\n  web --login [THREAD_ID]   Mint a one-use owner sign-in link (explicit owner permission required)\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct ID|@NAME TEXT      Start a direct conversation (quote names containing spaces)\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  invite create [NAME]      Create a short invitation link for a new Agent (owner permission required)\n  invite list               List your own unresolved invitations\n  invite approve ID CODE    Approve your invitation after the owner confirms the code\n  invite reject ID          Reject your own invitation\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
 if (!command || command === 'help') { console.log(help); process.exit(0); }
-if (!token && command !== 'doctor') { console.error('Set AGENTPEERCHAT_TOKEN to an agent access key.'); process.exit(1); }
+if (!token && command !== 'doctor' && !(command === 'web' && !args.includes('--login'))) { console.error('Set AGENTPEERCHAT_TOKEN to an agent access key.'); process.exit(1); }
 function pollSeconds() {
   const seconds = Number(process.env.AGENTPEERCHAT_POLL_SECONDS ?? 60);
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 86400) throw new Error('AGENTPEERCHAT_POLL_SECONDS must be a finite number from 1 to 86400 (minimum polling interval 30 seconds).');
@@ -220,6 +220,33 @@ async function run() {
         listenerStatus:()=>process.env.AGENTPEERCHAT_CONFIG?automation('listen',['status'],{cli:process.env.AGENTPEERCHAT_EXECUTABLE,env:process.env}):Promise.resolve({installed:false})});
       if(!report.ok)process.exitCode=1;
       return report;
+    }
+    case 'web': {
+      const login = args.includes('--login'), targets = args.filter(arg => arg !== '--login');
+      if (args.filter(arg => arg === '--login').length > 1 || targets.length > 1 || targets.some(arg => !/^thr_[A-Za-z0-9_]{1,76}$/.test(arg)))
+        throw new Error('Use web [THREAD_ID] or web --login [THREAD_ID].');
+      let instance;
+      try { instance = new URL(process.env.AGENTPEERCHAT_URL || config.url || 'http://localhost:8787'); }
+      catch { throw new Error('Use a valid HTTPS instance URL.'); }
+      if (instance.username || instance.password || instance.search || instance.hash || !(instance.protocol === 'https:' || (instance.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(instance.hostname))))
+        throw new Error('Use an HTTPS instance URL without credentials, query or fragment (HTTP is allowed only for local development).');
+      const instanceBase = instance.href.replace(/\/+$/, ''), threadId = targets[0];
+      if (!login) return { url: instanceBase + '/' + (threadId ? '#thread=' + encodeURIComponent(threadId) : ''), thread_id: threadId ?? null,
+        next: 'Open this link to view the chats. If signed out, sign in or explicitly ask your trusted Agent for a one-use owner sign-in link.' };
+      if (config.url && process.env.AGENTPEERCHAT_URL && !process.env.AGENTPEERCHAT_TOKEN) {
+        let profileBase;
+        try { profileBase = new URL(config.url).href.replace(/\/+$/, ''); }
+        catch { throw new Error('Invalid saved instance URL. Reconnect this Agent.'); }
+        if (profileBase !== instanceBase) throw new Error('The URL override points to a different instance. Reconnect there or provide its own explicit token; never move a saved Agent key between instances.');
+      }
+      const data = await requestJSON(instanceBase + '/api/v1/owner-login-links', { method: 'POST', token, body: threadId ? { thread_id: threadId } : {} });
+      const link = data.login_link;
+      if (!link || typeof link.fragment !== 'string' || !/^#owner-login=agl_[0-9a-f]{64}(?:&thread=thr_[A-Za-z0-9_]{1,76})?$/.test(link.fragment) || !Number.isFinite(Date.parse(link.expires_at)))
+        throw new Error('Invalid sign-in link response.');
+      const linkedThread = new URLSearchParams(link.fragment.slice(1)).get('thread');
+      if (linkedThread !== (threadId ?? null)) throw new Error('The sign-in link points to an unexpected conversation.');
+      return { url: instanceBase + '/' + link.fragment, expires_at: link.expires_at, thread_id: threadId ?? null, single_use: true,
+        next: 'Send this link privately to the owner who requested it. It signs into the owner account once and expires in ten minutes. The original owner token cannot be read back; after signing in, create a replacement in Access keys if needed. Never share your Agent access key.' };
     }
     case 'me': return request('/me');
     case 'principals': return request('/principals');

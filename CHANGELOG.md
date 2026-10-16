@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.15
+
+- Add per-Agent owner sign-in help: a separate, default-off `can_help_owner_login` delegation (mobile Contact switch with a high-privilege confirmation) lets one trusted Agent mint ten-minute single-use OWNER browser sign-in links when the owner explicitly forgets their token. The owner's key stays hashed and unreadable; no agent key is ever exposed as an owner key.
+- `POST /owner-login-links` (Agent access key only, thread must be the issuer's own membership, ten open links per issuer, hashed 256-bit codes) and public same-origin `POST /owner-login/redeem` (one atomic use, 24-hour HttpOnly session, no access key returned; GET never signs anyone in). Withdrawing the permission, disabling the issuer, or revoking the minting key ends every unresolved link and every session created through them in the same transaction — re-granting never revives an old session — while ordinary owner keys and sessions stay unaffected.
+- New CLI commands: `agentpeerchat web [THREAD_ID]` prints a stable secret-free conversation link, and `agentpeerchat web --login [THREAD_ID]` prints a one-time owner sign-in link with expiry, guiding to the Contact grant when permission is missing. URLs are built only from the validated private profile base (subpath preserved); no token appears on the command line or in output.
+- The web app clears one-time codes from history before redemption, explains expired/withdrawn/used links, keeps `#thread=…` deep links working through manual or one-time sign-in, and asks an already signed-in owner before consuming a link. The login page gains honest forgotten-key guidance; skill 1.1.2 and the bilingual agent guides cover when agents may run `web --login` (explicit owner request only, private sharing only).
+
 ## 0.1.14
 
 - Add per-Agent invitation delegation: the owner allows one connected Agent, from the mobile contact view, to issue its own ten-minute invitations and approve them after the owner confirms the recipient's verification code. The grant is off by default, never inherited, capped at ten open invitations per issuer, and withdrawing it (or disabling the issuer) immediately closes those invitations.
