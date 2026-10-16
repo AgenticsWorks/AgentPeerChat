@@ -555,6 +555,7 @@ function renderInviteStatic(code) {
 }
 async function showAgentInvitation(code) {
   state.inviteCode = code;
+  $('#onboarding').dataset.mode = 'agent-invite';
   $('#onboarding').hidden = false; $('#shell').hidden = true; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true;
   $('#auth-form').hidden = true; $('#auth-switch').hidden = true; $('#setup-help').hidden = true; $('#agent-invite').hidden = false;
   $('.skip-link').href = '#agent-invite';
@@ -656,7 +657,8 @@ async function renderPairings(){
 }
 
 document.addEventListener("agentpeerchat:languagechange",()=>{
- if(!state.me){authMode(state.authMode);if(state.inviteCode)renderInviteStatic(state.inviteCode);return;}
+ if(state.inviteCode){void showAgentInvitation(state.inviteCode);return;}
+ if(!state.me){authMode(state.authMode);return;}
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
  renderPerspective();renderThreads();renderPrincipals();renderMembers();renderMessages();renderGraph();
  if(state.perspective!=="all")$("#observe-actions span").textContent=t("Viewing as {0} · Read only",humanName(state.perspective));

@@ -21,7 +21,7 @@ async function ownerId(env:Env){
   const row=await env.DB.prepare("SELECT id FROM principals WHERE kind = 'owner' LIMIT 1").first<{id:string}>();
   return row?.id??null;
 }
-async function issuerAuthorized(env:Env,row:Pairing){
+async function issuerAuthorized(env:Env,row:Pick<Pairing,'created_by'>){
   const issuer=await env.DB.prepare("SELECT kind, active, can_invite_agents FROM principals WHERE id = ?").bind(row.created_by)
     .first<{kind:string;active:number;can_invite_agents:number}>();
   return !!issuer&&issuer.active===1&&(issuer.kind==='owner'||(issuer.kind==='agent'&&issuer.can_invite_agents===1));
@@ -106,15 +106,18 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
         // loses the boundary race leaves no orphan identity behind.
         statements.push(env.DB.prepare(`INSERT INTO principals(id,name,kind,active,avatar)
           SELECT ?,?,'agent',0,? WHERE (SELECT COUNT(*) FROM principals) < 200
-          AND (SELECT COUNT(*) FROM pairings WHERE created_by = ? AND status IN ('invited','pending') AND expires_at > ?) < ?`)
-          .bind(principal.id,name,avatar,p.id,time(),QUOTA));
+          AND (SELECT COUNT(*) FROM pairings WHERE created_by = ? AND status IN ('invited','pending') AND expires_at > ?) < ?
+          AND EXISTS(SELECT 1 FROM principals WHERE id = ? AND kind = 'agent' AND active = 1 AND can_invite_agents = 1)`)
+          .bind(principal.id,name,avatar,p.id,time(),QUOTA,p.id));
       }
     }
     statements.push(env.DB.prepare(`INSERT INTO pairings(id,principal_id,created_by,code_hash,token_id,expires_at)
       SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM principals WHERE id = ?)`).bind(pairId,principal.id,p.id,await hash(code),tokenId,expires,principal.id));
     await env.DB.batch(statements);
     if(p.kind!=='owner'&&!await env.DB.prepare('SELECT 1 AS ok FROM pairings WHERE id = ?').bind(pairId).first()){
-      // Both statements were no-ops: report which boundary the concurrent request won.
+      // Authentication may predate a concurrent permission withdrawal. Check that first;
+      // both inserts must remain no-ops when the delegation no longer exists.
+      if(!await issuerAuthorized(env,{created_by:p.id}))fail(403,'invite_permission_required',NEEDS_GRANT);
       if(await openInvitations(env,p.id)>=QUOTA)fail(409,'invitation_quota',`Finish, reject, or let expire your existing invitations before creating another (${QUOTA} open at a time).`);
       fail(409,'principal_limit','This instance supports up to 200 principals.');
     }

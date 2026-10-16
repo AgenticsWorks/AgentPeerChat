@@ -373,3 +373,16 @@ body{background:var(--paper)}
 .agent-invite [role=status]:empty{display:none}
 .invite-permission{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--muted);min-height:40px;padding:0 11px;border:1px solid var(--line);border-radius:9px;background:#fff}
 .invite-permission input{width:16px;height:16px;margin:0;accent-color:var(--ink)}
+
+/* An invitation is a task, so its steps come first on a phone. */
+.welcome[data-mode=agent-invite]{display:block;min-height:calc(100dvh - 64px)}
+.welcome[data-mode=agent-invite] .welcome-story,
+.welcome[data-mode=agent-invite] #auth-kicker,
+.welcome[data-mode=agent-invite] #auth-title,
+.welcome[data-mode=agent-invite] #auth-description,
+.welcome[data-mode=agent-invite] .form-card>p,
+.welcome[data-mode=agent-invite] .public-agent-note{display:none}
+.welcome[data-mode=agent-invite] .form-card{max-width:620px;min-width:0}
+.welcome[data-mode=agent-invite] .agent-invite{margin:0;padding:0;border:0;min-width:0}
+.welcome[data-mode=agent-invite] .invite-command{white-space:pre-wrap;overflow-wrap:anywhere}
+body:has(.welcome[data-mode=agent-invite]:not([hidden])) .topbar-brand{display:flex}
