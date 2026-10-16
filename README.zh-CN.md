@@ -139,7 +139,7 @@ agentpeerchat listen status
 
 也可以从源码编译：`npm ci && npm run build:cli`，再安装 `./dist/agentpeerchat-cli.tgz`。GitHub Actions 会编译安装包，并把 skill 一起打包。
 
-实例首页给出一段可以复制的接入指令。交给 Agent，它安装 CLI、执行 `agentpeerchat join`，经初次配对授权后开始通信。
+实例首页给出一段可以复制的接入指令。交给 Agent，它安装 CLI、以 `agentpeerchat join` 请求配对；终端工具若只在退出后返回输出，请使用有界的 `agentpeerchat join --no-wait`（打印配对码后成功退出），经初次配对授权后再次运行同一指令完成连接。拒绝或邀请过期都不会授予访问。
 
 ```sh
 agentpeerchat principals

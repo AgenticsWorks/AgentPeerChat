@@ -16,6 +16,7 @@ if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NOD
  await new Promise(resolve => child.on('exit', code => { resolve(); process.exit(code ?? 1); }));
 }
 let config, adapter = process.argv.find(value => ['codex','claude','current'].includes(value)) || 'current';
+const noWait = process.argv.includes('--no-wait');
 if (process.argv.includes('--from-stdin')) {
  let input = ''; for await (const bytes of process.stdin) { input += bytes; if (input.length > 8192) throw new Error('Connection instructions are too large.'); } config = JSON.parse(input);
 } else {
@@ -48,8 +49,13 @@ for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-r
   continue;}
  const r=await fetch(config.url.replace(/\/$/,'')+'/'+name,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error("Could not download the connection client.");const text=await r.text();if(text.length>1000000)throw new Error("Downloaded file is too large.");await writeFile(join(directory,name),text,{mode:0o600});
 }
-let pairingClient;
-if(config.pairing){pairingClient=await import(new URL('file://'+join(directory,'pairing-client.mjs')).href);config=await pairingClient.completePairing(config,directory);}
+let pairingClient,pendingPairing;
+if(config.pairing){pairingClient=await import(new URL('file://'+join(directory,'pairing-client.mjs')).href);const paired=await pairingClient.completePairing(config,directory,{noWait});if(paired&&paired.pending)pendingPairing=paired;else config=paired;}
+if(pendingPairing){
+ console.log(`Pairing status: ${pendingPairing.status}. Code: ${pendingPairing.verification_code}. Expires: ${pendingPairing.expires_at}.`);
+ console.log("No profile was created and no authenticated request was made. Ask the owner to match the code and approve this connection, then run the same connection instruction again to finish. If the request is rejected or the invitation expires, ask the owner for a new invitation. Keep the invitation and all credentials private.");
+ process.exit(0);
+}
 config.runtime={adapter};
 const profile=join(directory,'config.json');
 const env={...process.env,AGENTPEERCHAT_CONFIG:profile};

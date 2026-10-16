@@ -28,25 +28,33 @@ test('copied connection command works when npm global binaries are absent from P
  const invitation=await api('/pairings',owner.access_key,'POST',{name:'Muse'});
  const instruction=connectionInstructions({url,principal:invitation.principal,pairing:invitation.pairing,ownerId:owner.principal.id});
  const script=instruction.match(/```sh\n([\s\S]*?)\n```/)[1];
- const env={...process.env,HOME:home,PATH:minimalBin,NPM_CONFIG_PREFIX:tools,NODE_USE_ENV_PROXY:'0'};
- for(const key of Object.keys(env))if(/^(AGENTPEERCHAT|AGENTGRAM|AGENTPENPAL)_/.test(key)||/^(https?|all)_proxy$/i.test(key))delete env[key];
- child=spawn('/bin/bash',['-s'],{env});let stdout='',stderr='',exitCode;
- child.stdout.on('data',data=>stdout+=data);child.stderr.on('data',data=>stderr+=data);
- const finished=new Promise(done=>child.on('exit',code=>{exitCode=code;done(code);}));child.stdin.end(script);
- let pending;
- for(let i=0;i<100;i++){
-  pending=(await api('/pairings',owner.access_key)).items.find(p=>p.id===invitation.pairing.id&&p.status==='pending');
-  if(pending&&stdout.includes(pending.verification_code))break;
-  if(exitCode!==undefined)break;
-  await new Promise(done=>setTimeout(done,100));
+ const env={...process.env,HOME:home,PATH:minimalBin,NODE_USE_ENV_PROXY:'0'};
+ for(const key of Object.keys(env))if(/^(AGENTPEERCHAT|AGENTGRAM|AGENTPENPAL)_/.test(key)||/^(https?|all)_proxy$/i.test(key)||/^npm_config_/i.test(key))delete env[key];
+ // Isolate the inner npm from the outer `npm test` process so its global prefix and cache are local.
+ env.NPM_CONFIG_PREFIX=tools;
+ async function runShell(source){
+  return new Promise(done=>{
+   child=spawn('/bin/bash',['-s'],{env});let stdout='',stderr='';
+   child.stdout.on('data',data=>stdout+=data);child.stderr.on('data',data=>stderr+=data);
+   child.on('exit',code=>done({code,stdout,stderr}));child.stdin.end(source);
+  });
  }
- assert.ok(pending&&stdout.includes(pending.verification_code),'Copied command must launch the installed CLI and show its pairing code: '+stderr);
- await api('/pairings/'+pending.id+'/approve',owner.access_key,'POST',{verification_code:pending.verification_code});
- assert.equal(await finished,0,stderr);
+ // The generated instruction is bounded for buffered tools: the first run returns the
+ // pairing code without activating, and the owner approves before the second run finishes.
+ const first=await runShell(script);
+ assert.equal(first.code,0,first.stderr);
+ const pending=(await api('/pairings',owner.access_key)).items.find(p=>p.id===invitation.pairing.id&&p.status==='pending');
+ assert.ok(pending&&first.stdout.includes(pending.verification_code),'Copied command must launch the installed CLI and show its pairing code: '+first.stderr);
+ assert.ok(!first.stdout.includes(invitation.pairing.code),'Pairing output must not expose the invitation code');
  const profile=join(home,'.config','agentpeerchat',invitation.principal.id,'config.json');
+ await assert.rejects(stat(profile),{code:'ENOENT'});
+ await api('/pairings/'+pending.id+'/approve',owner.access_key,'POST',{verification_code:pending.verification_code});
+ // Re-running the joined command reuses the installed CLI and the locally saved proof.
+ const second=await runShell(script.replace(/^npm install[^\n]*\n/,''));
+ assert.equal(second.code,0,second.stderr);
  const saved=JSON.parse(await readFile(profile,'utf8'));assert.equal(saved.principal_id,invitation.principal.id);assert.equal((await stat(profile)).mode&0o777,0o600);
  assert.equal((await api('/me',saved.token)).principal.name,'Muse');
- const executable=stdout.match(/^CLI executable: (.+)$/m)?.[1];assert.ok(executable);
+ const executable=second.stdout.match(/^CLI executable: (.+)$/m)?.[1];assert.ok(executable);
  // A later tool shell has its original PATH again. The installer provides a working absolute CLI.
  async function nextTool(args){
   child=spawn(process.execPath,[executable,...args],{env});let text='',error='';child.stdout.on('data',data=>text+=data);child.stderr.on('data',data=>error+=data);child.stdin.end();
