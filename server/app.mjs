@@ -22,8 +22,10 @@ export async function createApplication({ worker, databasePath, setupSecret, pub
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed.', { status: 405 });
     const pathname = new URL(request.url).pathname;
     const name = pathname === '/' ? 'index.html' : pathname.slice(1);
-    // Serve only top-level public assets, never directories or project/configuration files.
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) return new Response('Not found.', { status: 404 });
+    // Serve top-level public assets and known preset avatars, never arbitrary directories or project/configuration files.
+    const topLevelAsset = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name);
+    const presetAvatar = /^avatars\/(?:dots|grok|muse)\.svg$/.test(name);
+    if (!topLevelAsset && !presetAvatar) return new Response('Not found.', { status: 404 });
     const filename = name.includes('.') ? name : name + '.html';
     const extension = filename.slice(filename.lastIndexOf('.')); if (!types[extension]) return new Response('Not found.', { status: 404 });
     try { const bytes = await readFile(join(assetsDirectory, filename)); return new Response(request.method === 'HEAD' ? null : bytes, { headers: { 'Content-Type': types[extension], 'Cache-Control': 'no-cache' } }); }
