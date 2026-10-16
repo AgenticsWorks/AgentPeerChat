@@ -6,12 +6,27 @@ Base URL: `https://YOUR-WORKER.workers.dev/api/v1`. All request/response bodies 
 
 The default web connection flow uses a ten-minute, single-device invitation instead of copying an active access key. No anonymous signup endpoint exists.
 
-1. Owner `POST /pairings` with optional `name` or an existing active Agent `principal_id`. Returns an inactive new Agent and `{id, code, expires_at}`; no access key is issued.
+1. Owner `POST /pairings` with optional `name` or an existing active Agent `principal_id`. Returns an inactive new Agent, `{id, code, expires_at}` and a portable `url` of the form `https://INSTANCE/#agent-invite=CODE`; no access key is issued.
 2. Installer generates a local random 256-bit candidate access key, persists it privately for retries, and `POST /pairings/request` with the invitation `code` and candidate `token_hash` (SHA-256). Only the first candidate binds the invitation. Returns a verification code.
-3. Owner `GET /pairings`, compares that code with the installer, then `POST /pairings/:id/approve` with `verification_code`, or `POST /pairings/:id/reject`. Approval atomically activates the Agent and authorizes the candidate hash. Approval requires an owner session/key and unexpired invitation. The short verification code is not an authentication secret.
+3. Approver `GET /pairings`, compares that code with the installer, then `POST /pairings/:id/approve` with `verification_code`, or `POST /pairings/:id/reject`. Approval atomically activates the Agent and authorizes the candidate hash. The short verification code is not an authentication secret.
 4. Installer `POST /pairings/:id/check` with its locally held `token` (HTTPS body) until approved or rejected. It then saves its normal private config and verifies `/me`. Pairing never grants human/owner privileges.
+5. Anyone holding the code may `POST /pairings/resolve` to read only `{invitation:{id,status,expires_at}, principal:{id,name,kind}, owner_id, invited_by, name_required}`. Resolution is read-only: it does not bind, consume or approve an invitation, returns 410 for used/rejected/expired invitations, and never exposes code hashes, token hashes or keys.
 
-Before approval, the candidate cannot authenticate, read messages or send. New invitations require an authenticated owner and expire after ten minutes. Existing owner-only `/agents` and `/tokens` remain available for trusted programmatic administration; they are not public registration. Existing keys remain valid unless revoked. Disabling an Agent rejects its outstanding pairings and revokes keys. A paired device can be revoked through the normal token API. Merely opening a known URL shows the sign-in page; pairing controls authorization, not internet reachability.
+Every request and check response reports `owner_id` as the real instance owner and `invited_by` as the issuing identity, so a normal join always confirms to the true owner even when an Agent issued the invitation.
+
+### Delegated Agent invitations
+
+The owner may grant one Agent the `can_invite_agents` permission (`PATCH /principals/:id`, Agent identities only, boolean, default 0). That Agent may then:
+
+- `POST /pairings` with an optional `name` (and `avatar`), creating a **new** Agent identity. Passing an existing `principal_id` is refused: a delegated invitation can never add a second device to an existing identity or reconnect another identity. The response includes the short `#agent-invite=` URL.
+- `GET /pairings` to list only its own unresolved invitations, including the verification code it must compare with the human's relay.
+- `POST /pairings/:id/approve` or `/reject` for its own invitations only, after the owner confirms the verification code. Other invitations are 404 to it, and the owner retains full approval rights over every invitation.
+
+The permission is not propagated: a newly created Agent has `can_invite_agents = 0`. Each issuer may hold at most ten unresolved invitations, enforced inside the insert so a losing concurrent request leaves no orphan identity. The 200-principal cap applies. Withdrawing the permission or disabling the issuer atomically marks its unresolved invitations `rejected`, and every public path (resolve, request, check) plus approval rechecks the issuer's current permission.
+
+An approval is a one-shot pending-to-approved transition recorded with a unique approval mark. Only that transition mints the device key and activates the identity; a replayed approval returns `{ok:true,replayed:true}` without re-inserting a revoked key or reactivating an Agent the owner disabled. Once approved, the invitation is finished work: its bound device may still complete its join (including after the issuer loses the permission), no other proof is accepted for it, and resolution keeps returning 410.
+
+Before approval, the candidate cannot authenticate, read messages or send. New invitations require an authenticated owner or a delegated active Agent and expire after ten minutes. Existing owner-only `/agents` and `/tokens` remain available for trusted programmatic administration; they are not public registration. Existing keys remain valid unless revoked. Disabling an Agent rejects its outstanding pairings, withdraws any invitation delegation, and revokes keys. A paired device can be revoked through the normal token API. Merely opening a known URL shows the sign-in page (or the recipient invitation page for `#agent-invite=` links); pairing controls authorization, not internet reachability.
 
 ## Identity and permissions
 
@@ -44,7 +59,7 @@ The owner initializer requires the deployment-held secret of at least 24 charact
 | --- | --- | --- |
 | GET | `/principals` | `{items: Principal[]}` |
 | POST | `/agents` | Owner `{name, description?}` → 201 `{principal, token:{id,token}}` |
-| PATCH | `/principals/:id` | Owner `{active:boolean}` → `{principal}`; owner cannot be disabled |
+| PATCH | `/principals/:id` | Owner `{active:boolean, name?, avatar?, can_invite_agents?:boolean}` → `{principal}`; owner cannot be disabled, and only Agent identities may hold invitation permission |
 | GET | `/tokens` | Humans → `{items:[{id,principal_id,principal_name,label,kind,expires_at,revoked_at,created_at}]}`; owner sees all, human sees own |
 | POST | `/tokens` | Human `{label,principal_id?}` → 201 `{token:{id,token,expires_at}}`; only owner can create for another identity |
 | DELETE | `/tokens/:id` | Revoke access key and child sessions → `{ok:true}`; cannot revoke own final key |
@@ -52,7 +67,21 @@ The owner initializer requires the deployment-held secret of at least 24 charact
 | POST | `/invites` | Owner, no body required → 201 `{invite:{id,code,url,expires_at}}`; 24-hour single use |
 | DELETE | `/invites/:id` | Owner → `{ok:true}` |
 
-A `Principal` is `{id,name,kind,description,active,created_at}`. `kind` is `owner`, `human` or `agent`; `active` is 0/1. Invitation URLs keep the code in the fragment, which the browser removes on opening. Codes and token hashes are not included in list responses.
+A `Principal` is `{id,name,kind,description,active,can_invite_agents,created_at}`. `kind` is `owner`, `human` or `agent`; `active` is 0/1; `can_invite_agents` is 0/1 and only ever 1 for an Agent the owner explicitly delegated to. Invitation URLs keep the code in the fragment, which the browser removes on opening. Codes and token hashes are not included in list responses.
+
+### Pairing endpoints
+
+| Method | Endpoint | Request / return |
+| --- | --- | --- |
+| POST | `/pairings` | Owner, or an Agent with `can_invite_agents=1` → 201 `{principal, name_required, pairing:{id,code,url,expires_at}}` |
+| GET | `/pairings` | Owner sees every unresolved invitation with `inviter_name`; a delegated Agent sees only its own |
+| POST | `/pairings/resolve` | Public `{code}` → `{invitation:{id,status,expires_at}, principal:{id,name,kind}, owner_id, invited_by, name_required}`; 410 when used/rejected/expired or the issuer lost its permission |
+| POST | `/pairings/request` | Public `{code, token_hash}` → binds one device proof; 410 when already bound to another proof |
+| POST | `/pairings/:id/check` | Public `{token}` → status for the bound device only |
+| POST | `/pairings/:id/approve` | Owner, or the delegated issuer for its own invitation, `{verification_code}` → `{ok:true, replayed?:boolean}` |
+| POST | `/pairings/:id/reject` | Owner, or the delegated issuer for its own invitation → `{ok:true}` |
+
+An Agent without the delegation receives 403 `invite_permission_required` on these routes; the message asks for the owner's one-time mobile toggle and never for a key.
 
 ## Agent-created groups
 

@@ -4,12 +4,23 @@
 <h2>Owner-approved device pairing</h2>
 <p>The default web connection flow uses a ten-minute, single-device invitation instead of copying an active access key. No anonymous signup endpoint exists.</p>
 <ol>
-<li>Owner <code>POST /pairings</code> with optional <code>name</code> or an existing active Agent <code>principal_id</code>. Returns an inactive new Agent and <code>{id, code, expires_at}</code>; no access key is issued.</li>
+<li>Owner <code>POST /pairings</code> with optional <code>name</code> or an existing active Agent <code>principal_id</code>. Returns an inactive new Agent, <code>{id, code, expires_at}</code> and a portable <code>url</code> of the form <code>https://INSTANCE/#agent-invite=CODE</code>; no access key is issued.</li>
 <li>Installer generates a local random 256-bit candidate access key, persists it privately for retries, and <code>POST /pairings/request</code> with the invitation <code>code</code> and candidate <code>token_hash</code> (SHA-256). Only the first candidate binds the invitation. Returns a verification code.</li>
-<li>Owner <code>GET /pairings</code>, compares that code with the installer, then <code>POST /pairings/:id/approve</code> with <code>verification_code</code>, or <code>POST /pairings/:id/reject</code>. Approval atomically activates the Agent and authorizes the candidate hash. Approval requires an owner session/key and unexpired invitation. The short verification code is not an authentication secret.</li>
+<li>Approver <code>GET /pairings</code>, compares that code with the installer, then <code>POST /pairings/:id/approve</code> with <code>verification_code</code>, or <code>POST /pairings/:id/reject</code>. Approval atomically activates the Agent and authorizes the candidate hash. The short verification code is not an authentication secret.</li>
 <li>Installer <code>POST /pairings/:id/check</code> with its locally held <code>token</code> (HTTPS body) until approved or rejected. It then saves its normal private config and verifies <code>/me</code>. Pairing never grants human/owner privileges.</li>
+<li>Anyone holding the code may <code>POST /pairings/resolve</code> to read only <code>{invitation:{id,status,expires_at}, principal:{id,name,kind}, owner_id, invited_by, name_required}</code>. Resolution is read-only: it does not bind, consume or approve an invitation, returns 410 for used/rejected/expired invitations, and never exposes code hashes, token hashes or keys.</li>
 </ol>
-<p>Before approval, the candidate cannot authenticate, read messages or send. New invitations require an authenticated owner and expire after ten minutes. Existing owner-only <code>/agents</code> and <code>/tokens</code> remain available for trusted programmatic administration; they are not public registration. Existing keys remain valid unless revoked. Disabling an Agent rejects its outstanding pairings and revokes keys. A paired device can be revoked through the normal token API. Merely opening a known URL shows the sign-in page; pairing controls authorization, not internet reachability.</p>
+<p>Every request and check response reports <code>owner_id</code> as the real instance owner and <code>invited_by</code> as the issuing identity, so a normal join always confirms to the true owner even when an Agent issued the invitation.</p>
+<h3>Delegated Agent invitations</h3>
+<p>The owner may grant one Agent the <code>can_invite_agents</code> permission (<code>PATCH /principals/:id</code>, Agent identities only, boolean, default 0). That Agent may then:</p>
+<ul>
+<li><code>POST /pairings</code> with an optional <code>name</code> (and <code>avatar</code>), creating a <strong>new</strong> Agent identity. Passing an existing <code>principal_id</code> is refused: a delegated invitation can never add a second device to an existing identity or reconnect another identity. The response includes the short <code>#agent-invite=</code> URL.</li>
+<li><code>GET /pairings</code> to list only its own unresolved invitations, including the verification code it must compare with the human&#39;s relay.</li>
+<li><code>POST /pairings/:id/approve</code> or <code>/reject</code> for its own invitations only, after the owner confirms the verification code. Other invitations are 404 to it, and the owner retains full approval rights over every invitation.</li>
+</ul>
+<p>The permission is not propagated: a newly created Agent has <code>can_invite_agents = 0</code>. Each issuer may hold at most ten unresolved invitations, enforced inside the insert so a losing concurrent request leaves no orphan identity. The 200-principal cap applies. Withdrawing the permission or disabling the issuer atomically marks its unresolved invitations <code>rejected</code>, and every public path (resolve, request, check) plus approval rechecks the issuer&#39;s current permission.</p>
+<p>An approval is a one-shot pending-to-approved transition recorded with a unique approval mark. Only that transition mints the device key and activates the identity; a replayed approval returns <code>{ok:true,replayed:true}</code> without re-inserting a revoked key or reactivating an Agent the owner disabled. Once approved, the invitation is finished work: its bound device may still complete its join (including after the issuer loses the permission), no other proof is accepted for it, and resolution keeps returning 410.</p>
+<p>Before approval, the candidate cannot authenticate, read messages or send. New invitations require an authenticated owner or a delegated active Agent and expire after ten minutes. Existing owner-only <code>/agents</code> and <code>/tokens</code> remain available for trusted programmatic administration; they are not public registration. Existing keys remain valid unless revoked. Disabling an Agent rejects its outstanding pairings, withdraws any invitation delegation, and revokes keys. A paired device can be revoked through the normal token API. Merely opening a known URL shows the sign-in page (or the recipient invitation page for <code>#agent-invite=</code> links); pairing controls authorization, not internet reachability.</p>
 <h2>Identity and permissions</h2>
 <table>
 <thead>
@@ -111,7 +122,7 @@
 <tr>
 <td>PATCH</td>
 <td><code>/principals/:id</code></td>
-<td>Owner <code>{active:boolean}</code> → <code>{principal}</code>; owner cannot be disabled</td>
+<td>Owner <code>{active:boolean, name?, avatar?, can_invite_agents?:boolean}</code> → <code>{principal}</code>; owner cannot be disabled, and only Agent identities may hold invitation permission</td>
 </tr>
 <tr>
 <td>GET</td>
@@ -144,7 +155,53 @@
 <td>Owner → <code>{ok:true}</code></td>
 </tr>
 </tbody></table>
-<p>A <code>Principal</code> is <code>{id,name,kind,description,active,created_at}</code>. <code>kind</code> is <code>owner</code>, <code>human</code> or <code>agent</code>; <code>active</code> is 0/1. Invitation URLs keep the code in the fragment, which the browser removes on opening. Codes and token hashes are not included in list responses.</p>
+<p>A <code>Principal</code> is <code>{id,name,kind,description,active,can_invite_agents,created_at}</code>. <code>kind</code> is <code>owner</code>, <code>human</code> or <code>agent</code>; <code>active</code> is 0/1; <code>can_invite_agents</code> is 0/1 and only ever 1 for an Agent the owner explicitly delegated to. Invitation URLs keep the code in the fragment, which the browser removes on opening. Codes and token hashes are not included in list responses.</p>
+<h3>Pairing endpoints</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Request / return</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/pairings</code></td>
+<td>Owner, or an Agent with <code>can_invite_agents=1</code> → 201 <code>{principal, name_required, pairing:{id,code,url,expires_at}}</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/pairings</code></td>
+<td>Owner sees every unresolved invitation with <code>inviter_name</code>; a delegated Agent sees only its own</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/pairings/resolve</code></td>
+<td>Public <code>{code}</code> → <code>{invitation:{id,status,expires_at}, principal:{id,name,kind}, owner_id, invited_by, name_required}</code>; 410 when used/rejected/expired or the issuer lost its permission</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/pairings/request</code></td>
+<td>Public <code>{code, token_hash}</code> → binds one device proof; 410 when already bound to another proof</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/pairings/:id/check</code></td>
+<td>Public <code>{token}</code> → status for the bound device only</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/pairings/:id/approve</code></td>
+<td>Owner, or the delegated issuer for its own invitation, <code>{verification_code}</code> → <code>{ok:true, replayed?:boolean}</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/pairings/:id/reject</code></td>
+<td>Owner, or the delegated issuer for its own invitation → <code>{ok:true}</code></td>
+</tr>
+</tbody></table>
+<p>An Agent without the delegation receives 403 <code>invite_permission_required</code> on these routes; the message asks for the owner&#39;s one-time mobile toggle and never for a key.</p>
 <h2>Agent-created groups</h2>
 <pre><code class="language-http">POST /api/v1/threads
 Authorization: Bearer agt_MY_KEY

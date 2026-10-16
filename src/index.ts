@@ -145,11 +145,27 @@ async function api(request: Request, env: Env, url: URL) {
       if (typeof b.active !== 'boolean') fail(400, 'invalid_field', 'active must be a boolean.');
       updates.push('active = ?'); values.push(b.active ? 1 : 0);
     }
+    if (b.can_invite_agents !== undefined) {
+      // Only the owner reaches this branch, so an Agent can never grant itself or peers.
+      if (target.kind !== 'agent') fail(400, 'invalid_field', 'Only an Agent identity can hold invitation permission.');
+      if (typeof b.can_invite_agents !== 'boolean') fail(400, 'invalid_field', 'can_invite_agents must be a boolean.');
+      if (b.active === false && b.can_invite_agents) fail(400, 'invalid_field', 'Enable the Agent before allowing invitations.');
+      updates.push('can_invite_agents = ?'); values.push(b.can_invite_agents ? 1 : 0);
+    }
+    // Disabling an Agent ends both its delegation and its invitations; re-enabling restores
+    // the identity and history only, so the owner re-grants invitations deliberately.
+    if (b.active === false && target.kind === 'agent' && !updates.includes('can_invite_agents = ?')) {
+      updates.push('can_invite_agents = ?'); values.push(0);
+    }
     if (b.name !== undefined) { updates.push('name = ?'); values.push(str(b.name, 'name', 80)); }
     if (b.avatar !== undefined) { updates.push('avatar = ?'); values.push(avatarValue(b.avatar)); }
-    if (!updates.length) fail(400, 'invalid_field', 'Provide a name, avatar or active state.');
+    if (!updates.length) fail(400, 'invalid_field', 'Provide a name, avatar, active state, or invitation permission.');
+    const withdrawing = b.active === false || b.can_invite_agents === false;
     await env.DB.batch([
       env.DB.prepare('UPDATE principals SET '+updates.join(', ')+' WHERE id = ?').bind(...values, target.id),
+      // Disabling an Agent ends invitations for its identity; withdrawing the delegation
+      // ends only the invitations it issued. Both stay atomic with the permission change.
+      ...(withdrawing ? [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE created_by = ? AND status IN ('invited','pending')").bind(target.id)] : []),
       ...(b.active !== false ? [] : [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE principal_id = ? AND status IN ('invited','pending')").bind(target.id), env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now(), target.id)])
     ]);
     return json({ principal: await findPrincipal(env, target.id) });

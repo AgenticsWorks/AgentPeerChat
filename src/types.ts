@@ -1,6 +1,8 @@
 export interface Env { DB: D1Database; ASSETS: Fetcher; SETUP_SECRET: string }
 export type PrincipalKind = 'owner' | 'human' | 'agent';
-export interface Principal { id: string; name: string; kind: PrincipalKind; description: string; avatar?: string | null; active: number; created_at: string }
+// can_invite_agents is the owner-granted, default-off delegation that lets one Agent
+// issue and approve its own invitations. It is 0/1 and never applies to owner/human rows.
+export interface Principal { id: string; name: string; kind: PrincipalKind; description: string; avatar?: string | null; active: number; can_invite_agents?: number; created_at: string }
 export interface Message {
   id: string; seq: number; thread_id: string; sender_id: string;
   type: 'text' | 'json' | 'url' | 'artifact'; content: unknown; created_at: string;

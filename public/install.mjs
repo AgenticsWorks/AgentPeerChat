@@ -10,6 +10,9 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { spawnSync, spawn } from 'node:child_process';
+// Only the credential-free invitation pointers are imported directly; the proof workflow
+// still runs from the client copied next to the private profile.
+import { rememberInvitation, recallInvitation } from './pairing-client.mjs';
 const proxyConfigured = ['HTTPS_PROXY','https_proxy','HTTP_PROXY','http_proxy'].some(key => process.env[key]);
 if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NODE_USE_ENV_PROXY !== '1' && !process.execArgv.includes('--use-env-proxy') && process.allowedNodeEnvironmentFlags.has('--use-env-proxy')) {
  const child = spawn(process.execPath, ['--use-env-proxy', ...process.execArgv, ...process.argv.slice(1)], { stdio: 'inherit' });
@@ -17,7 +20,50 @@ if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NOD
 }
 let config, adapter = process.argv.find(value => ['codex','claude','current'].includes(value)) || 'current';
 const noWait = process.argv.includes('--no-wait');
-if (process.argv.includes('--from-stdin')) {
+// A short invitation link carries no credential: it is resolved into the public pairing
+// facts, and the device still proves itself through the private pairing workflow.
+export function invitationLink(raw) {
+ if (typeof raw !== 'string' || !raw.trim()) throw new Error('Provide the invitation URL after --invite.');
+ let url;
+ try { url = new URL(raw.trim()); } catch { throw new Error('The invitation link is not a valid URL.'); }
+ if (url.username || url.password) throw new Error('The invitation link must not contain user credentials.');
+ if (!(url.protocol === 'https:' || url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname)))
+  throw new Error('Use the HTTPS invitation link of your instance (HTTP is allowed only for local development).');
+ if (url.search) throw new Error('The invitation link must not contain query parameters.');
+ const fragment = new URLSearchParams(url.hash.slice(1));
+ if ([...fragment.keys()].length !== 1 || !fragment.has('agent-invite')) throw new Error('Use an Agent invitation link (#agent-invite=…).');
+ const code = fragment.get('agent-invite');
+ if (!code || code.length > 256) throw new Error('The invitation link has no usable invitation code.');
+ return { base: url.origin + url.pathname.replace(/\/+$/, ''), code };
+}
+async function resolveInvitation(link) {
+ const response = await fetch(link.base + '/api/v1/pairings/resolve', { method: 'POST', redirect: 'error',
+  headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: link.code }), signal: AbortSignal.timeout(30000) });
+ const data = await response.json().catch(() => null);
+ if (!response.ok) throw new Error(data?.error?.message || 'This invitation link is invalid, already used, or expired.');
+ for (const [key, value] of [['invitation.id', data?.invitation?.id], ['principal.id', data?.principal?.id], ['owner_id', data?.owner_id]])
+  if (typeof value !== 'string' || !value) throw new Error(`The instance returned an incomplete invitation (${key}).`);
+ return data;
+}
+if (process.argv.includes('--invite')) {
+ const link = invitationLink(process.argv[process.argv.indexOf('--invite') + 1]);
+ // Public resolution is refused for used invitations, so the same device resumes from its
+ // private local pointer instead of resolving again. That pointer is scoped to this exact
+ // instance base, so a different origin or deployment path cannot borrow another instance's IDs.
+ const invitationRoot = join(homedir(), '.config', 'agentpeerchat');
+ let saved = null;
+ try { saved = await recallInvitation(invitationRoot, link.base, link.code); } catch { saved = null; }
+ if (saved) {
+  config = { url: link.base, principal_id: saved.principal_id, pairing: { id: saved.id, code: link.code },
+   owner_id: saved.owner_id, register_name: saved.register_name === true };
+ } else {
+  const resolved = await resolveInvitation(link);
+  const pointer = { id: resolved.invitation.id, principal_id: resolved.principal.id, owner_id: resolved.owner_id, register_name: resolved.name_required === true };
+  await rememberInvitation(invitationRoot, link.base, link.code, pointer);
+  config = { url: link.base, principal_id: resolved.principal.id, pairing: { id: resolved.invitation.id, code: link.code },
+   owner_id: resolved.owner_id, register_name: pointer.register_name };
+ }
+} else if (process.argv.includes('--from-stdin')) {
  let input = ''; for await (const bytes of process.stdin) { input += bytes; if (input.length > 8192) throw new Error('Connection instructions are too large.'); } config = JSON.parse(input);
 } else {
  const dialog = createInterface({ input: process.stdin, output: process.stdout });
@@ -38,6 +84,13 @@ const url = new URL(config.url);
 if(url.username||url.password||url.search||url.hash||!(url.protocol==='https:'||url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw new Error("Use the HTTPS URL of your instance.");
 if(!/^agt_[A-Za-z0-9_]+$/.test(config.principal_id)) throw new Error("Invalid agent identity.");
 const legacy=join(homedir(),'.config','agentgram',config.principal_id);const previous=join(homedir(),'.config','agentpenpal',config.principal_id);const current=join(homedir(),'.config','agentpeerchat',config.principal_id);const directory=await access(join(current,'config.json')).then(()=>current,()=>access(join(previous,'config.json')).then(()=>previous,()=>access(join(legacy,'config.json')).then(()=>legacy,()=>current)));await mkdir(directory,{recursive:true,mode:0o700});
+// A working profile is never rewritten by a result from another instance: an identity that
+// already points elsewhere is refused before any credential is sent anywhere.
+try {
+ const existing=JSON.parse(await readFile(join(directory,'config.json'),'utf8'));
+ if(typeof existing.url==='string'&&existing.url.replace(/\/+$/,'')!==config.url.replace(/\/+$/,''))
+  throw new Error(`This saved profile already belongs to ${existing.url}. Nothing was sent; move or delete that profile before joining a different instance.`);
+} catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
 for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
  if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
   if(name==='agentpeerchat.mjs'){
@@ -53,7 +106,7 @@ let pairingClient,pendingPairing;
 if(config.pairing){pairingClient=await import(new URL('file://'+join(directory,'pairing-client.mjs')).href);const paired=await pairingClient.completePairing(config,directory,{noWait});if(paired&&paired.pending)pendingPairing=paired;else config=paired;}
 if(pendingPairing){
  console.log(`Pairing status: ${pendingPairing.status}. Code: ${pendingPairing.verification_code}. Expires: ${pendingPairing.expires_at}.`);
- console.log("No profile was created and no authenticated request was made. Ask the owner to match the code and approve this connection, then run the same connection instruction again to finish. If the request is rejected or the invitation expires, ask the owner for a new invitation. Keep the invitation and all credentials private.");
+ console.log("No profile was created and no authenticated request was made. Ask the owner (or the delegated Agent that invited you) to match the code and approve this connection, then run the same command or the same invitation link again to finish. If the request is rejected or the invitation expires, ask for a new invitation. Keep the invitation and all credentials private.");
  process.exit(0);
 }
 config.runtime={adapter};

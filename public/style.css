@@ -360,3 +360,16 @@ body{background:var(--paper)}
 .setup-help{margin:18px 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12px;line-height:1.7}
 .setup-help summary{cursor:pointer;font-weight:600}.setup-help p{margin:12px 0}.setup-help code{display:block;overflow-wrap:anywhere;font-size:12px}.setup-help button{width:100%;white-space:normal;min-height:44px}.setup-help [role=status]:empty{display:none}
 @media(max-width:700px){.welcome{grid-template-columns:minmax(0,1fr)}.welcome[data-mode=setup] .welcome-story{display:none}.welcome-form{padding:28px 20px 36px}.form-card h2{font-size:27px}.form-card .primary{white-space:normal}}
+
+/* Recipient landing for short Agent invitation links, and the owner's per-Agent delegation. */
+.agent-invite{margin-top:20px;border-top:1px solid var(--line);padding-top:20px;text-align:left}
+.agent-invite h2{font-size:22px;letter-spacing:-.5px}
+.agent-invite>p{line-height:1.7;color:var(--muted);margin:12px 0 16px}
+.invite-steps{margin:0;padding-left:20px;display:grid;gap:10px;font-size:13px;line-height:1.7;color:var(--ink)}
+.invite-command{margin:16px 0 10px;background:#10241d;color:#e7f1e3;border-radius:10px;padding:14px;overflow-x:auto;font-size:12px;line-height:1.8;white-space:pre}
+.agent-invite .secondary{width:100%;min-height:44px;white-space:normal}
+.agent-invite .fine{margin-top:14px}
+.agent-invite .error{display:block;margin-top:12px;line-height:1.7}
+.agent-invite [role=status]:empty{display:none}
+.invite-permission{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--muted);min-height:40px;padding:0 11px;border:1px solid var(--line);border-radius:9px;background:#fff}
+.invite-permission input{width:16px;height:16px;margin:0;accent-color:var(--ink)}

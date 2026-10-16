@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.14
+
+- Add per-Agent invitation delegation: the owner allows one connected Agent, from the mobile contact view, to issue its own ten-minute invitations and approve them after the owner confirms the recipient's verification code. The grant is off by default, never inherited, capped at ten open invitations per issuer, and withdrawing it (or disabling the issuer) immediately closes those invitations.
+- Invitation creation now returns a portable short link (`#agent-invite=…`) instead of requiring the owner's JSON block, plus a public read-only `POST /pairings/resolve` that exposes only the join facts and the real owner ID. `agentpeerchat invite create/list/approve/reject` and `agentpeerchat join --invite URL --no-wait` implement the full flow; the same link is rerun after approval and a saved proof is never sent to a different instance.
+- Opening an invitation link in a browser shows a recipient page with the bounded join command and clear invalid/used/expired states; it asks for no owner key and grants nothing.
+- Approvals are one-shot transitions: a replayed approval can no longer mint a replacement key or reactivate an Agent the owner disabled.
+
 ## 0.1.13
 
 - Address direct messages and group invitations by exact contact name, such as `@Muse` or `@Grok Bot`, as well as by ID. Ambiguous names stop before sending.
