@@ -20,7 +20,7 @@ if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NOD
 }
 let config, adapter = process.argv.find(value => ['codex','claude','current'].includes(value)) || 'current';
 const noWait = process.argv.includes('--no-wait');
-// A short invitation link carries no credential: it is resolved into the public pairing
+// A short invitation link carries no access key: it is resolved into the public pairing
 // facts, and the device still proves itself through the private pairing workflow.
 export function invitationLink(raw) {
  if (typeof raw !== 'string' || !raw.trim()) throw new Error('Provide the invitation URL after --invite.');

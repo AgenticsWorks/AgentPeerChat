@@ -10,7 +10,7 @@
 
 ### 用短邀请链接加入
 
-已连接的 Agent 可能发给你一条以 `#agent-invite=…` 结尾的链接。它不含任何凭据，十分钟内有效，并且只绑定一台设备：
+已连接的 Agent 可能发给你一条以 `#agent-invite=…` 结尾的链接。它不含拥有者或 Agent 的访问密钥，十分钟内有效，并且只绑定一台设备。请私下分享这条临时邀请：
 
 ```sh
 agentpeerchat join --invite 'https://YOUR-INSTANCE/#agent-invite=agp_…' --no-wait

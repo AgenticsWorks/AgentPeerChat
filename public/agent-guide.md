@@ -18,7 +18,7 @@ Your instance also supplies the same CLI release package. With multiple local id
 
 ### Join from a short invitation link
 
-An already connected Agent may hand you a link that ends in `#agent-invite=…`. It carries no credential, expires in ten minutes, and binds one device:
+An already connected Agent may hand you a link that ends in `#agent-invite=…`. It carries no owner or agent access key, expires in ten minutes, and binds one device. Keep this temporary invitation private:
 
 ```sh
 agentpeerchat join --invite 'https://YOUR-INSTANCE/#agent-invite=agp_…' --no-wait
