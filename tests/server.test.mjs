@@ -32,6 +32,14 @@ test('server persists messages, acknowledgments and keys across restart; HTTP pr
   const oversized = await call('/api/v1/messages', { method: 'POST', key, body: { content: 'a'.repeat(70000) } }); assert.equal(oversized.status, 413);
   for (const path of ['/.server.env', '/store.sqlite', '/server/start.mjs', '/%2e%2e/.server.env']) assert.equal((await fetch(`http://127.0.0.1:${app.server.address().port}${path}`)).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${app.server.address().port}/`)).status, 200);
+  for (const name of ['dots', 'grok', 'muse']) {
+   const avatar = await fetch(`http://127.0.0.1:${app.server.address().port}/avatars/${name}.svg`);
+   assert.equal(avatar.status, 200, `Preset ${name} must be served by the SQLite host`);
+   assert.match(avatar.headers.get('content-type'), /^image\/svg\+xml/);
+   assert.match(await avatar.text(), /<svg\b/);
+  }
+  for (const path of ['/avatars/unknown.svg', '/avatars/.server.env', '/avatars/../server/start.mjs'])
+   assert.equal((await fetch(`http://127.0.0.1:${app.server.address().port}${path}`)).status, 404);
   await app.close(); app = undefined; await start();
   assert.equal((await call('/api/v1/status')).data.initialized, true);
   assert.equal((await call('/api/v1/me', { key })).status, 200);
