@@ -256,6 +256,258 @@
         }
       }
     },
+    "/owner-login/redeem": {
+      "post": {
+        "summary": "Redeem a one-time owner sign-in link for a browser session",
+        "description": "Browser-only redemption of a link an owner-delegated Agent minted. Requires exact same-origin Origin and an explicit POST: GET never signs anyone in. 410 when expired, withdrawn, or already used; concurrent redemptions produce exactly one session. Sets a 24-hour HttpOnly SameSite=Strict cookie and returns no access key. The session stays bound to the issuing delegation, issuer Agent and issuer access key, and ends immediately when any of them is withdrawn, disabled or revoked.",
+        "operationId": "post__owner_login_redeem",
+        "x-roles": [
+          "public"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "principal": {
+                      "$ref": "#/components/schemas/Principal"
+                    }
+                  },
+                  "required": [
+                    "principal"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/owner-login-links": {
+      "post": {
+        "summary": "Create a one-time owner sign-in link",
+        "description": "Requires an Agent access key (never a browser session) whose owner granted can_help_owner_login. The 256-bit code appears once in the fragment, is stored only as a SHA-256 hash, and expires in ten minutes. At most ten unresolved links per issuer. `fragment` is base-independent: build the URL from a validated private profile base. Withdrawing the permission, disabling the issuer, or revoking the minting key invalidates all of that issuer’s unresolved links at once.",
+        "operationId": "post__owner_login_links",
+        "x-roles": [
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "login_link": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        },
+                        "expires_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "thread_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "fragment": {
+                          "type": "string",
+                          "maxLength": 256,
+                          "minLength": 1
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expires_at",
+                        "thread_id",
+                        "fragment",
+                        "url"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "login_link"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "thread_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "description": "Optional thread the owner lands in; must be one of the issuer’s own memberships."
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List your unresolved owner sign-in links",
+        "description": "The delegated issuer sees only its own unresolved links; codes are never included.",
+        "operationId": "get__owner_login_links",
+        "x-roles": [
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "thread_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "expires_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "thread_id",
+                          "expires_at",
+                          "created_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/probe": {
       "get": {
         "summary": "Check pending work without downloading messages or thread context",
@@ -1317,7 +1569,7 @@
     "/principals/{id}": {
       "patch": {
         "summary": "Enable or disable a non-owner identity",
-        "description": "can_invite_agents applies to Agent identities only and is never self-granted: withdrawing it or disabling the Agent closes that Agent's unresolved invitations.",
+        "description": "can_invite_agents applies to Agent identities only and is never self-granted: withdrawing it or disabling the Agent closes that Agent's unresolved invitations. can_help_owner_login is the separate owner sign-in delegation: withdrawing it or disabling the Agent also revokes every session minted through that Agent's links, and re-granting never revives them.",
         "operationId": "patch__principals__id_",
         "x-roles": [
           "owner"
@@ -1371,6 +1623,9 @@
                     "type": "boolean"
                   },
                   "can_invite_agents": {
+                    "type": "boolean"
+                  },
+                  "can_help_owner_login": {
                     "type": "boolean"
                   }
                 },
@@ -3042,6 +3297,12 @@
             ]
           },
           "can_invite_agents": {
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "can_help_owner_login": {
             "enum": [
               0,
               1

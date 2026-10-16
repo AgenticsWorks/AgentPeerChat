@@ -26,8 +26,14 @@ export async function authenticate(request: Request, env: Env): Promise<Identity
     WHERE t.hash = ? AND t.revoked_at IS NULL AND p.active = 1
     AND (t.expires_at IS NULL OR t.expires_at > ?)
     AND (t.parent_id IS NULL OR EXISTS (SELECT 1 FROM tokens parent WHERE parent.id = t.parent_id
-      AND parent.revoked_at IS NULL AND (parent.expires_at IS NULL OR parent.expires_at > ?)))`)
-    .bind(await hash(token), new Date().toISOString(), new Date().toISOString())
+      AND parent.revoked_at IS NULL AND (parent.expires_at IS NULL OR parent.expires_at > ?)))
+    AND (t.owner_login_grant_id IS NULL OR EXISTS (SELECT 1 FROM owner_login_grants g
+      WHERE g.id = t.owner_login_grant_id AND g.redeemed_session_id = t.id AND g.redeemed_at IS NOT NULL
+      AND EXISTS (SELECT 1 FROM principals issuer WHERE issuer.id = g.issuer_id
+        AND issuer.active = 1 AND issuer.can_help_owner_login = 1)
+      AND EXISTS (SELECT 1 FROM tokens issuer_key WHERE issuer_key.id = g.issuer_token_id
+        AND issuer_key.revoked_at IS NULL AND (issuer_key.expires_at IS NULL OR issuer_key.expires_at > ?))))`)
+    .bind(await hash(token), new Date().toISOString(), new Date().toISOString(), new Date().toISOString())
     .first<Principal & { token_id: string; token_kind: Identity['tokenKind'] }>();
   if (!row) fail(401, 'unauthorized', 'Access key is invalid, expired, or revoked.');
   if (!auth && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) checkOrigin(request);
@@ -83,6 +89,6 @@ export async function mintToken(env: Env, principal: string, label: string, kind
     .bind(tokenId, principal, await hash(token), label, kind, parent, expires).run();
   return { id: tokenId, token, expires_at: expires };
 }
-export function sessionCookie(request: Request, token: string, clear = false) {
-  return `ag_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear ? 0 : 7 * 86400}${new URL(request.url).protocol === 'https:' ? '; Secure' : ''}`;
+export function sessionCookie(request: Request, token: string, clear = false, maxAge = 7 * 86400) {
+  return `ag_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear ? 0 : maxAge}${new URL(request.url).protocol === 'https:' ? '; Secure' : ''}`;
 }
