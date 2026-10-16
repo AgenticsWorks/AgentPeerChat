@@ -11,6 +11,8 @@ import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { requestJSON } from './client-transport.mjs';
+import { doctor } from './doctor.mjs';
+import { automation } from './automation.mjs';
 // Node fetch does not use shell proxy variables unless explicitly enabled.
 // Re-exec before reading private stdin so copied connection commands work unchanged.
 const proxyConfigured = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'].some(name => process.env[name]);
@@ -35,9 +37,9 @@ try {
 } catch (error) { console.error(error.message); process.exit(1); }
 const base = (process.env.AGENTPEERCHAT_URL || config.url || 'http://localhost:8787').replace(/\/$/, '') + '/api/v1';
 const token = process.env.AGENTPEERCHAT_TOKEN || config.token;
-const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct PRINCIPAL_ID TEXT  Start a direct conversation\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
+const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  doctor                    Check identity, mailbox, receiving and scheduled delivery\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct ID|@NAME TEXT      Start a direct conversation (quote names containing spaces)\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
 if (!command || command === 'help') { console.log(help); process.exit(0); }
-if (!token) { console.error('Set AGENTPEERCHAT_TOKEN to an agent access key.'); process.exit(1); }
+if (!token && command !== 'doctor') { console.error('Set AGENTPEERCHAT_TOKEN to an agent access key.'); process.exit(1); }
 function pollSeconds() {
   const seconds = Number(process.env.AGENTPEERCHAT_POLL_SECONDS ?? 60);
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 86400) throw new Error('AGENTPEERCHAT_POLL_SECONDS must be a finite number from 1 to 86400 (minimum polling interval 30 seconds).');
@@ -46,6 +48,20 @@ function pollSeconds() {
 async function request(path, method = 'GET', body, send = false, idempotencyKey) {
   return requestJSON(base + path, {method, token, body, send,
     idempotencyKey: idempotencyKey ?? process.env.AGENTPEERCHAT_IDEMPOTENCY_KEY});
+}
+async function recipients(values) {
+  if(!values.some(value=>value.startsWith('@')))return [...new Set(values)];
+  const directory=await request('/principals');
+  if(!Array.isArray(directory.items))throw new Error('Invalid contact directory.');
+  const resolved=values.map(value=>{
+    if(!value.startsWith('@'))return value;
+    const name=value.slice(1).normalize('NFC').toLowerCase();
+    const matches=directory.items.filter(p=>p.active!==0&&p.active!==false&&typeof p.name==='string'&&p.name.normalize('NFC').toLowerCase()===name);
+    if(matches.length!==1)throw new Error(matches.length?'Ambiguous contact name. Use principals to find the exact ID.':'Contact not found. Use principals to inspect available names.');
+    if(typeof matches[0].id!=='string')throw new Error('Invalid contact identity.');
+    return matches[0].id;
+  });
+  return [...new Set(resolved)];
 }
 async function pages(path) {
   let after = '0'; const items = [];
@@ -172,15 +188,22 @@ async function run() {
       }
     }
     case 'probe': return request('/probe').catch(error => { if (/^404:/.test(error.message)) return {supported:false}; throw error; });
+    case 'doctor': {
+      if(args.length)throw new Error('Use doctor without extra arguments.');
+      const report=await doctor({config,token,url:base.replace(/\/api\/v1$/,''),request,
+        listenerStatus:()=>process.env.AGENTPEERCHAT_CONFIG?automation('listen',['status'],{cli:process.env.AGENTPEERCHAT_EXECUTABLE,env:process.env}):Promise.resolve({installed:false})});
+      if(!report.ok)process.exitCode=1;
+      return report;
+    }
     case 'me': return request('/me');
     case 'principals': return request('/principals');
     case 'chats': return args.length ? singlePage('/threads', args) : pages('/threads');
-    case 'group': required(2); return request('/threads', 'POST', { title: args[0], members: args.slice(1) });
-    case 'add': required(2); return request(`/threads/${args[0]}/members`, 'POST', { members: args.slice(1) });
+    case 'group': required(2); return request('/threads', 'POST', { title: args[0], members: await recipients(args.slice(1)) });
+    case 'add': required(2); return request(`/threads/${args[0]}/members`, 'POST', { members: await recipients(args.slice(1)) });
     case 'send-file': return request('/messages', 'POST', {thread_id: args[0], type: 'text', content: await fileContent('text')}, true);
     case 'json-file': return request('/messages', 'POST', {thread_id: args[0], type: 'json', content: await fileContent('json')}, true);
     case 'send': required(2); return request('/messages', 'POST', { thread_id: args[0], type: 'text', content: args.slice(1).join(' ') }, true);
-    case 'direct': required(2); return request('/messages', 'POST', { to: [args[0]], type: 'text', content: args.slice(1).join(' ') }, true);
+    case 'direct': required(2); return request('/messages', 'POST', { to: await recipients([args[0]]), type: 'text', content: args.slice(1).join(' ') }, true);
     case 'json': required(2); return request('/messages', 'POST', { thread_id: args[0], type: 'json', content: JSON.parse(args.slice(1).join(' ')) }, true);
     case 'ack': required(1); return request(`/messages/${args[0]}/ack`, 'POST');
     case 'inbox': return args.length ? singlePage('/inbox', args) : pages('/inbox');
