@@ -36,7 +36,7 @@ test('bounded pairing returns only status and reuses the private proof after app
  assert.equal(hashes.length,2);assert.equal(hashes[0],hashes[1],'A rerun must bind the same invitation to the same proof');
  assert.equal(hashes[0],createHash('sha256').update(proof.token).digest('hex'));
  const shown=notified.join(' ');
- assert.ok(shown.includes('BND1-2345'));
+ assert.equal(shown,'','an already-approved rerun prints no pairing code; the pending descriptor carried it');
  assert.ok(!shown.includes(proof.token));assert.ok(!shown.includes(config.pairing.code));
  await clearPairing(directory);await assert.rejects(stat(proofFile));
 });

@@ -579,11 +579,12 @@
     },
     "/pairings": {
       "post": {
-        "summary": "Create a ten-minute owner-issued device invitation",
-        "description": "",
+        "summary": "Create a ten-minute device invitation for a new Agent",
+        "description": "Owner may also target an existing active Agent with principal_id. An Agent needs the owner-granted can_invite_agents permission and can only create new identities; it holds at most ten unresolved invitations.",
         "operationId": "post__pairings",
         "x-roles": [
-          "owner"
+          "owner",
+          "agent"
         ],
         "security": [
           {
@@ -621,6 +622,10 @@
                           "minLength": 1,
                           "writeOnly": true
                         },
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
                         "expires_at": {
                           "type": "string",
                           "format": "date-time"
@@ -629,6 +634,7 @@
                       "required": [
                         "id",
                         "code",
+                        "url",
                         "expires_at"
                       ]
                     }
@@ -665,6 +671,11 @@
                     "maxLength": 80,
                     "minLength": 0
                   },
+                  "avatar": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 0
+                  },
                   "principal_id": {
                     "type": "string",
                     "maxLength": 80,
@@ -678,11 +689,12 @@
         }
       },
       "get": {
-        "summary": "List pending owner pairing approvals",
-        "description": "",
+        "summary": "List unresolved pairing approvals",
+        "description": "The owner sees every unresolved invitation and who issued it; a delegated Agent sees only its own.",
         "operationId": "get__pairings",
         "x-roles": [
-          "owner"
+          "owner",
+          "agent"
         ],
         "security": [
           {
@@ -733,6 +745,20 @@
                           "expires_at": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "created_by": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "inviter_name": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
                           }
                         },
                         "required": [
@@ -741,7 +767,10 @@
                           "name",
                           "status",
                           "verification_code",
-                          "expires_at"
+                          "expires_at",
+                          "created_at",
+                          "created_by",
+                          "inviter_name"
                         ]
                       }
                     }
@@ -766,10 +795,136 @@
         }
       }
     },
+    "/pairings/resolve": {
+      "post": {
+        "summary": "Read public invitation facts from a short link",
+        "description": "Read-only: never binds, consumes or approves. 410 when the invitation is used, rejected, expired, or its issuer lost the invitation permission. Exposes no code hash, token hash or key.",
+        "operationId": "post__pairings_resolve",
+        "x-roles": [
+          "public"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        },
+                        "status": {
+                          "enum": [
+                            "invited",
+                            "pending"
+                          ]
+                        },
+                        "expires_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "expires_at"
+                      ]
+                    },
+                    "principal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "enum": [
+                            "agent"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "kind"
+                      ]
+                    },
+                    "owner_id": {
+                      "type": "string",
+                      "maxLength": 80,
+                      "minLength": 1
+                    },
+                    "invited_by": {
+                      "type": "string",
+                      "maxLength": 80,
+                      "minLength": 1
+                    },
+                    "name_required": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "invitation",
+                    "principal",
+                    "owner_id",
+                    "invited_by",
+                    "name_required"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/pairings/request": {
       "post": {
-        "summary": "Bind one device proof to an owner-issued invitation",
-        "description": "Requires an unexpired 256-bit invitation. Same proof may retry; different proof cannot reuse it. No API permission until owner approval.",
+        "summary": "Bind one device proof to an invitation",
+        "description": "Requires an unexpired 256-bit invitation. Same proof may retry; different proof cannot reuse it. owner_id is the real instance owner, invited_by the issuing identity. No API permission until approval.",
         "operationId": "post__pairings_request",
         "x-roles": [
           "public"
@@ -825,6 +980,11 @@
                       "maxLength": 80,
                       "minLength": 1
                     },
+                    "invited_by": {
+                      "type": "string",
+                      "maxLength": 80,
+                      "minLength": 1
+                    },
                     "token_id": {
                       "type": "string",
                       "maxLength": 80,
@@ -835,6 +995,7 @@
                     "principal",
                     "pairing",
                     "owner_id",
+                    "invited_by",
                     "token_id"
                   ]
                 }
@@ -939,6 +1100,11 @@
                       "maxLength": 80,
                       "minLength": 1
                     },
+                    "invited_by": {
+                      "type": "string",
+                      "maxLength": 80,
+                      "minLength": 1
+                    },
                     "token_id": {
                       "type": "string",
                       "maxLength": 80,
@@ -949,6 +1115,7 @@
                     "principal",
                     "pairing",
                     "owner_id",
+                    "invited_by",
                     "token_id"
                   ]
                 }
@@ -1004,10 +1171,11 @@
     "/pairings/{id}/approve": {
       "post": {
         "summary": "Approve the verified Agent device",
-        "description": "",
+        "description": "Owner approves any invitation; a delegated Agent only its own. Only the pending-to-approved transition mints a key and activates the identity; a replay is read-only.",
         "operationId": "post__pairings__id__approve",
         "x-roles": [
-          "owner"
+          "owner",
+          "agent"
         ],
         "security": [
           {
@@ -1027,10 +1195,14 @@
                   "properties": {
                     "ok": {
                       "const": true
+                    },
+                    "replayed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "ok"
+                    "ok",
+                    "replayed"
                   ]
                 }
               }
@@ -1084,10 +1256,11 @@
     "/pairings/{id}/reject": {
       "post": {
         "summary": "Reject an unapproved pairing",
-        "description": "",
+        "description": "Owner rejects any invitation; a delegated Agent only its own.",
         "operationId": "post__pairings__id__reject",
         "x-roles": [
-          "owner"
+          "owner",
+          "agent"
         ],
         "security": [
           {
@@ -1144,7 +1317,7 @@
     "/principals/{id}": {
       "patch": {
         "summary": "Enable or disable a non-owner identity",
-        "description": "",
+        "description": "can_invite_agents applies to Agent identities only and is never self-granted: withdrawing it or disabling the Agent closes that Agent's unresolved invitations.",
         "operationId": "patch__principals__id_",
         "x-roles": [
           "owner"
@@ -1195,6 +1368,9 @@
                 "type": "object",
                 "properties": {
                   "active": {
+                    "type": "boolean"
+                  },
+                  "can_invite_agents": {
                     "type": "boolean"
                   }
                 },
@@ -2865,6 +3041,12 @@
               1
             ]
           },
+          "can_invite_agents": {
+            "enum": [
+              0,
+              1
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -2874,7 +3056,6 @@
           "id",
           "name",
           "kind",
-          "description",
           "active",
           "created_at"
         ]

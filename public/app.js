@@ -6,7 +6,7 @@ import { connectionInstructions } from './connection-kit.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null, perspective: 'all' };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null, perspective: 'all', inviteCode: null };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -418,6 +418,24 @@ function renderPrincipals() {
     card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? t("还没有简介。") : t("可以查看聊天、参与讨论。"))), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : t("联系人")));
     const footer = el('footer');
     if(state.me.kind==='owner'){const edit=el('button','secondary',t('Edit profile'));edit.addEventListener('click',()=>editPrincipal(p));footer.append(edit);}
+    if (state.me.kind === 'owner' && p.kind === 'agent') {
+      // One explicit, mobile-friendly owner switch. Withdrawing it closes that Agent's open invitations.
+      const permission = el('label', 'invite-permission');
+      const toggle = el('input'); toggle.type = 'checkbox'; toggle.checked = p.can_invite_agents === 1;
+      toggle.setAttribute('aria-label', t("Allow Agent invitations"));
+      toggle.addEventListener('change', async () => {
+        const next = toggle.checked; toggle.disabled = true;
+        try {
+          await api(`/principals/${p.id}`, { method: 'PATCH', data: { can_invite_agents: next } });
+          await refresh();
+          toast(next ? t("{0} can now invite other Agents. Ask it to create a link only when you want one.", p.name)
+                     : t("Invitation permission withdrawn. {0}’s open invitations are now closed.", p.name));
+        } catch (error) { toggle.checked = !next; toast(error.message); }
+        finally { toggle.disabled = false; }
+      });
+      permission.append(toggle, el('span', '', t("Allow Agent invitations")));
+      footer.append(permission);
+    }
     if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
       const connect = el('button', 'primary', t("连接 Agent")); connect.dataset.connectAgent = p.id;
       connect.addEventListener('click', async () => {
@@ -492,6 +510,13 @@ async function boot() {
       try{await api('/session',{method:'POST',data:{access_key:signInKey}});await enter();}catch(error){authMode('login');$('#auth-error').textContent=error.message;}
       return;
     }
+    const agentInvitation = parameters.get('agent-invite');
+    if (agentInvitation) {
+      // The invitation code stays out of the address bar and history; retry uses the shared link again.
+      history.replaceState(null, '', location.pathname + location.search);
+      await showAgentInvitation(agentInvitation);
+      return;
+    }
     const invitation = parameters.get('invite');
     if (invitation) { history.replaceState(null, '', location.pathname); authMode('invite'); $('#auth-key').value = invitation; return; }
     const status = await api('/status');
@@ -502,10 +527,62 @@ async function boot() {
 }
 window.addEventListener('hashchange',()=>{
  const params=new URLSearchParams(location.hash.slice(1));
- if(params.has('access_key')||params.has('invite')){
+ if(params.has('access_key')||params.has('invite')||params.has('agent-invite')){
   clearTimeout(state.timer);$('#shell').hidden=true;$('#boot-state').hidden=false;
   void boot();
  }
+});
+// A recipient landing page for short Agent invitation links. It resolves only public
+// metadata, asks for no owner key, and never claims, approves or creates credentials.
+function inviteCommand(code) {
+  const link = `${location.origin}${appBase}/#agent-invite=${encodeURIComponent(code)}`;
+  return `npm install --global ${location.origin}${appBase}/agentpeerchat-cli.tgz\nagentpeerchat join --invite '${link}' --no-wait`;
+}
+function renderInviteStatic(code) {
+  const steps = [
+    t("Install the shared CLI with Node.js 22.15+, from this instance’s release package or the public repository."),
+    t("Run the bounded join command below in the invited Agent’s own terminal. It prints a verification code and exits without creating a profile or sending an authenticated request."),
+    t("Send that code back to the person who invited you, and wait for their confirmation."),
+    t("Rerun the exact same command. It reuses this device’s saved proof and finishes joining under its own identity.")
+  ];
+  $('#invite-steps-list').replaceChildren(...steps.map(step => el('li', '', step)));
+  $('#invite-command').textContent = inviteCommand(code);
+  $('#invite-limits').textContent = t("Invitation links expire after ten minutes and bind one device. This page never asks for the owner’s key; approval stays with the owner or the delegated Agent that invited you.");
+  $('#invite-runtime').textContent = t("Opening this link grants nothing by itself: the recipient still needs the CLI or native HTTP tools, and a link creates no schedule, does not wake a hosted agent, and adds no model or tool capability. If your runtime cannot run commands or fetch APIs, say so and stop — no identity is created here.");
+  const docs = el('span');
+  docs.append(t("Full instructions: "), Object.assign(document.createElement('a'), { href: '/agent-guide.md', textContent: t("Agent connection guide") }), ' · ', Object.assign(document.createElement('a'), { href: '/protocol.html', textContent: t("Developer documentation") }));
+  $('#invite-docs-links').replaceChildren(docs);
+}
+async function showAgentInvitation(code) {
+  state.inviteCode = code;
+  $('#onboarding').dataset.mode = 'agent-invite';
+  $('#onboarding').hidden = false; $('#shell').hidden = true; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true;
+  $('#auth-form').hidden = true; $('#auth-switch').hidden = true; $('#setup-help').hidden = true; $('#agent-invite').hidden = false;
+  $('.skip-link').href = '#agent-invite';
+  $('#invite-error').hidden = true; $('#invite-steps').hidden = false; $('#invite-copy-status').textContent = '';
+  renderInviteStatic(code);
+  $('#invite-summary').textContent = t("Checking this invitation…");
+  try {
+    const resolved = await api('/pairings/resolve', { method: 'POST', data: { code } });
+    $('#invite-summary').textContent = resolved.invitation.status === 'pending'
+      ? t("This invitation already holds one device and is waiting for approval. Only that device can finish it.")
+      : t("This invitation is open until {0}. Follow the steps below to join.", new Date(resolved.invitation.expires_at).toLocaleString(getLocale()));
+  } catch (error) {
+    $('#invite-steps').hidden = true;
+    $('#invite-summary').textContent = t("This invitation link cannot be used.");
+    const detail = $('#invite-error'); detail.hidden = false;
+    detail.textContent = error.status === 410
+      ? t("It is invalid, already used by another device, expired, or its issuer’s permission was withdrawn. Ask for a new invitation link.")
+      : error.message;
+  }
+}
+$('#invite-back').addEventListener('click', () => {
+  $('#agent-invite').hidden = true; $('#auth-form').hidden = false; state.inviteCode = null;
+  authMode('login');
+});
+$('#copy-invite-command').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('#invite-command').textContent); $('#invite-copy-status').textContent = t("Copied. Run it in the invited Agent’s terminal."); }
+  catch { $('#invite-copy-status').textContent = t("Select and copy the command above manually."); }
 });
 $('#identity-perspective').addEventListener('change', () => setPerspective($('#identity-perspective').value).catch(error => toast(error.message)));
 $('#refresh-map').addEventListener('click', () => refresh().catch(error => toast(error.message)));
@@ -565,7 +642,10 @@ async function renderPairings(){
  const result=await api('/pairings'),list=$('#pairing-list');list.replaceChildren();
  const pending=result.items.filter(p=>p.status==='pending');$('#pairing-requests').hidden=!pending.length;
  for(const p of pending){
-  const row=el('div','pairing-request');row.append(el('strong','',p.name),el('span','',t("配对码 {0}", p.verification_code)));
+  const row=el('div','pairing-request');
+  const heading=el('strong','',p.name);
+  if(p.created_by&&p.created_by!==state.me.id&&p.inviter_name)heading.append(el('small','fine',t("issued by {0}",p.inviter_name)));
+  row.append(heading,el('span','',t("配对码 {0}", p.verification_code)));
   const allow=el('button','primary',t("核对一致，允许")),reject=el('button','secondary',t("拒绝"));
   for(const [button,action] of [[allow,'approve'],[reject,'reject']]){button.type='button';button.addEventListener('click',async()=>{
    allow.disabled=true;reject.disabled=true;
@@ -577,6 +657,7 @@ async function renderPairings(){
 }
 
 document.addEventListener("agentpeerchat:languagechange",()=>{
+ if(state.inviteCode){void showAgentInvitation(state.inviteCode);return;}
  if(!state.me){authMode(state.authMode);return;}
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
  renderPerspective();renderThreads();renderPrincipals();renderMembers();renderMessages();renderGraph();

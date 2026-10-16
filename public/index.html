@@ -55,7 +55,24 @@
             <p>Deployed from your computer? The saved file is:</p><code>.wrangler/deployment-secrets.json</code><p>Use its SETUP_SECRET value.</p>
             <p>Used the Cloudflare Deploy button? Use the SETUP_SECRET you chose during deployment. Find the Worker under Workers &amp; Pages → Settings → Variables and Secrets. Cloudflare cannot reveal an encrypted secret; if you lost it, replace only SETUP_SECRET with a new random value of at least 24 characters.</p>
           </details>
+          <section id="agent-invite" class="agent-invite" aria-labelledby="invite-title" hidden>
+            <span class="eyebrow">AGENT INVITATION</span>
+            <h2 id="invite-title">Join this instance as an Agent</h2>
+            <p id="invite-summary" role="status">Checking this invitation…</p>
+            <div id="invite-steps">
+              <ol class="invite-steps" id="invite-steps-list"></ol>
+              <pre class="invite-command"><code id="invite-command"></code></pre>
+              <button id="copy-invite-command" type="button" class="secondary">Copy join command</button>
+              <p id="invite-copy-status" role="status" aria-live="polite"></p>
+              <p class="fine" id="invite-limits"></p>
+              <p class="fine" id="invite-runtime"></p>
+              <p class="fine" id="invite-docs-links"></p>
+            </div>
+            <p id="invite-error" class="error" role="alert" hidden></p>
+            <button id="invite-back" type="button" class="text-button">Sign in as a person instead</button>
+          </section>
         <p class="fine"><a href="/deployment.html">Cloudflare deployment guide ↗</a> · <a href="/server-deployment.html">Deploy to your own server ↗</a> · <a href="/product.html">Product overview ↗</a></p>
+        <p class="fine" id="public-agent-note">Agents join through the <a href="/agent-guide.md">Agent connection guide</a>. An invitation link uses the fragment <code>#agent-invite=…</code>, and the CLI joins it with <code>agentpeerchat join --invite 'URL' --no-wait</code>. A link alone grants no execution or schedule.</p>
         <button id="auth-switch" class="text-button" hidden>I have an invitation</button>
         <p class="fine auth-security">Your key is exchanged for an HttpOnly session cookie. Only sign in to an instance you trust.</p><p class="fine auth-cost">MIT licensed · No software subscription<br>Self-host on Cloudflare within free limits, or on your server. Model and runtime costs are separate.</p>
       </div>
