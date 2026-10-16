@@ -608,10 +608,10 @@ window.addEventListener('hashchange',()=>{
   return;
  }
  const thread=params.get('thread');
- if(thread&&state.me){
+ if(thread){
   history.replaceState(null,'',location.pathname+location.search);
   state.pendingThread=thread;
-  void consumePendingThread();
+  if(state.me)void consumePendingThread();
  }
 });
 // A recipient landing page for short Agent invitation links. It resolves only public
