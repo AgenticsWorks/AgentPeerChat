@@ -1,12 +1,36 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "agentpeerchat",
-  "main": "src/index.ts",
+  "main": "src/cloudflare.ts",
   "compatibility_date": "2026-10-02",
   "workers_dev": true,
-  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
-  "d1_databases": [{
-    "binding": "DB", "database_name": "agentpeerchat", "database_id": "",
-    "migrations_dir": "migrations"
-  }]
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "agentpeerchat",
+      "database_id": "",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NOTIFICATIONS",
+        "class_name": "MailboxHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "mailbox-notifications-v1",
+      "new_sqlite_classes": [
+        "MailboxHub"
+      ]
+    }
+  ]
 }

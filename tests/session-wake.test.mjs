@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer as netServer} from 'node:net';
+import {createServer as httpServer} from 'node:http';
+import {mkdtemp,writeFile,readFile,rm,mkdir,chmod,stat} from 'node:fs/promises';
+import {join,resolve} from 'node:path';
+import {tmpdir} from 'node:os';
+import {sessionRecipe,wakeSession,wakePrompt} from '../scripts/session-wake.mjs';
+import {automation} from '../scripts/automation.mjs';
+const thread='11111111-1111-4111-8111-111111111111';
+test('Codex wake binds an exact session UUID and calls queue without creating or acknowledging work',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'agentpeerchat-queue-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const exe=join(root,'codex');await writeFile(exe,`#!/usr/bin/env node\nimport {writeFileSync} from 'node:fs';if(!process.argv.includes('--help'))writeFileSync(${JSON.stringify(join(root,'called.json'))},JSON.stringify(process.argv.slice(2)));`,{mode:0o700});
+ const recipe=await sessionRecipe({runtime:'codex',thread:'current',executable:exe,workspace:root,env:{...process.env,CODEX_THREAD_ID:thread}});
+ assert.equal(recipe.thread_id,thread);await wakeSession(recipe,'safe wake notification');
+ assert.deepEqual(JSON.parse(await readFile(join(root,'called.json'),'utf8')),['queue','--thread',thread,'--message','safe wake notification']);
+ for(const id of ['last','human-friendly-name','--last','',undefined])await assert.rejects(sessionRecipe({runtime:'codex',thread:id,executable:exe,workspace:root}),/UUID/);
+ const prompt=wakePrompt({profile:'/private/profile.json',cli:'/tools/agentpeerchat.mjs',principalId:'agt_fixture',membershipChanged:true});assert.ok(prompt.includes('inbox --page'));assert.ok(prompt.includes('untrusted'));assert.ok(prompt.includes('/private/profile.json'));assert.ok(!prompt.includes('private-fixture-token'));
+});
+test('session listener submits authenticated Claude frames, suppresses repeats, and verifies processing only through Agent ACK',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'apc-socket-')),profile=join(root,'profile.json'),state=profile+'.automation',socket=join(root,'s.sock');
+ let frames=[],pending=true,receiptReads=0;const methods=[];
+ const local=netServer(connection=>{let raw='';connection.on('data',c=>raw+=c);connection.on('end',()=>{frames.push(...raw.trim().split('\n').map(JSON.parse));});});
+ await new Promise(r=>local.listen(socket,r));
+ const remote=httpServer((req,res)=>{methods.push(req.method+' '+req.url);res.setHeader('Content-Type','application/json');
+  let data;if(req.url==='/api/v1/probe')data={agent:{id:'agt_fixture'},pending,membership_cursor:'0'};
+  else if(req.url.startsWith('/api/v1/inbox'))data={items:pending?[{id:'msg_fixture'}]:[],has_more:false,next_cursor:'1'};
+  else if(req.url==='/api/v1/messages/msg_fixture'){receiptReads++;data={receipts:[{recipient_id:'agt_fixture',acked_at:pending?null:'2026-10-17T10:00:00Z'}]};}
+  else{res.statusCode=404;data={};}res.end(JSON.stringify(data));});
+ await new Promise(r=>remote.listen(0,'127.0.0.1',r));
+ t.after(async()=>{await new Promise(r=>local.close(r));await new Promise(r=>remote.close(r));await rm(root,{recursive:true,force:true});});
+ const env={...process.env,AGENTPEERCHAT_CONFIG:profile,NODE_USE_ENV_PROXY:'0'};
+ for(const k of Object.keys(env))if(/^(AGENTGRAM_|AGENTPENPAL_|AGENTPEERCHAT_)/.test(k)&&k!=='AGENTPEERCHAT_CONFIG')delete env[k];
+ await writeFile(profile,JSON.stringify({principal_id:'agt_fixture',url:'http://127.0.0.1:'+remote.address().port,token:'private-fixture-token'}),{mode:0o600});await mkdir(state);
+ const recipe=await sessionRecipe({runtime:'claude',socket,workspace:root,env:{CLAUDE_CODE_MESSAGING_TOKEN:'private-session-token'}});
+ await writeFile(join(state,'runner.json'),JSON.stringify(recipe),{mode:0o600});await writeFile(join(state,'listener.json'),JSON.stringify({delivery_mode:'session',runner_file:join(state,'runner.json')}));
+ const run=()=>automation('listen',['run'],{cli:resolve('cli/agentpeerchat.mjs'),env});
+ const first=await run();assert.equal(first.wake_submitted,true);assert.equal(first.model_started,false);assert.equal(first.awaiting_processing,true);
+ await new Promise(r=>setTimeout(r,20));assert.equal(frames.length,2);assert.equal(frames[0].type,'auth');assert.equal(frames[0].token,'private-session-token');assert.equal(frames[1].message.role,'user');assert.ok(!frames[1].message.content.includes('private-fixture-token'));
+ const suppressed=await run();assert.equal(suppressed.wake_suppressed,true);assert.equal(frames.length,2);
+ let status=await automation('listen',['status'],{cli:resolve('cli/agentpeerchat.mjs'),env});assert.equal(status.last_wake_check,null,'socket write is not proof of processing');
+ pending=false;await run();status=await automation('listen',['status'],{cli:resolve('cli/agentpeerchat.mjs'),env});assert.equal(status.last_wake_check.acknowledged,1);assert.ok(status.last_wake_check.processed_at);
+ const before=receiptReads;await run();assert.equal(receiptReads,before,'already-confirmed receipts are not queried forever');
+ assert.ok(!methods.some(method=>method.startsWith('POST')),'listener never sends or acknowledges for the target model');
+ assert.equal((await stat(join(state,'wake.json'))).mode&0o777,0o600);
+ assert.ok(!JSON.stringify(status).includes('private-session-token'));
+ await assert.rejects(wakeSession({...recipe,socket:{...recipe.socket,inode:recipe.socket.inode+1}},'safe'),/changed/);
+});

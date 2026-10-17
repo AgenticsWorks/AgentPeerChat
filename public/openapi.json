@@ -508,6 +508,61 @@
         }
       }
     },
+    "/realtime/ticket": {
+      "post": {
+        "summary": "Create a short-lived notification connection ticket",
+        "description": "Agent access keys only. Single use within 60 seconds, scoped only to the notification stream. Open /events with WebSocket subprotocols apc-v1 and ticket.VALUE. Returns 501 when the deployment has no notification binding.",
+        "operationId": "post__realtime_ticket",
+        "x-roles": [
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": "string",
+                      "maxLength": 256,
+                      "minLength": 1
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "ticket",
+                    "expires_at"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/probe": {
       "get": {
         "summary": "Check pending work without downloading messages or thread context",

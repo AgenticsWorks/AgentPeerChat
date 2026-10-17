@@ -1,3 +1,4 @@
+import { realtimeTicket, realtimeConnect, notifyAgents } from './realtime';
 import { avatarValue } from './avatar';
 import { pairingPublic, pairingOwner } from './pairing';
 import { ownerLoginRedeem, ownerLoginAgent } from './owner-login';
@@ -92,6 +93,7 @@ async function publicRoutes(request: Request, env: Env, path: string) {
 
 async function api(request: Request, env: Env, url: URL) {
   const path = url.pathname.slice('/api/v1'.length).replace(/\/$/, '') || '/';
+  if (path === '/events' && request.method === 'GET') return realtimeConnect(request, env);
   const publicResponse = await publicRoutes(request, env, path);
   if (publicResponse) return publicResponse;
   const identity = await authenticate(request, env), p = identity.principal;
@@ -100,6 +102,10 @@ async function api(request: Request, env: Env, url: URL) {
   const ownerLoginResponse = await ownerLoginAgent(request, env, path, p, identity.tokenId, identity.tokenKind);
   if (ownerLoginResponse) return ownerLoginResponse;
   const store = new D1MessageStore(env.DB), method = request.method;
+  if (path === '/realtime/ticket' && method === 'POST') {
+    if (p.kind !== 'agent' || identity.tokenKind !== 'access') fail(403, 'agent_required', 'Use a connected Agent identity.');
+    return json(await realtimeTicket(env, p.id, identity.tokenId), 201);
+  }
   if (path === '/me' && method === 'GET') return json({ principal: p });
   if (path === '/probe' && method === 'GET') {
     if (p.kind !== 'agent') fail(403, 'agent_required', 'Only an Agent may probe its inbox.');
@@ -193,6 +199,7 @@ async function api(request: Request, env: Env, url: URL) {
       ] : []),
       ...(b.active !== false ? [] : [env.DB.prepare("UPDATE pairings SET status = 'rejected' WHERE principal_id = ? AND status IN ('invited','pending')").bind(target.id), env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now(), target.id)])
     ]);
+    await notifyAgents(env, [target.id]);
     return json({ principal: await findPrincipal(env, target.id) });
   }
   if (path === '/tokens' && method === 'GET') {
@@ -224,6 +231,7 @@ async function api(request: Request, env: Env, url: URL) {
       AND (? != ? OR (SELECT COUNT(*) FROM tokens WHERE principal_id = ? AND kind = 'access' AND revoked_at IS NULL) > 1)`)
       .bind(now(), token.id, token.id, token.principal_id, p.id, p.id).run();
     if (!result.meta.changes) fail(409, 'last_access_key', 'Create and save a replacement before revoking your last key.');
+    await notifyAgents(env, [token.principal_id]);
     return json({ ok: true });
   }
   if (path === '/invites' && method === 'GET') {
@@ -257,6 +265,7 @@ async function api(request: Request, env: Env, url: URL) {
       env.DB.prepare(`INSERT ${direct ? 'OR IGNORE ' : ''}INTO thread_members(thread_id, principal_id) VALUES ${members.map(() => '(?, ?)').join(',')}`)
         .bind(...members.flatMap(member => [threadId, member]))
     ]);
+    await notifyAgents(env, members.filter(member => member !== p.id));
     return json({ thread: { ...await threadAccess(env, threadId, p), members: await threadMembers(env, threadId) } }, 201);
   }
   if (path === '/threads' && method === 'GET') {
@@ -290,6 +299,7 @@ async function api(request: Request, env: Env, url: URL) {
       .bind(...added, match[1], match[1], match[1]).run();
     const actual = await threadMembers(env, match[1]);
     if (added.some(member => !actual.some(m => m.id === member))) fail(409, 'member_limit', 'Threads support up to 32 participants.');
+    await notifyAgents(env, added);
     return json({ members: actual });
   }
   match = /^\/threads\/([^/]+)\/activity$/.exec(path);
@@ -371,6 +381,7 @@ async function api(request: Request, env: Env, url: URL) {
     }
     const result = await store.put({ id: id('msg'), thread_id: threadId, sender_id: p.id, type, content,
       idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread, reply_to: replyTo });
+    if (!result.replayed) await notifyAgents(env, recipients);
     return json(result, result.replayed ? 200 : 201);
   }
   if (path === '/inbox' && method === 'GET') {
@@ -454,6 +465,7 @@ export default {
         response = json({ error: { code: 'temporarily_unavailable', message: 'Storage is unavailable. Retry with backoff; check database availability, migrations and hosting quotas.', request_id: requestId } }, 503, { 'Retry-After': '60' });
       }
     }
+    if (response.status === 101) return response;
     const headers = new Headers(response.headers);
     headers.set('X-Request-Id', requestId);
     headers.set('X-Content-Type-Options', 'nosniff');

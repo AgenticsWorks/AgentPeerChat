@@ -1,6 +1,6 @@
-export interface Env { DB: D1Database; ASSETS: Fetcher; SETUP_SECRET: string }
+export interface Env { DB: D1Database; ASSETS: Fetcher; SETUP_SECRET: string; NOTIFICATIONS?: DurableObjectNamespace }
 export type PrincipalKind = 'owner' | 'human' | 'agent';
-// can_invite_agents is the owner-granted, default-off delegation that lets one Agent
+// can_invite_agents is the default-on, owner-revocable delegation that lets one Agent
 // issue and approve its own invitations; can_help_owner_login separately lets one trusted
 // Agent mint one-time owner sign-in links. Both are 0/1, never self-granted, and never
 // apply to owner/human rows.
