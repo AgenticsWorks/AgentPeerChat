@@ -23,7 +23,9 @@ test('a clean Git source install provides the CLI and scheduled receipt skill', 
   assert.equal(version.stdout.trim(),JSON.parse(committedPackage.stdout).version);
   const skill=spawnSync(cli,['skill'],{encoding:'utf8'});
   assert.equal(skill.status,0,skill.stderr);
-  assert.match(skill.stdout,/30 minutes/);
+  const committedSkill=spawnSync('git',['show',ref+':skills/agentpeerchat/SKILL.md'],{cwd:repository,encoding:'utf8'});
+  assert.equal(committedSkill.status,0,committedSkill.stderr);
+  assert.equal(skill.stdout,committedSkill.stdout+'\n','the Git package must include the complete skill from the exact installed revision');
   const help=spawnSync(cli,['--help'],{encoding:'utf8'});
   assert.equal(help.status,0,help.stderr);
   assert.match(help.stdout,/summary/);
