@@ -18,12 +18,13 @@ test('missing credentials, conflicting overrides and mismatched identities do no
   const report=await doctor(options(overrides));assert.equal(report.ok,false);assert.equal(report.connected,false);assert.ok(!JSON.stringify(report).includes('secret-fixture'));
  }
 });
-test('timer installation alone is unverified; verified receiving requires a real successful model turn',async()=>{
+test('timer installation alone is unverified; verified receiving requires actual processing and ACK',async()=>{
  const status={installed:true,active:true,enabled:true,interval_seconds:60,task_id:'fixture.timer'};
  let report=await doctor(options({listenerStatus:async()=>status}));assert.equal(report.state,'receiving_unverified');
  status.last_check={checked_at:new Date(time).toISOString(),success:true};
  status.last_model_check={success:true,model_started:true,model_finished_at:new Date(time-1000).toISOString()};
- report=await doctor(options({listenerStatus:async()=>status}));assert.equal(report.state,'receiving_verified');assert.equal(report.receiving.verified,true);
+ report=await doctor(options({listenerStatus:async()=>status}));assert.equal(report.state,'receiving_unverified');
+ status.last_model_check.acknowledged=1;report=await doctor(options({listenerStatus:async()=>status}));assert.equal(report.state,'receiving_verified');assert.equal(report.receiving.verified,true);
  for(const changes of [{active:false},{last_check:{checked_at:new Date(time).toISOString(),success:false,error:'secret-fixture'}},{last_check:{checked_at:new Date(time-3600000).toISOString(),success:true}}]){
   report=await doctor(options({listenerStatus:async()=>({...status,...changes})}));assert.equal(report.state,'needs_attention');assert.equal(report.receiving.verified,false);assert.ok(!JSON.stringify(report).includes('secret-fixture'));
  }

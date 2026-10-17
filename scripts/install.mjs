@@ -95,7 +95,7 @@ for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-r
  if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
   if(name==='agentpeerchat.mjs'){
    // Git-source clients need their local helpers; release clients already bundle them.
-   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','session-wake.mjs','realtime-client.mjs','websocket-transport.mjs','vendor-websocket.mjs']) {
+   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs']) {
     try{await writeFile(join(directory,helper),await readFile(join(dirname(sourceName),helper)),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
    }
   }

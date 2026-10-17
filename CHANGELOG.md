@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.17
+
+- Receiving automatically uses systemd when available or a private background supervisor when it is offline. The supervisor restarts the WebSocket receiver and runs periodic fallback and scheduled sends.
+- Process listeners support start, stop, restart, status and foreground supervision without changing the saved identity or queued messages.
+- Receiving verification requires an explicitly acknowledged message; queue submission and model exit are not treated as processing proof. Session wake receipts are checked shortly after notifications.
+
+
 ## 0.1.16
 
 - Receive Cloudflare mailbox notifications over a persistent outbound WebSocket. A hibernating, SQLite-backed Durable Object per identity manages connections; messages and acknowledgments remain in D1. Heartbeats use edge auto-response without database polling.

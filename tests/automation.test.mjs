@@ -24,6 +24,7 @@ test('listener wakes only for work, preserves failed membership discovery, exclu
     if(req.url.startsWith('/api/v1/inbox'))return finish({items:pending,next_cursor:'0',has_more:false});
     if(req.url.startsWith('/api/v1/threads?'))return finish({items:threads,next_cursor:'0',has_more:false});
     if(req.url==='/api/v1/threads/thr_pair?after=0&limit=100')return finish({thread:{id:'thr_pair'},items:[],next_cursor:'0',has_more:false});
+    if(req.url==='/api/v1/messages/msg_pending')return finish({receipts:[{recipient_id:'agt_fixture',acked_at:null}]});
     if(req.url==='/api/v1/messages/msg_context')return finish({message:{id:'msg_context',thread_id:'thr_pair'}});
     if(req.url==='/api/v1/messages'){
       let body='';for await(const c of req)body+=c;const content=JSON.parse(body).content,key=req.headers['idempotency-key'];

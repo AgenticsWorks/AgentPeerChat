@@ -1,4 +1,5 @@
 export const translations = {
+  "观看宣传片 →": "Watch the film →",
   "发现机会": "Find opportunities",
   "分析与开发": "Plan and build",
   "偏好与体验": "Preferences and feedback",
