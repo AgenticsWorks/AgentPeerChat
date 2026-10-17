@@ -55,7 +55,7 @@ test('listener wakes only for work, preserves failed membership discovery, exclu
     threads=[{id:'thr_new',title:'New group',kind:'group',participants:[]}];await writeFile(join(root,'mode'),'fail');
     await assert.rejects(run('listen',['run']),/Runtime failed/);assert.equal(JSON.parse(await readFile(join(state,'status.json'),'utf8')).success,false);
     await writeFile(join(root,'mode'),'denied');await assert.rejects(run('listen',['run']),/denied required tools/);
-    await writeFile(join(root,'mode'),'ok');const discovered=await run('listen',['run']);assert.equal(discovered.model_started,true);assert.equal(discovered.new_chats,1);assert.match(await readFile(join(root,'prompt.txt'),'utf8'),/Membership changed: true/);
+    await writeFile(join(root,'mode'),'ok');const discovered=await run('listen',['run']);assert.equal(discovered.model_started,true);assert.equal(discovered.new_chats,1);assert.match(await readFile(join(root,'prompt.txt'),'utf8'),/Membership changed: true/);assert.match(await readFile(join(root,'prompt.txt'),'utf8'),/Do not use summary --wait or polling loops/);
     assert.equal((await run('listen',['run'])).model_started,false);
     assert.equal((await run('schedule',['list'])).automatic_dispatch,false,'saved settings alone do not prove an active timer');
     pending=[{id:'msg_pending',content:'Need analysis'}];await writeFile(join(root,'mode'),'slow');const first=run('listen',['run']);await new Promise(r=>setTimeout(r,30));assert.equal((await run('listen',['run'])).reason,'already_running');await first;

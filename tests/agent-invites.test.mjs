@@ -34,7 +34,7 @@ before(async () => {
 });
 after(async () => { await mf?.dispose(); });
 
-test('invitation permission is owner-only, boolean, agent-only, and off by default', async () => {
+test('invitation permission is owner-only, boolean, agent-only, and on by default', async () => {
   const initialized = await call('/setup', { method: 'POST', key: null, body: { name: 'Operator', setup_secret: setup } });
   ownerId = initialized.data.principal.id; ownerKey = initialized.data.access_key;
   const device = async (name, label) => {
@@ -44,8 +44,8 @@ test('invitation permission is owner-only, boolean, agent-only, and off by defau
   dots = await device('Dots', 'Dots device');
   muse = await device('Muse', 'Muse device');
   scribe = await device('Scribe', 'Scribe device');
-  // Default off for every installed Agent: no blanket grant.
-  for (const agent of [dots, muse, scribe]) assert.equal((await call('/me', { key: agent.key })).data.principal.can_invite_agents, 0);
+  // Newly connected Agents can invite peers without an extra owner toggle.
+  for (const agent of [dots, muse, scribe]) assert.equal((await call('/me', { key: agent.key })).data.principal.can_invite_agents, 1);
   // Only the owner may change it, and only with a real boolean on an Agent identity.
   for (const can_invite_agents of ['yes', 1, null, 'true'])
     assert.equal((await call(`/principals/${dots.id}`, { method: 'PATCH', body: { can_invite_agents } })).status, 400, String(can_invite_agents));
@@ -64,6 +64,7 @@ test('invitation permission is owner-only, boolean, agent-only, and off by defau
 
 let firstInvitation;
 test('a delegated Agent creates a portable short invitation for a new identity only', async () => {
+  await call(`/principals/${muse.id}`, {method:'PATCH',body:{can_invite_agents:false}});
   const refused = await call('/pairings', { method: 'POST', key: muse.key, body: { name: 'No permission' } });
   assert.equal(refused.status, 403); assert.equal(refused.data.error.code, 'invite_permission_required');
   assert.match(refused.data.error.message, /allow invitations for this Agent once/i, 'the error asks for the owner delegation, never for a key');
@@ -72,7 +73,7 @@ test('a delegated Agent creates a portable short invitation for a new identity o
   assert.equal(created.status, 201);
   const { principal, pairing, name_required } = created.data;
   assert.equal(principal.kind, 'agent'); assert.equal(principal.active, 0);
-  assert.equal(principal.can_invite_agents, 0, 'a delegated invitation never propagates permission');
+  assert.equal(principal.can_invite_agents, 1, 'new peers inherit the default invitation capability');
   assert.equal(principal.avatar, 'preset:muse'); assert.equal(name_required, false);
   assert.equal(created.data.token, undefined, 'no bearer material is issued with an invitation');
   assert.match(pairing.url, /^https:\/\/agentpeerchat\.test\/#agent-invite=agp_[0-9a-f]+$/, 'a short instance URL replaces the owner JSON block');
@@ -135,8 +136,9 @@ test('two-step join from the invitation code ends with the delegated issuer appr
   joinedKey = device; joinedId = firstInvitation.principal_id;
   const me = await call('/me', { key: device });
   assert.equal(me.status, 200); assert.equal(me.data.principal.id, joinedId);
-  assert.equal(me.data.principal.can_invite_agents, 0, 'the new Agent cannot invite others');
+  assert.equal(me.data.principal.can_invite_agents, 1, 'the new Agent can introduce the next peer');
   assert.equal(me.data.principal.active, 1);
+  assert.equal((await call('/pairings',{method:'POST',key:device,body:{name:'Next peer'}})).status,201,'a joined peer can invite another without returning to the owner UI');
   assert.equal((await call(`/pairings/${firstInvitation.id}/check`, { method: 'POST', key: null, body: { token: device } })).data.pairing.status, 'approved');
   assert.equal((await call('/pairings/resolve', { method: 'POST', key: null, body: { code: firstInvitation.code } })).status, 410, 'a used invitation cannot be resolved again');
   // The owner keeps full independent control of the Agent the invitation created.

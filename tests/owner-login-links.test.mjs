@@ -66,6 +66,7 @@ test('sign-in help permission is owner-only, boolean, agent-only, off by default
   // The invitation delegation confers no sign-in power, and vice versa.
   assert.equal((await call(`/principals/${dots.id}`, { method: 'PATCH', body: { can_invite_agents: true } })).status, 200);
   assert.equal((await call('/owner-login-links', { method: 'POST', key: dots.key, body: {} })).status, 403);
+  assert.equal((await call(`/principals/${muse.id}`, { method: 'PATCH', body: { can_invite_agents: false } })).status, 200);
   assert.equal((await call(`/principals/${muse.id}`, { method: 'PATCH', body: { can_help_owner_login: true } })).status, 200);
   assert.equal((await call('/pairings', { method: 'POST', key: muse.key, body: {} })).status, 403);
   const invited = (await call('/pairings', { method: 'POST', key: dots.key, body: { name: 'Invited peer' } })).data.pairing;

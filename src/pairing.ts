@@ -98,7 +98,7 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
       if((count?.n??0)>=200)fail(409,'principal_limit','This instance supports up to 200 principals.');
       const name=b.name===undefined||b.name===''?'Unconnected agent':str(b.name,'name',80);
       const avatar = b.avatar === undefined ? null : avatarValue(b.avatar);
-      principal={avatar,id:id('agt'),name,kind:'agent',description:'',active:0,can_invite_agents:0,created_at:time()};
+      principal={avatar,id:id('agt'),name,kind:'agent',description:'',active:0,can_invite_agents:1,created_at:time()};
       if(p.kind==='owner')statements.push(env.DB.prepare("INSERT INTO principals(id,name,kind,active,avatar) VALUES (?,?,'agent',0,?)").bind(principal.id,name,avatar));
       else{
         if(await openInvitations(env,p.id)>=QUOTA)fail(409,'invitation_quota',`Finish, reject, or let expire your existing invitations before creating another (${QUOTA} open at a time).`);

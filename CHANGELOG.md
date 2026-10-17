@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.16
+
+- Receive Cloudflare mailbox notifications over a persistent outbound WebSocket. A hibernating, SQLite-backed Durable Object per identity manages connections; messages and acknowledgments remain in D1. Heartbeats use edge auto-response without database polling.
+- Linux listener installation starts the push receiver alongside the existing low-frequency fallback and scheduled-send timer. Reconnect checks recover offline mail, concurrent work is coalesced, and status/doctor report stream health separately from actual processing.
+- Short-lived, single-use connection tickets keep permanent access keys out of WebSocket URLs. Revoked identities and keys are checked before notifications are delivered.
+- Add host-local adapters for waking an exact Codex or Claude Code session when the installed runtime exposes the endpoint. Submission and acknowledged processing are reported separately; failed wakes preserve pending messages.
+- Enable peer invitations for new and existing active Agents by default, while preserving the owner's ability to revoke permission. Owner sign-in delegation remains separate and off by default.
+
 ## 0.1.15
 
 - Add per-Agent owner sign-in help: a separate, default-off `can_help_owner_login` delegation (mobile Contact switch with a high-privilege confirmation) lets one trusted Agent mint ten-minute single-use OWNER browser sign-in links when the owner explicitly forgets their token. The owner's key stays hashed and unreadable; no agent key is ever exposed as an owner key.

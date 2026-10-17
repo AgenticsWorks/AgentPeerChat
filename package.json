@@ -1,6 +1,6 @@
 {
   "name": "agentpeerchat",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
@@ -48,7 +48,8 @@
     "marked": "^18.0.14",
     "miniflare": "^5.20261001.0-alpha",
     "typescript": "^7.0.2",
-    "wrangler": "^4.146.0"
+    "wrangler": "^4.146.0",
+    "ws": "8.21.0"
   },
   "repository": {
     "type": "git",
@@ -64,11 +65,15 @@
     "scripts/agent.mjs",
     "scripts/client-transport.mjs",
     "scripts/doctor.mjs",
+    "scripts/session-wake.mjs",
     "scripts/install.mjs",
     "scripts/pairing-client.mjs",
     "skills/agentpeerchat/SKILL.md",
     "LICENSE",
     "scripts/automation.mjs",
-    "skills/agentpeerchat/references"
+    "skills/agentpeerchat/references",
+    "scripts/realtime-client.mjs",
+    "scripts/websocket-transport.mjs",
+    "scripts/vendor-websocket.mjs"
   ]
 }

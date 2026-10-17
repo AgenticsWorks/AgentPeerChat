@@ -27,18 +27,23 @@ export async function doctor({config={},token,url,request,listenerStatus,now=Dat
     check('receiving','warn','No CLI listener is installed. A native platform schedule must be checked on that platform; otherwise receiving is manual.');
     next.push('Follow the installed skill to verify the chosen native schedule, configure receiving once, or retain manual mode.');
   }else{
+    if(status.receiving_transport==='websocket_with_periodic_fallback'){
+      check('realtime',status.realtime?.connected?'pass':'warn',status.realtime?.connected?'Push stream is connected; periodic receiving remains as fallback.':'Push stream is disconnected; periodic receiving remains as fallback.');
+      result.realtime=status.realtime;
+    }
     const latest=status.last_check,model=status.last_model_check;
     const time=Date.parse(latest?.model_finished_at||latest?.checked_at||'');
     const stale=Number.isFinite(time)&&now-time>Math.max(120,(status.interval_seconds||1800)*2+1980)*1000;
     const failedCheck=latest?.success===false&&Boolean(latest.error);
     const running=latest?.model_started===true&&!latest.model_finished_at&&!latest.error;
     const active=Boolean(status.active&&status.enabled);
-    const verified=model?.success===true&&model?.model_started===true&&Number.isFinite(Date.parse(model.model_finished_at||''));
-    result.receiving={mode:!active||stale||failedCheck?'needs_attention':running?'checking':verified?'verified':'unverified',verified:active&&!stale&&!failedCheck&&verified,task_id:status.task_id,interval_seconds:status.interval_seconds,last_check_at:latest?.checked_at||null,last_model_at:model?.model_finished_at||null};
+    const wake=status.last_wake_check,session=status.delivery_mode==='session';
+    const verified=session?Number.isFinite(Date.parse(wake?.processed_at||''))&&wake.acknowledged>0:model?.success===true&&model?.model_started===true&&Number.isFinite(Date.parse(model.model_finished_at||''));
+    result.receiving={mode:!active||stale||failedCheck?'needs_attention':running?'checking':verified?'verified':'unverified',verified:active&&!stale&&!failedCheck&&verified,task_id:status.task_id,interval_seconds:status.interval_seconds,last_check_at:latest?.checked_at||null,last_model_at:session?wake?.processed_at||null:model?.model_finished_at||null,delivery_mode:status.delivery_mode||'independent',last_wake_submitted:latest?.wake_submitted||false};
     if(!active){check('receiving','fail','The configured CLI listener is stopped or disabled.');next.push('Restore the existing listener using the skill; reuse its task instead of creating duplicates.');}
     else if(stale){check('receiving','fail','The listener has not reported a recent check.');next.push('Inspect the existing timer and service on the Agent host.');}
     else if(failedCheck){check('receiving','fail','The latest receiving check failed; messages remain pending.');next.push('Inspect runtime access and permissions, then retry the existing listener.');}
-    else check('receiving',verified?'pass':'warn',running?'A model turn is currently checking the mailbox.':verified?'The active listener has completed a real model turn.':'The timer is active, but a real model turn has not been verified.');
+    else check('receiving',verified?'pass':'warn',running?'A model turn is currently checking the mailbox.':verified?(session?'The bound session has acknowledged work after a wake.':'The active listener has completed a real model turn.'):(session?'Session wake is configured; successful processing has not yet been observed.':'The timer is active, but a real model turn has not been verified.'));
   }
   if(checks.some(c=>c.status==='fail'))result.state='needs_attention';
   else if(result.receiving?.verified)result.state='receiving_verified';

@@ -268,9 +268,9 @@ test('owner connects an unnamed Agent; Agent registers only its own name', async
   assert.equal((await call('/me',{key})).data.principal.id,agentId);
 });
 
-test('pairing requires an owner invitation and approval; candidate proof has no access beforehand', async () => {
+test('pairing requires an authorized invitation and approval; candidate proof has no access beforehand', async () => {
   assert.equal((await call('/pairings', {method:'POST',key:null,body:{}})).status,401);
-  assert.equal((await call('/pairings', {method:'POST',key:a.key,body:{}})).status,403);
+  assert.equal((await call('/pairings', {method:'POST',key:a.key,body:{}})).status,201);
   const issued=await call('/pairings',{method:'POST',body:{name:'Paired device'}});assert.equal(issued.status,201);
   const invitation=issued.data.pairing,token='agt_'+crypto.randomUUID().replaceAll('-','');
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));
@@ -285,7 +285,7 @@ test('pairing requires an owner invitation and approval; candidate proof has no 
   assert.equal((await call('/threads',{key:null})).status,401);
   const listed=await call('/pairings');assert.ok(listed.data.items.some(p=>p.id===invitation.id));assert.ok(!JSON.stringify(listed.data).includes(tokenHash));
   assert.equal((await call(`/pairings/${invitation.id}/check`,{method:'POST',key:null,body:{token:'wrong'}})).status,410);
-  assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',key:a.key,body:{verification_code:requested.data.pairing.verification_code}})).status,403);
+  assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',key:a.key,body:{verification_code:requested.data.pairing.verification_code}})).status,404);
   assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',body:{verification_code:'0000-0000'}})).status,400);
   assert.equal((await call(`/pairings/${invitation.id}/approve`,{method:'POST',body:{verification_code:requested.data.pairing.verification_code}})).status,200);
   assert.equal((await call('/me',{key:token})).data.principal.id,issued.data.principal.id);
