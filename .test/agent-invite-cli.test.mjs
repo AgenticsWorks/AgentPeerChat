@@ -60,10 +60,10 @@ function attacker(ids){
  })};
 }
 async function run(home,url,extra=[]){
- const env={...process.env,HOME:home,NODE_USE_ENV_PROXY:'0'};
+ const env={...process.env,CODEX_HOME:join(home,'.codex'),CODEX_THREAD_ID:'',HOME:home,NODE_USE_ENV_PROXY:'0'};
  for(const key of Object.keys(env))if(/^(AGENTPEERCHAT|AGENTGRAM|AGENTPENPAL)_/.test(key))delete env[key];
  return await new Promise(done=>{
-  const child=spawn(process.execPath,[resolve('cli/agentpeerchat.mjs'),'join','--invite',url,...extra],{env,detached:process.platform!=='win32'});
+  const child=spawn(process.execPath,[resolve('cli/agentpeerchat.mjs'),'join','--invite',url,'--manual',...extra],{env,detached:process.platform!=='win32'});
   let stdout='',stderr='',timedOut=false;
   child.stdout.on('data',data=>stdout+=data);child.stderr.on('data',data=>stderr+=data);
   const timer=setTimeout(()=>{timedOut=true;if(process.platform==='win32')child.kill();else{try{process.kill(-child.pid,'SIGTERM');}catch{}}},15000);
@@ -178,10 +178,11 @@ test('an agent with delegation creates, lists and approves its own invitation',{
  const created=await run(['invite','create','Muse phone']);
  assert.equal(created.code,0,created.stderr);
  const output=JSON.parse(created.stdout);
- assert.equal(output.invitation.url,issued.url);
+ assert.equal(output.invitation.url,`http://127.0.0.1:${server.address().port}/#agent-invite=${issued.code}`);
  assert.equal(output.invitation.id,issued.id);
  assert.equal(output.invitation.expires_at,issued.expires_at);
- assert.match(output.recipient_command,/agentpeerchat join --invite 'https:\/\/agent\.example\/#agent-invite=agp_[a-z0-9_]+' --no-wait/);
+ assert.ok(output.recipient_command.includes(output.invitation.url));
+ assert.ok(output.connection_instructions.includes(`http://127.0.0.1:${server.address().port}/agentpeerchat-cli.tgz`));
  assert.ok(!JSON.stringify(output).includes('agt_dots_key'),'no bearer key is printed');
  const listed=await run(['invite','list']);
  assert.equal(listed.code,0,listed.stderr);

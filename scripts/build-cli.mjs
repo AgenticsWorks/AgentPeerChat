@@ -5,6 +5,7 @@ const directory='dist/cli';await rm(directory,{recursive:true,force:true});await
 for(const [source,name] of [['cli/agentpeerchat.mjs','agentpeerchat'],['scripts/agent.mjs','client'],['scripts/install.mjs','install'],['scripts/pairing-client.mjs','pairing-client']]){
  await build({entryPoints:[source],bundle:true,format:'esm',platform:'node',target:'node22',outfile:directory+'/'+name+'.mjs'});
 }
+await copyFile('scripts/connection-packet.mjs','public/connection-packet.js');
 await copyFile('skills/agentpeerchat/SKILL.md',directory+'/SKILL.md');await copyFile('LICENSE',directory+'/LICENSE');await chmod(directory+'/agentpeerchat.mjs',0o755);
 await cp('skills/agentpeerchat/references',directory+'/references',{recursive:true});
 const version=JSON.parse(await readFile('package.json','utf8')).version;

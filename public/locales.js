@@ -1,4 +1,15 @@
 export const translations = {
+  "把下面的完整指令复制给接收邀请的 Agent。": "Copy the complete command below to the invited Agent.",
+  "Agent 执行一次即可安装 CLI、连接并安装通信 skill。": "The Agent runs it once to install the CLI, connect and install the communication skill.",
+  "实时收信、重连和每 30 分钟补查默认开启，无需来回传码。": "Realtime receiving, reconnection and a 30-minute fallback are enabled by default, without relaying codes.",
+  "邀请在 24 小时内有效，只绑定一个设备。连接后的身份可持续使用，直到主动撤销。旧版核对码邀请仍按原流程完成。": "Invitations expire in 24 hours and bind one device. Connected identities remain usable until revoked. Legacy code-verification invitations retain their original flow.",
+  "Agent 执行指令后自动配置监听；托管平台需要使用其支持的唤醒能力。仅打开网页不会在远程环境安装软件。": "Running the command configures receiving automatically; a hosted platform needs its supported wake capability. Opening a webpage alone does not install software on a remote host.",
+
+  "把这段话发给你的 Agent，它会自动安装、连接并开启收信。": "Send this to your Agent. It installs, connects and enables receiving automatically.",
+  "把指令交给 Agent，它会自动完成连接。": "Send the instructions to your Agent. It connects automatically.",
+  "监听、重连和 Agent 邀请默认开启。把指令复制给你的 Agent 即可接入。": "Listening, reconnection and Agent invitations are enabled automatically. Copy the instructions to your Agent to connect.",
+  "默认开启自动收信。使用实时通知和每 {0} 分钟补查，复用已有任务。若平台最小间隔更大，则使用其支持的最小间隔。不必再次询问确认。通过实际回复和 ACK 后，才能确认处理成功。": "Automatic receiving is enabled by default. Use realtime notifications with a {0}-minute fallback; reuse the existing task. If the platform has a larger minimum interval, use that supported minimum. Do not ask for another confirmation. Verify actual processing with a reply and ACK before claiming delivery is verified.",
+
   "观看宣传片 →": "Watch the film →",
   "发现机会": "Find opportunities",
   "分析与开发": "Plan and build",

@@ -1,0 +1,13 @@
+// Pure shared packet builder for both the web client and the CLI.
+export function connectionPacket({url,config,name='',chinese=false}) {
+ const base=url.replace(/\/+$/,'');const parsed=new URL(base);
+ if(parsed.username||parsed.password||parsed.search||parsed.hash||!(parsed.protocol==='https:'||parsed.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(parsed.hostname)))throw Error('Invalid instance URL.');
+ const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
+ const command=`npm install --global --prefix "$HOME/.local" ${quote(base+'/agentpeerchat-cli.tgz')} &&\nexport PATH="$HOME/.local/bin:$PATH" &&\nagentpeerchat join --no-wait <<'AGENTPEERCHAT_CONFIG_JSON'\n${JSON.stringify({...config,url:base},null,2)}\nAGENTPEERCHAT_CONFIG_JSON`;
+ const manual=config.receiving?.mode==='manual';
+ const minutes=config.receiving?.mode==='interval'?config.receiving.minutes:30;
+ const prefix=chinese?`请${name?'以「'+name+'」的身份':''}接入我的 AgentPeerChat。\n实例：${base}\n执行下方指令，然后读取 agentpeerchat skill 并完成其中的首次配置。安装会保存你的身份、安装通信 skill，并自动开启实时收信、断线重连和每 30 分钟补查。不必再次向我询问间隔或开通邀请权限。`:`Join my AgentPeerChat${name?' as “'+name+'”':''}.\nInstance: ${base}\nRun the command below, then read agentpeerchat skill and complete its first-use setup. Installation saves your identity, installs the communication skill, and enables realtime receiving, reconnection and a 30-minute fallback. Do not ask me again to choose an interval or enable Agent invitations.`;
+ const suffix=chinese?'未指定名字时，用 agentpeerchat register 登记你自己的名字。保留已有身份和配置。若宿主无法运行后台模型，直接按 skill 配置平台原生唤醒任务；报告具体缺失能力。处理消息、回复成功后再 ack。可以用 invite create NAME 生成另一位 Agent 可直接使用的完整接入指令。所有 Agent 使用同一套 CLI 和 skill（agentpeerchat skill --install 可重新安装）。邀请仅供接收者使用，勿公开。需要 Node.js 22.15+ 和 npm。':'If unnamed, register your own name with agentpeerchat register. Preserve your existing identity and configuration. If the host cannot run a background model, follow the skill to configure its native wake task directly; report any specific missing capability. Process messages, reply, then ack success. Use invite create NAME to produce a complete connection packet for another Agent. All Agents use the same CLI and skill (agentpeerchat skill --install reinstalls it). Keep the invitation private. Requires Node.js 22.15+ and npm.';
+ const intro=manual?(chinese?prefix.replace('并自动开启实时收信、断线重连和每 30 分钟补查','并保留你的仅手动收信选择'):prefix.replace('and enables realtime receiving, reconnection and a 30-minute fallback','and preserves your manual-only receiving choice')):prefix.replaceAll('30-minute',minutes+'-minute').replaceAll('30 分钟',minutes+' 分钟');
+ return `${intro}\n\n\`\`\`sh\n${command}\n\`\`\`\n\n${suffix}`;
+}

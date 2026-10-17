@@ -39,19 +39,18 @@ test('copied connection command works when npm global binaries are absent from P
    child.on('exit',code=>done({code,stdout,stderr}));child.stdin.end(source);
   });
  }
- // The generated instruction is bounded for buffered tools: the first run returns the
- // pairing code without activating, and the owner approves before the second run finishes.
+ // A new invitation connects in one bounded command, with no human approval round trip.
  const first=await runShell(script);
  assert.equal(first.code,0,first.stderr);
- const pending=(await api('/pairings',owner.access_key)).items.find(p=>p.id===invitation.pairing.id&&p.status==='pending');
- assert.ok(pending&&first.stdout.includes(pending.verification_code),'Copied command must launch the installed CLI and show its pairing code: '+first.stderr);
- assert.ok(!first.stdout.includes(invitation.pairing.code),'Pairing output must not expose the invitation code');
  const profile=join(home,'.config','agentpeerchat',invitation.principal.id,'config.json');
- await assert.rejects(stat(profile),{code:'ENOENT'});
- await api('/pairings/'+pending.id+'/approve',owner.access_key,'POST',{verification_code:pending.verification_code});
- // Re-running the joined command reuses the installed CLI and the locally saved proof.
- const second=await runShell(script.replace(/^npm install[^\n]*\n/,''));
+ const original=JSON.parse(await readFile(profile,'utf8'));
+ assert.equal((await api('/me',original.token)).principal.can_invite_agents,1);
+ assert.match(first.stdout,/native_wake_required/,'A host without a model must report the missing native wake, not pretend it is receiving.');
+ assert.ok(await readFile(join(home,'.agents','skills','agentpeerchat','SKILL.md'),'utf8'));
+ // A repeated packet keeps the identity and credential instead of consuming the invite again.
+ const second=await runShell(script.slice(script.indexOf('export PATH')));
  assert.equal(second.code,0,second.stderr);
+ assert.equal(JSON.parse(await readFile(profile,'utf8')).token,original.token);
  const saved=JSON.parse(await readFile(profile,'utf8'));assert.equal(saved.principal_id,invitation.principal.id);assert.equal((await stat(profile)).mode&0o777,0o600);
  assert.equal((await api('/me',saved.token)).principal.name,'Muse');
  const executable=second.stdout.match(/^CLI executable: (.+)$/m)?.[1];assert.ok(executable);
@@ -63,6 +62,15 @@ test('copied connection command works when npm global binaries are absent from P
  assert.equal(await nextTool(['skill']),await readFile('skills/agentpeerchat/SKILL.md','utf8')+'\n');
  assert.equal(JSON.parse(await nextTool(['summary','--once'])).agent.id,invitation.principal.id);
 
+ // A connected Agent can create the next complete packet without a webpage or token entry.
+ const peer=JSON.parse(await nextTool(['invite','create','Dots']));
+ assert.match(peer.connection_instructions,new RegExp(url.replaceAll('.','\\.')));
+ assert.ok(peer.connection_instructions.includes(url+'/agentpeerchat-cli.tgz'));
+ const peerScript=peer.connection_instructions.match(/```sh\n([\s\S]*?)\n```/)[1];
+ const third=await runShell(peerScript.slice(peerScript.indexOf('export PATH')));assert.equal(third.code,0,third.stderr);
+ const peerProfile=JSON.parse(await readFile(join(home,'.config','agentpeerchat',peer.agent.id,'config.json'),'utf8'));
+ assert.equal((await api('/me',peerProfile.token)).principal.name,'Dots');
+ assert.notEqual(peerProfile.token,original.token);
  const inbox=(await api('/inbox',owner.access_key)).items;
  assert.ok(inbox.some(message=>message.sender_id===invitation.principal.id&&message.content.includes('joined')));
 });

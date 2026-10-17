@@ -9,7 +9,7 @@ import {spawn} from 'node:child_process';
 function run(file,args,env,input=''){return new Promise(resolveResult=>{const child=spawn(file,args,{env:{...process.env,...env,HTTP_PROXY:'',HTTPS_PROXY:'',http_proxy:'',https_proxy:'',ALL_PROXY:'',all_proxy:''}});let stdout='',stderr='';child.stdout.on('data',d=>stdout+=d);child.stderr.on('data',d=>stderr+=d);child.stdin.end(input);child.on('exit',code=>resolveResult({code,stdout,stderr}));});}
 test('installable CLI pairs with one identity, selects its private profile and distributes a working skill', {timeout:30000}, async t=>{
  const directory=await mkdtemp(join(tmpdir(),'agentpeerchat-package-'));t.after(()=>rm(directory,{recursive:true,force:true}));
- const home=join(directory,'home'),prefix=join(directory,'tools');await mkdir(home,{recursive:true});const env={HOME:home,AGENTPEERCHAT_CONFIG:'',AGENTPEERCHAT_TOKEN:'',AGENTPEERCHAT_URL:'',NODE_USE_ENV_PROXY:'0'};
+ const home=join(directory,'home'),prefix=join(directory,'tools');await mkdir(home,{recursive:true});const env={CODEX_HOME:join(home,'.codex'),CODEX_THREAD_ID:'',HOME:home,AGENTPEERCHAT_CONFIG:'',AGENTPEERCHAT_TOKEN:'',AGENTPEERCHAT_URL:'',NODE_USE_ENV_PROXY:'0'};
  let result=await run('npm',['install','--global','--prefix',prefix,'--ignore-scripts','--no-audit','--no-fund',resolve('dist/agentpeerchat-cli.tgz')],env);assert.equal(result.code,0,result.stderr);
  const cli=join(prefix,'bin','agentpeerchat');result=await run(cli,['--help'],env);assert.equal(result.code,0,result.stderr);assert.ok(result.stdout.includes('one CLI'));assert.ok(!result.stdout.includes('Claude'));
  result=await run(cli,['skill','--install',join(directory,'skills','agentpeerchat')],env);assert.equal(result.code,0,result.stderr);assert.ok((await readFile(join(directory,'skills','agentpeerchat','SKILL.md'),'utf8')).includes('agentpeerchat ack'));
@@ -24,7 +24,7 @@ test('installable CLI pairs with one identity, selects its private profile and d
  if(req.url.startsWith('/api/v1/threads?'))return res.end(JSON.stringify({items:[{id:'thr_group',title:'机会讨论',participants:[]},...(newGroup?[{id:'thr_new',title:'刚加入的新群',kind:'group',participants:[]}]:[])],next_cursor:'1',has_more:false}));
  res.statusCode=404;res.end('{}');});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
- const config={url:`http://127.0.0.1:${server.address().port}`,principal_id:'agt_fixture',owner_id:'hum_owner',pairing:{id:'pair_fixture',code:'agp_fixture'}};
+ const config={receiving:{mode:'manual'},url:`http://127.0.0.1:${server.address().port}`,principal_id:'agt_fixture',owner_id:'hum_owner',pairing:{id:'pair_fixture',code:'agp_fixture'}};
  result=await run(cli,['join'],{...env,AGENTPENPAL_URL:'http://127.0.0.1:1',AGENTPENPAL_TOKEN:'agt_stale_environment'},JSON.stringify(config));assert.equal(result.code,0,result.stderr);assert.ok(result.stdout.includes('PACK-1234'));assert.ok(!result.stdout.includes('agp_fixture'));assert.equal(sends,1);
  const profile=join(home,'.config','agentpeerchat','agt_fixture','config.json');assert.equal((await stat(profile)).mode&0o777,0o600);assert.equal(JSON.parse(await readFile(profile,'utf8')).pairing,undefined);
  result=await run(cli,['me'],env);assert.equal(result.code,0,result.stderr);assert.equal(JSON.parse(result.stdout).principal.name,'Muse');

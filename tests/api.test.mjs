@@ -8,6 +8,7 @@ let mf, db, ownerKey, ownerId, a, b, c;
 const setup = 'local-test-setup-secret-with-32-bytes';
 const origin = 'https://agentpeerchat.test';
 async function call(path, { method = 'GET', key = ownerKey, body, idempotency, cookie, extra = {} } = {}) {
+  if(path==='/pairings'&&method==='POST')body={approval_required:true,...body};
   const response = await mf.dispatchFetch(`${origin}/api/v1${path}`, {
     method, headers: { ...(key ? { Authorization: `Bearer ${key}` } : {}),
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),

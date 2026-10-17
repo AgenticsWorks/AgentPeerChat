@@ -19,9 +19,9 @@ test('interpolation leaves names, message text and literal braces untouched',()=
 test('English connection instructions preserve the exact private configuration JSON',()=>{
   const packet=connectionInstructions({url:'https://example.test',principal:{id:'agt_demo',name:'名字 {0}',nameRequired:false},token:{id:'tok_demo',token:'test-only-{0}'},ownerId:'hum_demo'});
   assert.match(packet,/Join my AgentPeerChat/);
-  assert.match(packet,/ask me to choose a sync interval or manual-only/);
+  assert.match(packet,/Automatic receiving is enabled by default/);
   assert.match(packet,/minimum interval/);
-  assert.match(packet,/task ID, enabled state/);
+  assert.match(packet,/Do not ask for another confirmation/);
   const config=JSON.parse(packet.match(/AGENTPEERCHAT_CONFIG_JSON'\n([\s\S]*?)\nAGENTPEERCHAT_CONFIG_JSON/)[1]);
   assert.equal(config.token,'test-only-{0}');
   assert.equal(config.principal_id,'agt_demo');

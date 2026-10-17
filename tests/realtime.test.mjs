@@ -80,3 +80,9 @@ test('outbound stream supports an HTTP CONNECT proxy without exposing permanent 
  const socket=new Socket(target,['apc-v1','ticket.'+ticket],{agent,perMessageDeflate:false});let ready=false;socket.on('message',data=>{if(JSON.parse(data).type==='ready')ready=true;});socket.on('error',()=>{});
  try{await until(()=>ready);assert.equal(tunnels,1);}finally{socket.terminate();agent.destroy();for(const s of open)s.destroy();await new Promise(r=>proxy.close(r));}
 });
+test('outbound receiving preserves the instance deployment subdirectory',async()=>{
+ const ctrl=new AbortController();let endpoint,checks=0;
+ class Socket extends EventTarget{constructor(url){super();endpoint=new URL(url);queueMicrotask(()=>{const event=new Event('message');event.data=JSON.stringify({type:'ready'});this.dispatchEvent(event);});}send(){}close(){this.dispatchEvent(new Event('close'));}}
+ await receiveNotifications({identity:{url:'https://example.test/team/chat/',token:'fixture'},signal:ctrl.signal,WebSocketImpl:Socket,request:async url=>{assert.equal(url,'https://example.test/team/chat/api/v1/realtime/ticket');return {ticket:'wst_fixture'};},onWork:async()=>{checks++;ctrl.abort();}});
+ assert.equal(checks,1);assert.equal(endpoint.href,'wss://example.test/team/chat/api/v1/events');
+});

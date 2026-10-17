@@ -15,7 +15,7 @@ export async function receiveNotifications({identity,onWork,onState=async()=>{},
     try{
       const credentials=await request(identity.url.replace(/\/$/,'')+'/api/v1/realtime/ticket',{method:'POST',token:identity.token});
       if(typeof credentials.ticket!=='string'||!/^wst_[A-Za-z0-9_-]+$/.test(credentials.ticket))throw Error('Invalid stream ticket');
-      const url=new URL(identity.url);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname='/api/v1/events';url.search='';url.hash='';
+      const url=new URL(identity.url);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.pathname=url.pathname.replace(/\/+$/,'')+'/api/v1/events';url.search='';url.hash='';
       await new Promise(resolve=>{
         const ws=new WebSocketImpl(url,['apc-v1','ticket.'+credentials.ticket]);
         let ready=false,lastPong=Date.now(),ended=false;

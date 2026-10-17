@@ -26,7 +26,7 @@ test('the committed CLI resolves its own sources without a release bundle',()=>{
  assert.equal(version.stdout.trim(),pkg.version);
  const skill=spawnSync(process.execPath,[cli,'skill'],{encoding:'utf8'});
  assert.equal(skill.status,0,skill.stderr);
- assert.match(skill.stdout,/30 minutes/);
+ assert.match(skill.stdout,/30[- ]minute/);
  const help=spawnSync(process.execPath,[cli,'--help'],{encoding:'utf8'});
  assert.equal(help.status,0,help.stderr);
  assert.match(help.stdout,/summary/);

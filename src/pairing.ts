@@ -1,7 +1,7 @@
 import { avatarValue } from './avatar';
 import type { Env, Principal } from './types';
 import { body, fail, hash, id, secret, str } from './security';
-interface Pairing { id:string; principal_id:string; created_by:string; code_hash:string; token_id:string; token_hash:string|null; verification_code:string|null; status:string; expires_at:string; approved_at?:string|null; approval_mark?:string|null }
+interface Pairing { id:string; principal_id:string; created_by:string; code_hash:string; token_id:string; token_hash:string|null; verification_code:string|null; status:string; expires_at:string; approved_at?:string|null; approval_mark?:string|null; approval_required:number }
 // Issuer conditions rechecked on every path that can still change an unresolved invitation,
 // so removing the owner's delegation withdraws that Agent's still-open invitations at once.
 const ISSUER_AUTHORIZED = `EXISTS (SELECT 1 FROM principals issuer WHERE issuer.id = pairings.created_by
@@ -36,6 +36,17 @@ async function visible(env:Env,row:Pairing){
   return {pairing:{id:row.id,status:row.status,verification_code:row.verification_code,expires_at:row.expires_at},
     principal,owner_id:await ownerId(env)??row.created_by,invited_by:row.created_by,token_id:row.token_id};
 }
+// Only the transaction that changes pending -> approved can mint a device key.
+// Invitations authorize one device; retrying can never reactivate a revoked identity.
+async function activatePairing(env:Env,row:Pairing){
+  const mark=crypto.randomUUID();
+  const results=await env.DB.batch([
+    env.DB.prepare(`UPDATE pairings SET status = 'approved', approved_at = ?, approval_mark = ? WHERE id = ? AND status = 'pending' AND expires_at > ? AND ${ISSUER_AUTHORIZED}`).bind(time(),mark,row.id,time()),
+    env.DB.prepare("INSERT INTO tokens(id,principal_id,hash,label,kind) SELECT token_id,principal_id,token_hash,'Paired Agent device','access' FROM pairings WHERE id = ? AND approval_mark = ? ON CONFLICT(id) DO NOTHING").bind(row.id,mark),
+    env.DB.prepare("UPDATE principals SET active = 1 WHERE id = ? AND EXISTS(SELECT 1 FROM pairings WHERE id = ? AND approval_mark = ?)").bind(row.principal_id,row.id,mark)
+  ]);
+  return Boolean(results[0].meta.changes);
+}
 export async function pairingPublic(request:Request,env:Env,path:string){
   if(path==='/pairings/resolve'&&request.method==='POST'){
     // Read-only: resolving never binds, consumes, or reveals proof/bearer material.
@@ -62,6 +73,12 @@ export async function pairingPublic(request:Request,env:Env,path:string){
       .bind(tokenHash,verification,row.id,time()).run();
     const actual=await env.DB.prepare('SELECT * FROM pairings WHERE id = ?').bind(row.id).first<Pairing>();
     if(!actual||actual.token_hash!==tokenHash||actual.status==='rejected')fail(410,'invalid_pairing','Pairing invitation is already used.');
+    if(actual.status==='pending'&&actual.approval_required===0){
+      await activatePairing(env,actual);
+      const activated=await env.DB.prepare('SELECT * FROM pairings WHERE id = ?').bind(row.id).first<Pairing>();
+      if(activated?.status!=='approved')fail(410,'invalid_pairing','Invitation was withdrawn.');
+      return json(await visible(env,activated));
+    }
     return json(await visible(env,actual));
   }
   const match=/^\/pairings\/([^/]+)\/check$/.exec(path);
@@ -87,7 +104,9 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
   if(path==='/pairings'&&request.method==='POST'){
     if(p.kind!=='owner'&&!issuer)fail(403,'invite_permission_required',NEEDS_GRANT);
     const b=await body(request);let principal:Principal|null;
-    const code=secret('agp'),pairId=id('pair'),expires=new Date(Date.now()+10*60000).toISOString(),tokenId=id('tok');
+    if(b.approval_required!==undefined&&typeof b.approval_required!=='boolean')fail(400,'invalid_field','approval_required must be a boolean.');
+    const approvalRequired=b.approval_required===true;
+    const code=secret('agp'),pairId=id('pair'),expires=new Date(Date.now()+(approvalRequired?10*60000:24*60*60000)).toISOString(),tokenId=id('tok');
     const statements=[];
     if(p.kind!=='owner'&&b.principal_id!==undefined)fail(403,'forbidden','A delegated invitation must create a new Agent identity.');
     if(b.principal_id!==undefined){
@@ -111,8 +130,8 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
           .bind(principal.id,name,avatar,p.id,time(),QUOTA,p.id));
       }
     }
-    statements.push(env.DB.prepare(`INSERT INTO pairings(id,principal_id,created_by,code_hash,token_id,expires_at)
-      SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM principals WHERE id = ?)`).bind(pairId,principal.id,p.id,await hash(code),tokenId,expires,principal.id));
+    statements.push(env.DB.prepare(`INSERT INTO pairings(id,principal_id,created_by,code_hash,token_id,expires_at,approval_required)
+      SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM principals WHERE id = ?)`).bind(pairId,principal.id,p.id,await hash(code),tokenId,expires,approvalRequired?1:0,principal.id));
     await env.DB.batch(statements);
     if(p.kind!=='owner'&&!await env.DB.prepare('SELECT 1 AS ok FROM pairings WHERE id = ?').bind(pairId).first()){
       // Authentication may predate a concurrent permission withdrawal. Check that first;
@@ -121,7 +140,7 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
       if(await openInvitations(env,p.id)>=QUOTA)fail(409,'invitation_quota',`Finish, reject, or let expire your existing invitations before creating another (${QUOTA} open at a time).`);
       fail(409,'principal_limit','This instance supports up to 200 principals.');
     }
-    return json({principal,name_required:nameRequired(principal.name),pairing:{id:pairId,code,expires_at:expires,url:`${invitationBase(request)}/#agent-invite=${code}`}},201);
+    return json({principal,name_required:nameRequired(principal.name),pairing:{id:pairId,code,approval_required:approvalRequired,expires_at:expires,url:`${invitationBase(request)}/#agent-invite=${code}`}},201);
   }
   const match=/^\/pairings\/([^/]+)\/(approve|reject)$/.exec(path);
   if(match&&request.method==='POST'){
@@ -138,17 +157,10 @@ export async function pairingOwner(request:Request,env:Env,path:string,p:Princip
     }
     const b=await body(request);
     if(!row.token_hash||str(b.verification_code,'verification_code',20)!==row.verification_code)fail(400,'verification_mismatch','Check the code shown by your Agent.');
-    const approvedAt=time(), mark=crypto.randomUUID();
-    const results=await env.DB.batch([
-      // Only a real pending-to-approved transition carries this request's unique mark, so later
-      // statements cannot mint a key or reactivate an identity on a replayed approval.
-      env.DB.prepare(`UPDATE pairings SET status = 'approved', approved_at = ?, approval_mark = ? WHERE id = ? AND status = 'pending' AND expires_at > ? AND ${ISSUER_AUTHORIZED}`).bind(approvedAt,mark,row.id,time()),
-      env.DB.prepare("INSERT INTO tokens(id,principal_id,hash,label,kind) SELECT token_id,principal_id,token_hash,'Paired Agent device','access' FROM pairings WHERE id = ? AND approval_mark = ? ON CONFLICT(id) DO NOTHING").bind(row.id,mark),
-      env.DB.prepare("UPDATE principals SET active = 1 WHERE id = ? AND EXISTS(SELECT 1 FROM pairings WHERE id = ? AND approval_mark = ?)").bind(row.principal_id,row.id,mark)
-    ]);
+    const changed=await activatePairing(env,row);
     const actual=await env.DB.prepare('SELECT * FROM pairings WHERE id = ?').bind(row.id).first<Pairing>();
     if(actual?.status!=='approved')fail(409,'pairing_state','This request is already resolved.');
-    return json({ok:true,replayed:!results[0].meta.changes});
+    return json({ok:true,replayed:!changed});
   }
   return null;
 }

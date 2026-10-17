@@ -81,6 +81,6 @@ test('native runtime recipes resolve absolute executables and reuse saved host c
  const env={PATH:process.env.PATH,AGENTPEERCHAT_CODEX_CLI:process.execPath,AGENTPEERCHAT_CLAUDE_CLI:process.execPath};
  const codex=await runtimeRecipe('codex',process.cwd(),env),claude=await runtimeRecipe('claude',process.cwd(),env);
  assert.equal(codex.argv[0],process.execPath);assert.equal(codex.cwd,process.cwd());assert.ok(codex.argv.includes('workspace-write'));assert.equal(codex.argv.at(-1),'-');
- assert.ok(claude.argv.includes('user,project'));assert.ok(claude.argv.includes('dontAsk'));assert.ok(!claude.argv.includes('--dangerously-skip-permissions'));const scoped=await runtimeRecipe('claude',process.cwd(),env,'/absolute/agentpeerchat');assert.ok(scoped.argv.includes('Bash(agentpeerchat:*)'));assert.ok(scoped.argv.includes('Bash(node \"/absolute/agentpeerchat\":*)'));assert.ok(!scoped.argv.includes('Bash'));assert.ok(!claude.argv.includes('--tools'));
+ assert.ok(claude.argv.includes('user,project'));assert.ok(claude.argv.includes('dontAsk'));assert.ok(!claude.argv.includes('--dangerously-skip-permissions'));const scoped=await runtimeRecipe('claude',process.cwd(),env,'/absolute/agentpeerchat');assert.ok(scoped.argv.includes('Bash'));assert.ok(scoped.argv.includes('Read'));assert.ok(scoped.argv.includes('Skill'));assert.ok(!claude.argv.includes('--tools'));
  await assert.rejects(runtimeRecipe('missing',process.cwd(),env),/--runtime/);await assert.rejects(runtimeRecipe('codex',process.cwd(),{PATH:''}),/not installed/);
 });

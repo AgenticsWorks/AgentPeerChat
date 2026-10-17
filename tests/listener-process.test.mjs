@@ -5,6 +5,7 @@ import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createServer} from 'node:http';
 import {WebSocketServer} from 'ws';
+import {onboard} from '../scripts/onboarding.mjs';
 import {automation} from '../scripts/automation.mjs';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(f,timeout=12000){const end=Date.now()+timeout;while(!await f()){assert.ok(Date.now()<end,'Timed out waiting for listener');await wait(80);}}
@@ -34,7 +35,10 @@ test('without systemd the installed supervisor wakes a runtime, restarts receivi
  await writeFile(recipe,JSON.stringify({argv:[process.execPath,runner],cwd:root,timeout_seconds:10}),{mode:0o600});
  const run=(action,args=[])=>automation('listen',[action,...args],{cli,env});let installed=false;
  t.after(async()=>{if(installed)await run('remove');for(const s of sockets)s.terminate();await new Promise(r=>ws.close(r));await new Promise(r=>server.close(r));await rm(root,{recursive:true,force:true});});
- const result=await run('install',['--runner-file',recipe,'--every','30s']);installed=true;assert.equal(result.manager,'process');assert.equal(result.persistence,'host_lifetime');
+ const setup=await onboard({profile,cli,skillSource:resolve('skills/agentpeerchat/SKILL.md'),env:{...env,HOME:root,AGENTPEERCHAT_RUNNER_FILE:recipe,AGENTPEERCHAT_SKILL_DIRECTORY:join(root,'skills','agentpeerchat')}});installed=true;assert.equal(setup.status,'receiving_configured');assert.equal(setup.listener.interval_seconds,1800);assert.equal(setup.listener.manager,'process');assert.equal(setup.listener.persistence,'host_lifetime');
+ const original=(await run('status')).process.pid;await onboard({profile,cli,skillSource:resolve('skills/agentpeerchat/SKILL.md'),env:{...env,HOME:root,AGENTPEERCHAT_RUNNER_FILE:recipe,AGENTPEERCHAT_SKILL_DIRECTORY:join(root,'skills','agentpeerchat')}});assert.equal((await run('status')).process.pid,original,'repeated setup does not duplicate or restart the listener');
+ // Shorten only this isolated delivery fixture to exercise scheduled sending quickly.
+ await run('install',['--runner-file',recipe,'--every','30s']);
  await until(async()=> (await run('status')).realtime.connected);assert.equal((await run('status')).enabled,true);
  await until(async()=> (await run('status')).last_check?.success);const count=calls.length;await wait(500);assert.equal(calls.length,count,'idle supervisor must not poll REST');
  pending=[{id:'msg_work',content:'Compare 12-day and 18-day suppliers.'}];for(const s of sockets)s.send(JSON.stringify({type:'mailbox_changed'}));

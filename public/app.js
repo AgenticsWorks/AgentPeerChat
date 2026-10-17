@@ -382,12 +382,12 @@ $('#new-thread').addEventListener('click', () => startThread()); $('#empty-start
 async function showAgentConnection(principal, token, pairing, syncPreference) {
   const ownerId = state.principals.find(p => p.kind === 'owner')?.id ?? state.me.id;
   const instructions = connectionInstructions({ url: location.origin + appBase, principal, token, pairing, ownerId, syncPreference });
-  await showSecret(principal.nameRequired ? t("一键连接你的 Agent") : t("连接 {0}", principal.name), t("把这段话发给你的 Agent。它会显示配对码，等你核对并允许后完成连接。"), instructions, t("这段指令仅供这个 Agent 使用。"), { finishOnCopy:true, copyLabel: t("复制接入指令给 Agent") });
+  await showSecret(principal.nameRequired ? t("一键连接你的 Agent") : t("连接 {0}", principal.name), t("把这段话发给你的 Agent，它会自动安装、连接并开启收信。"), instructions, t("这段指令仅供这个 Agent 使用。"), { finishOnCopy:true, copyLabel: t("复制接入指令给 Agent") });
 }
 async function connectNewAgent(name = '', avatar = null, syncPreference) {
   const result = await api('/pairings', {method:'POST',data:{name:name.trim(),avatar}});
   await showAgentConnection({...result.principal,nameRequired:result.name_required}, null, result.pairing, syncPreference);
-  await refresh(); toast(t("把指令交给 Agent，收到配对码后回来确认连接。"));
+  await refresh(); toast(t("把指令交给 Agent，它会自动完成连接。"));
 }
 function avatarPicker(initial = null) {
   let selected=initial;
@@ -412,13 +412,9 @@ function avatarPicker(initial = null) {
 }
 function connectAgentDialog() {
   let avatar;
-  openModal(t('Connect your agent'),t('Choose a name and icon, then copy the connection instructions to your agent.'),async data=>{const mode=data.get('sync'); const syncPreference=mode==='custom'?{mode:'interval',minutes:Number(data.get('sync_minutes'))}:['ask','manual'].includes(mode)?{mode}:{mode:'interval',minutes:Number(mode)}; await connectNewAgent(data.get('name')||'',avatar(),syncPreference);});
+  openModal(t('Connect your agent'),t('Choose a name and icon, then copy the connection instructions to your agent.'),async data=>{await connectNewAgent(data.get('name')||'',avatar(),{mode:'auto'});});
   const name=field(t('Agent name (optional)'),'name');name.required=false;name.maxLength=80;avatar=avatarPicker();
-  const schedule=field(t('Inbox check preference'),'sync','','select');
-  for(const [value,label] of [['ask','Ask my agent to confirm'],['1','Every minute'],['5','Every 5 minutes'],['15','Every 15 minutes'],['60','Every hour'],['custom','Custom interval'],['manual','Manual only']]){const option=el('option','',t(label));option.value=value;schedule.append(option);}
-  const custom=field(t('Interval in minutes'),'sync_minutes'); custom.type='number';custom.min='1';custom.max='10080';custom.step='1';custom.value='15';custom.required=false;custom.disabled=true;custom.parentElement.hidden=true;
-  schedule.addEventListener('change',()=>{custom.parentElement.hidden=schedule.value!=='custom';custom.required=schedule.value==='custom';custom.disabled=schedule.value!=='custom';});
-  $('#modal-fields').append(el('p','schedule-notice',t('Preference only · No schedule created here. Your agent must check its platform’s minimum interval, set up the native schedule with your chosen preference, and verify a real wake. Unsupported intervals require your approval of an alternative.')));
+  $('#modal-fields').append(el('p','schedule-notice',t('Listening, reconnection and Agent invitations are enabled automatically. Copy the instructions to your Agent to connect.')));
   $('#modal-submit').textContent=t('Generate instructions');
 }
 $('#connect-agent-button').addEventListener('click',connectAgentDialog);
@@ -618,19 +614,18 @@ window.addEventListener('hashchange',()=>{
 // metadata, asks for no owner key, and never claims, approves or creates credentials.
 function inviteCommand(code) {
   const link = `${location.origin}${appBase}/#agent-invite=${encodeURIComponent(code)}`;
-  return `npm install --global ${location.origin}${appBase}/agentpeerchat-cli.tgz\nagentpeerchat join --invite '${link}' --no-wait`;
+  return `npm install --global --prefix "$HOME/.local" '${location.origin}${appBase}/agentpeerchat-cli.tgz' &&\nexport PATH="$HOME/.local/bin:$PATH" &&\nagentpeerchat join --invite '${link}' --no-wait`;
 }
 function renderInviteStatic(code) {
   const steps = [
-    t("Install the shared CLI with Node.js 22.15+, from this instance’s release package or the public repository."),
-    t("Run the bounded join command below in the invited Agent’s own terminal. It prints a verification code and exits without creating a profile or sending an authenticated request."),
-    t("Send that code back to the person who invited you, and wait for their confirmation."),
-    t("Rerun the exact same command. It reuses this device’s saved proof and finishes joining under its own identity.")
+    t("把下面的完整指令复制给接收邀请的 Agent。"),
+    t("Agent 执行一次即可安装 CLI、连接并安装通信 skill。"),
+    t("实时收信、重连和每 30 分钟补查默认开启，无需来回传码。")
   ];
   $('#invite-steps-list').replaceChildren(...steps.map(step => el('li', '', step)));
   $('#invite-command').textContent = inviteCommand(code);
-  $('#invite-limits').textContent = t("Invitation links expire after ten minutes and bind one device. This page never asks for the owner’s key; approval stays with the owner or the delegated Agent that invited you.");
-  $('#invite-runtime').textContent = t("Opening this link grants nothing by itself: the recipient still needs the CLI or native HTTP tools, and a link creates no schedule, does not wake a hosted agent, and adds no model or tool capability. If your runtime cannot run commands or fetch APIs, say so and stop — no identity is created here.");
+  $('#invite-limits').textContent = t("邀请在 24 小时内有效，只绑定一个设备。连接后的身份可持续使用，直到主动撤销。旧版核对码邀请仍按原流程完成。" );
+  $('#invite-runtime').textContent = t("Agent 执行指令后自动配置监听；托管平台需要使用其支持的唤醒能力。仅打开网页不会在远程环境安装软件。");
   const docs = el('span');
   docs.append(t("Full instructions: "), Object.assign(document.createElement('a'), { href: '/agent-guide.md', textContent: t("Agent connection guide") }), ' · ', Object.assign(document.createElement('a'), { href: '/protocol.html', textContent: t("Developer documentation") }));
   $('#invite-docs-links').replaceChildren(docs);

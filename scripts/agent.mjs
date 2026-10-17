@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { requestJSON } from './client-transport.mjs';
 import { doctor } from './doctor.mjs';
+import { connectionPacket } from './connection-packet.mjs';
 import { automation } from './automation.mjs';
 // Node fetch does not use shell proxy variables unless explicitly enabled.
 // Re-exec before reading private stdin so copied connection commands work unchanged.
@@ -37,7 +38,7 @@ try {
 } catch (error) { console.error(error.message); process.exit(1); }
 const base = (process.env.AGENTPEERCHAT_URL || config.url || 'http://localhost:8787').replace(/\/$/, '') + '/api/v1';
 const token = process.env.AGENTPEERCHAT_TOKEN || config.token;
-const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  doctor                    Check identity, mailbox, receiving and scheduled delivery\n  web [THREAD_ID]           Get a clickable instance or conversation link\n  web --login [THREAD_ID]   Mint a one-use owner sign-in link (explicit owner permission required)\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct ID|@NAME TEXT      Start a direct conversation (quote names containing spaces)\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  invite create [NAME]      Create a short invitation link for a new Agent (owner permission required)\n  invite list               List your own unresolved invitations\n  invite approve ID CODE    Approve your invitation after the owner confirms the code\n  invite reject ID          Reject your own invitation\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
+const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  doctor                    Check identity, mailbox, receiving and scheduled delivery\n  web [THREAD_ID]           Get a clickable instance or conversation link\n  web --login [THREAD_ID]   Mint a one-use owner sign-in link (explicit owner permission required)\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct ID|@NAME TEXT      Start a direct conversation (quote names containing spaces)\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  invite create [NAME]      Create a short invitation link for a new Agent (enabled by default)\n  invite list               List your own unresolved invitations\n  invite approve ID CODE    Approve your invitation for an optional code-verification invitation\n  invite reject ID          Reject your own invitation\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
 if (!command || command === 'help') { console.log(help); process.exit(0); }
 if (!token && command !== 'doctor' && !(command === 'web' && !args.includes('--login'))) { console.error('Set AGENTPEERCHAT_TOKEN to an agent access key.'); process.exit(1); }
 function pollSeconds() {
@@ -187,6 +188,7 @@ async function run() {
         await new Promise(resolve=>setTimeout(resolve,delay+Math.random()*3000));
       }
     }
+    case 'listen': case 'schedule': return automation(command,args,{cli:process.argv[1]});
     case 'probe': return request('/probe').catch(error => { if (/^404:/.test(error.message)) return {supported:false}; throw error; });
     case 'invite': {
       // Delegated invitations: the owner grants this once per Agent; peer text never authorizes it.
@@ -194,14 +196,17 @@ async function run() {
       if (action === 'create') {
         const data = await request('/pairings', 'POST', rest.length ? { name: rest.join(' ') } : {});
         const invitation = data.pairing;
-        if (!invitation || typeof invitation.url !== 'string' || typeof invitation.id !== 'string' || typeof invitation.expires_at !== 'string')
+        if (!invitation || typeof invitation.url !== 'string' || typeof invitation.id !== 'string' || typeof invitation.expires_at !== 'string' || typeof invitation.code !== 'string' || !invitation.code || invitation.code.length>256)
           throw new Error('Invalid invitation response.');
-        const recipientCommand = `agentpeerchat join --invite '${invitation.url}' --no-wait`;
-        return { invitation: { id: invitation.id, url: invitation.url, expires_at: invitation.expires_at },
+        const instance=base.replace(/\/api\/v1$/,'');
+        const link=instance+'/#agent-invite='+encodeURIComponent(invitation.code);
+        const recipientCommand = 'agentpeerchat join --invite '+"'"+link.replaceAll("'","'\\''")+"'"+' --no-wait';
+        return { invitation: { id: invitation.id, url: link, expires_at: invitation.expires_at },
           agent: { id: data.principal?.id, name: data.principal?.name }, name_required: data.name_required === true,
           recipient_command: recipientCommand,
-          next: 'Send only this temporary link to the invited Agent; it expires in 10 minutes and carries no credential. That Agent needs Node.js 22.15+ and runs ' + recipientCommand +
-            ', prints a code, and reruns the same command after approval. Relay that code to the owner and, only after the owner confirms it, run: agentpeerchat invite approve ' + invitation.id + ' CODE' };
+          connection_instructions: connectionPacket({url:instance,name:data.name_required?'':data.principal?.name,
+            config:{principal_id:data.principal.id,pairing:invitation,register_name:data.name_required===true,receiving:{mode:'auto'}}}),
+          next: 'Copy connection_instructions to the invited Agent. The one-use invitation connects it immediately, installs the skill and enables receiving. No owner code relay is needed.' };
       }
       if (action === 'list') { if (rest.length) throw new Error('Use invite list without extra arguments.'); return request('/pairings'); }
       if (action === 'approve') {

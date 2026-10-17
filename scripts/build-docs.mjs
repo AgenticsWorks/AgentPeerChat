@@ -31,7 +31,7 @@ await copyFile('docs/agent-guide.md', 'public/agent-guide.md');
 await copyFile('docs/agent-guide.zh-CN.md', 'public/agent-guide.zh-CN.md');
 
 await copyFile('scripts/runtime.mjs', 'public/agentpeerchat-runtime.mjs');
-await copyFile('scripts/install.mjs', 'public/install.mjs');
+await copyFile('dist/cli/install.mjs', 'public/install.mjs');
 await mkdir('public/references',{recursive:true});
 await copyFile('skills/agentpeerchat/references/automation.md','public/references/automation.md');
 

@@ -68,11 +68,11 @@ export async function runtimeRecipe(runtime,workspace,env=process.env,cli){
   let executable;for(const path of candidates)if(await access(path,constants.X_OK).then(()=>true,()=>false)){executable=resolve(path);break;}
   if(!executable)throw new Error('The selected model runtime is not installed. Install/sign in to it first.');
   // Reuse saved host authentication. Never put provider keys in arguments or the recipe.
-  const argv=runtime==='codex'?[executable,'exec','--ephemeral','--skip-git-repo-check','--sandbox','workspace-write','-c','sandbox_workspace_write.network_access=true','-c','approval_policy="never"','-c','shell_environment_policy.inherit="all"','--json','-']:[executable,'-p','--no-session-persistence','--permission-mode','dontAsk',...(cli?['--allowedTools','Bash(agentpeerchat:*)','Bash(node '+JSON.stringify(cli)+':*)','Bash(node '+cli+':*)']:[]),'--setting-sources','user,project','--verbose','--output-format','stream-json'];
+  const argv=runtime==='codex'?[executable,'exec','--ephemeral','--skip-git-repo-check','--sandbox','workspace-write','-c','sandbox_workspace_write.network_access=true','-c','approval_policy="never"','-c','shell_environment_policy.inherit="all"','--json','-']:[executable,'-p','--no-session-persistence','--permission-mode','dontAsk','--allowedTools','Bash','Read','Write','Edit','Glob','Grep','Skill','WebSearch','WebFetch','--setting-sources','user,project','--verbose','--output-format','stream-json'];
   return {argv,cwd,timeout_seconds:300};
 }
 function quoteUnit(value){if(/[\n\r\0]/.test(value))throw new Error('Invalid unit path.');return '"'+value.replaceAll('\\','\\\\').replaceAll('"','\\"').replaceAll('%','%%').replaceAll('$','$$')+'"';}
-function systemctl(system,...args){const r=spawnSync('systemctl',[...(system?[]:['--user']),...args],{encoding:'utf8'});if(r.status!==0)throw new Error('systemd '+args[0]+' failed. Use your host scheduler if no systemd session is available.');return r.stdout.trim();}
+function controlSystemd(env,system,...args){const r=spawnSync('systemctl',[...(system?[]:['--user']),...args],{env,encoding:'utf8'});if(r.status!==0)throw new Error('systemd '+args[0]+' failed. Use your host scheduler if no systemd session is available.');return r.stdout.trim();}
 const validText=value=>typeof value==='string'&&Boolean(value.trim())&&Buffer.byteLength(value,'utf8')<=16384;
 const validScheduledText=(thread,content)=>validText(content)&&Buffer.byteLength(JSON.stringify({thread_id:thread,type:'text',content}),'utf8')<=65536;
 const validThread=value=>typeof value==='string'&&value.length<=80&&/^thr_[A-Za-z0-9_]+$/.test(value);
@@ -94,6 +94,7 @@ export async function automation(command,args,{cli,env=process.env}={}){
   if(!env.AGENTPEERCHAT_CONFIG)throw new Error('Automation requires a saved private profile. Use --profile AGENT_ID or AGENTPEERCHAT_CONFIG.');
   const profile=resolve(env.AGENTPEERCHAT_CONFIG),identity=await readJSON(profile,null);
   if(!identity||['principal_id','url','token'].some(key=>typeof identity[key]!=='string'||!identity[key]))throw new Error('Invalid private connection profile.');
+  const systemctl=(system,...parts)=>controlSystemd(env,system,...parts);
   const f=flags(args),action=f.positionals.shift();
   const root=profile+'.automation';
   if(command!=='listen'||action!=='status')await mkdir(root,{recursive:true,mode:0o700});
@@ -192,7 +193,7 @@ export async function automation(command,args,{cli,env=process.env}={}){
     if(settings&&(settings.manager||'systemd')!==manager)throw Error('Remove the existing listener before changing its process manager.');
     if(settings&&settings.system!==system)throw new Error('Remove the existing listener before changing between user and system units.');
     const actual=await verifyIdentity();if(actual.kind!=='agent')throw new Error('Listener requires the matching Agent identity.');
-    const unitDirectory=system?'/etc/systemd/system':join(homedir(),'.config','systemd','user');if(manager==='systemd')await mkdir(unitDirectory,{recursive:true});
+    const unitDirectory=system?'/etc/systemd/system':join(env.HOME||homedir(),'.config','systemd','user');if(manager==='systemd')await mkdir(unitDirectory,{recursive:true});
     const recipePath=join(root,'runner.json');await privateWrite(recipePath,{...runner,timeout_seconds:timeout});
     const bin=join(root,'bin');await mkdir(bin,{recursive:true,mode:0o700});
     const shellQuote=value=>"'"+value.replaceAll("'","'\\''")+"'";

@@ -28,9 +28,9 @@ test('buffered terminal can request pairing, return its code, then finish after 
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(home,{recursive:true,force:true});});
- const packet={url:`http://127.0.0.1:${server.address().port}`,principal_id:'agt_buffered',pairing:{id:'pair_fixture',code:'agp_fixture_invitation'}};
+ const packet={receiving:{mode:'manual'},url:`http://127.0.0.1:${server.address().port}`,principal_id:'agt_buffered',pairing:{id:'pair_fixture',code:'agp_fixture_invitation'}};
  async function run(){
-  const env={...process.env,HOME:home,NODE_USE_ENV_PROXY:'0'};
+  const env={...process.env,CODEX_HOME:join(home,'.codex'),CODEX_THREAD_ID:'',HOME:home,NODE_USE_ENV_PROXY:'0'};
   for(const k of Object.keys(env))if(/^(AGENTPEERCHAT|AGENTGRAM|AGENTPENPAL)_/.test(k))delete env[k];
   return await new Promise((resolveDone,reject)=>{
    const child=spawn(process.execPath,[resolve('cli/agentpeerchat.mjs'),'join','--no-wait'],{env,detached:process.platform!=='win32'});let stdout='',stderr='',timedOut=false;

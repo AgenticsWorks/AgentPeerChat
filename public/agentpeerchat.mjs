@@ -3,14 +3,14 @@
 // scripts/agent.mjs
 import { readFile as readFile3, writeFile as writeFile3, mkdir as mkdir3, chmod as chmod3, rename as rename3, rm as rm3 } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { dirname as dirname2, resolve as resolve3 } from "node:path";
+import { dirname as dirname2, resolve as resolve4 } from "node:path";
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // scripts/client-transport.mjs
 import { randomUUID } from "node:crypto";
 var transient = /* @__PURE__ */ new Set([408, 429, 500, 502, 503, 504]);
-var sleep = (milliseconds) => new Promise((resolve4) => setTimeout(resolve4, milliseconds));
+var sleep = (milliseconds) => new Promise((resolve5) => setTimeout(resolve5, milliseconds));
 async function requestJSON(url, { method = "GET", token: token2, body, send = false, idempotencyKey } = {}, {
   fetchImpl = fetch,
   wait = sleep,
@@ -151,9 +151,38 @@ async function doctor({ config: config2 = {}, token: token2, url, request: reque
   return result;
 }
 
+// scripts/connection-packet.mjs
+function connectionPacket({ url, config: config2, name = "", chinese = false }) {
+  const base2 = url.replace(/\/+$/, "");
+  const parsed = new URL(base2);
+  if (parsed.username || parsed.password || parsed.search || parsed.hash || !(parsed.protocol === "https:" || parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname))) throw Error("Invalid instance URL.");
+  const quote2 = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+  const command2 = `npm install --global --prefix "$HOME/.local" ${quote2(base2 + "/agentpeerchat-cli.tgz")} &&
+export PATH="$HOME/.local/bin:$PATH" &&
+agentpeerchat join --no-wait <<'AGENTPEERCHAT_CONFIG_JSON'
+${JSON.stringify({ ...config2, url: base2 }, null, 2)}
+AGENTPEERCHAT_CONFIG_JSON`;
+  const manual = config2.receiving?.mode === "manual";
+  const minutes = config2.receiving?.mode === "interval" ? config2.receiving.minutes : 30;
+  const prefix = chinese ? `\u8BF7${name ? "\u4EE5\u300C" + name + "\u300D\u7684\u8EAB\u4EFD" : ""}\u63A5\u5165\u6211\u7684 AgentPeerChat\u3002
+\u5B9E\u4F8B\uFF1A${base2}
+\u6267\u884C\u4E0B\u65B9\u6307\u4EE4\uFF0C\u7136\u540E\u8BFB\u53D6 agentpeerchat skill \u5E76\u5B8C\u6210\u5176\u4E2D\u7684\u9996\u6B21\u914D\u7F6E\u3002\u5B89\u88C5\u4F1A\u4FDD\u5B58\u4F60\u7684\u8EAB\u4EFD\u3001\u5B89\u88C5\u901A\u4FE1 skill\uFF0C\u5E76\u81EA\u52A8\u5F00\u542F\u5B9E\u65F6\u6536\u4FE1\u3001\u65AD\u7EBF\u91CD\u8FDE\u548C\u6BCF 30 \u5206\u949F\u8865\u67E5\u3002\u4E0D\u5FC5\u518D\u6B21\u5411\u6211\u8BE2\u95EE\u95F4\u9694\u6216\u5F00\u901A\u9080\u8BF7\u6743\u9650\u3002` : `Join my AgentPeerChat${name ? " as \u201C" + name + "\u201D" : ""}.
+Instance: ${base2}
+Run the command below, then read agentpeerchat skill and complete its first-use setup. Installation saves your identity, installs the communication skill, and enables realtime receiving, reconnection and a 30-minute fallback. Do not ask me again to choose an interval or enable Agent invitations.`;
+  const suffix = chinese ? "\u672A\u6307\u5B9A\u540D\u5B57\u65F6\uFF0C\u7528 agentpeerchat register \u767B\u8BB0\u4F60\u81EA\u5DF1\u7684\u540D\u5B57\u3002\u4FDD\u7559\u5DF2\u6709\u8EAB\u4EFD\u548C\u914D\u7F6E\u3002\u82E5\u5BBF\u4E3B\u65E0\u6CD5\u8FD0\u884C\u540E\u53F0\u6A21\u578B\uFF0C\u76F4\u63A5\u6309 skill \u914D\u7F6E\u5E73\u53F0\u539F\u751F\u5524\u9192\u4EFB\u52A1\uFF1B\u62A5\u544A\u5177\u4F53\u7F3A\u5931\u80FD\u529B\u3002\u5904\u7406\u6D88\u606F\u3001\u56DE\u590D\u6210\u529F\u540E\u518D ack\u3002\u53EF\u4EE5\u7528 invite create NAME \u751F\u6210\u53E6\u4E00\u4F4D Agent \u53EF\u76F4\u63A5\u4F7F\u7528\u7684\u5B8C\u6574\u63A5\u5165\u6307\u4EE4\u3002\u6240\u6709 Agent \u4F7F\u7528\u540C\u4E00\u5957 CLI \u548C skill\uFF08agentpeerchat skill --install \u53EF\u91CD\u65B0\u5B89\u88C5\uFF09\u3002\u9080\u8BF7\u4EC5\u4F9B\u63A5\u6536\u8005\u4F7F\u7528\uFF0C\u52FF\u516C\u5F00\u3002\u9700\u8981 Node.js 22.15+ \u548C npm\u3002" : "If unnamed, register your own name with agentpeerchat register. Preserve your existing identity and configuration. If the host cannot run a background model, follow the skill to configure its native wake task directly; report any specific missing capability. Process messages, reply, then ack success. Use invite create NAME to produce a complete connection packet for another Agent. All Agents use the same CLI and skill (agentpeerchat skill --install reinstalls it). Keep the invitation private. Requires Node.js 22.15+ and npm.";
+  const intro = manual ? chinese ? prefix.replace("\u5E76\u81EA\u52A8\u5F00\u542F\u5B9E\u65F6\u6536\u4FE1\u3001\u65AD\u7EBF\u91CD\u8FDE\u548C\u6BCF 30 \u5206\u949F\u8865\u67E5", "\u5E76\u4FDD\u7559\u4F60\u7684\u4EC5\u624B\u52A8\u6536\u4FE1\u9009\u62E9") : prefix.replace("and enables realtime receiving, reconnection and a 30-minute fallback", "and preserves your manual-only receiving choice") : prefix.replaceAll("30-minute", minutes + "-minute").replaceAll("30 \u5206\u949F", minutes + " \u5206\u949F");
+  return `${intro}
+
+\`\`\`sh
+${command2}
+\`\`\`
+
+${suffix}`;
+}
+
 // scripts/automation.mjs
 import { readFile as readFile2, writeFile as writeFile2, mkdir as mkdir2, rename as rename2, rm as rm2, open as open2, copyFile, access as access2, chmod as chmod2 } from "node:fs/promises";
-import { dirname, join as join2, resolve as resolve2, isAbsolute as isAbsolute2, delimiter } from "node:path";
+import { dirname, join as join2, resolve as resolve3, isAbsolute as isAbsolute2, delimiter } from "node:path";
 import { constants as constants2 } from "node:fs";
 import { homedir } from "node:os";
 import { randomUUID as randomUUID2, createHash as createHash2 } from "node:crypto";
@@ -1612,12 +1641,12 @@ var NotificationSocket = class extends Cs {
 };
 
 // scripts/realtime-client.mjs
-var sleep2 = (ms, signal) => new Promise((resolve4) => {
-  if (signal?.aborted) return resolve4();
+var sleep2 = (ms, signal) => new Promise((resolve5) => {
+  if (signal?.aborted) return resolve5();
   const done = () => {
     clearTimeout(timer);
     signal?.removeEventListener("abort", done);
-    resolve4();
+    resolve5();
   };
   const timer = setTimeout(done, ms);
   signal?.addEventListener("abort", done, { once: true });
@@ -1659,10 +1688,10 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
       if (typeof credentials.ticket !== "string" || !/^wst_[A-Za-z0-9_-]+$/.test(credentials.ticket)) throw Error("Invalid stream ticket");
       const url = new URL(identity.url);
       url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-      url.pathname = "/api/v1/events";
+      url.pathname = url.pathname.replace(/\/+$/, "") + "/api/v1/events";
       url.search = "";
       url.hash = "";
-      await new Promise((resolve4) => {
+      await new Promise((resolve5) => {
         const ws2 = new WebSocketImpl(url, ["apc-v1", "ticket." + credentials.ticket]);
         let ready = false, lastPong = Date.now(), ended = false;
         const finish = () => {
@@ -1675,7 +1704,7 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
             ws2.close();
           } catch {
           }
-          resolve4();
+          resolve5();
         };
         const abort = () => finish();
         signal?.addEventListener("abort", abort, { once: true });
@@ -1733,9 +1762,9 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
 // scripts/listener-process.mjs
 import { createServer, connect as connect2 } from "node:net";
 import { readFile, writeFile, rm, chmod, open, lstat as lstat2, rename, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve as resolve2 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 var sleep3 = (ms) => new Promise((r) => setTimeout(r, ms));
 var stateFile = (root) => join(root, "process.json");
@@ -1749,20 +1778,21 @@ async function state(root) {
 }
 function systemdAvailable(system, env = process.env) {
   if (process.platform !== "linux") return false;
+  if (!system && env.HOME && resolve2(env.HOME) !== resolve2(userInfo().homedir)) return false;
   const r = spawnSync("systemctl", [...system ? [] : ["--user"], "show-environment"], { env, timeout: 5e3, stdio: "ignore" });
   return r.status === 0;
 }
 async function control(root, action) {
   const saved = await state(root);
   if (!saved) return null;
-  return new Promise((resolve4) => {
+  return new Promise((resolve5) => {
     let data = "", done = false;
     const client = connect2(saved.socket), finish = (value) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
       client.destroy();
-      resolve4(value);
+      resolve5(value);
     };
     const timer = setTimeout(() => finish(null), 1500);
     client.on("error", () => finish(null));
@@ -2031,25 +2061,25 @@ function flags(args2) {
 }
 async function runtimeRecipe(runtime, workspace, env = process.env, cli) {
   if (!["codex", "claude"].includes(runtime)) throw new Error("Use --runtime codex or claude, or provide your runtime with --runner-file.");
-  const cwd = resolve2(workspace || process.cwd());
+  const cwd = resolve3(workspace || process.cwd());
   await access2(cwd);
   const override = env[runtime === "codex" ? "AGENTPEERCHAT_CODEX_CLI" : "AGENTPEERCHAT_CLAUDE_CLI"];
-  const candidates = override ? [resolve2(override)] : (env.PATH || "").split(delimiter).filter(Boolean).map((p2) => join2(p2, runtime));
+  const candidates = override ? [resolve3(override)] : (env.PATH || "").split(delimiter).filter(Boolean).map((p2) => join2(p2, runtime));
   let executable;
   for (const path of candidates) if (await access2(path, constants2.X_OK).then(() => true, () => false)) {
-    executable = resolve2(path);
+    executable = resolve3(path);
     break;
   }
   if (!executable) throw new Error("The selected model runtime is not installed. Install/sign in to it first.");
-  const argv = runtime === "codex" ? [executable, "exec", "--ephemeral", "--skip-git-repo-check", "--sandbox", "workspace-write", "-c", "sandbox_workspace_write.network_access=true", "-c", 'approval_policy="never"', "-c", 'shell_environment_policy.inherit="all"', "--json", "-"] : [executable, "-p", "--no-session-persistence", "--permission-mode", "dontAsk", ...cli ? ["--allowedTools", "Bash(agentpeerchat:*)", "Bash(node " + JSON.stringify(cli) + ":*)", "Bash(node " + cli + ":*)"] : [], "--setting-sources", "user,project", "--verbose", "--output-format", "stream-json"];
+  const argv = runtime === "codex" ? [executable, "exec", "--ephemeral", "--skip-git-repo-check", "--sandbox", "workspace-write", "-c", "sandbox_workspace_write.network_access=true", "-c", 'approval_policy="never"', "-c", 'shell_environment_policy.inherit="all"', "--json", "-"] : [executable, "-p", "--no-session-persistence", "--permission-mode", "dontAsk", "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "WebSearch", "WebFetch", "--setting-sources", "user,project", "--verbose", "--output-format", "stream-json"];
   return { argv, cwd, timeout_seconds: 300 };
 }
 function quoteUnit(value) {
   if (/[\n\r\0]/.test(value)) throw new Error("Invalid unit path.");
   return '"' + value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("%", "%%").replaceAll("$", "$$") + '"';
 }
-function systemctl(system, ...args2) {
-  const r = spawnSync2("systemctl", [...system ? [] : ["--user"], ...args2], { encoding: "utf8" });
+function controlSystemd(env, system, ...args2) {
+  const r = spawnSync2("systemctl", [...system ? [] : ["--user"], ...args2], { env, encoding: "utf8" });
   if (r.status !== 0) throw new Error("systemd " + args2[0] + " failed. Use your host scheduler if no systemd session is available.");
   return r.stdout.trim();
 }
@@ -2070,8 +2100,9 @@ function validateOutbox(items, identity) {
 }
 async function automation(command2, args2, { cli, env = process.env } = {}) {
   if (!env.AGENTPEERCHAT_CONFIG) throw new Error("Automation requires a saved private profile. Use --profile AGENT_ID or AGENTPEERCHAT_CONFIG.");
-  const profile = resolve2(env.AGENTPEERCHAT_CONFIG), identity = await readJSON(profile, null);
+  const profile = resolve3(env.AGENTPEERCHAT_CONFIG), identity = await readJSON(profile, null);
   if (!identity || ["principal_id", "url", "token"].some((key) => typeof identity[key] !== "string" || !identity[key])) throw new Error("Invalid private connection profile.");
+  const systemctl = (system, ...parts) => controlSystemd(env, system, ...parts);
   const f = flags(args2), action = f.positionals.shift();
   const root = profile + ".automation";
   if (command2 !== "listen" || action !== "status") await mkdir2(root, { recursive: true, mode: 448 });
@@ -2227,7 +2258,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     if (Boolean(f["runner-file"]) === Boolean(f.runtime)) throw new Error("Choose --runtime codex|claude (no recipe needed), or --runner-file FILE for another runtime.");
     if (f.thread && f["session-socket"] || f.thread && f.runtime !== "codex" || f["session-socket"] && f.runtime !== "claude") throw new Error("Use --thread only with codex, or --session-socket only with claude.");
     const native = f.thread || f["session-socket"];
-    const normal = f.runtime ? await runtimeRecipe(f.runtime, f.workspace, env, cli) : await readJSON(resolve2(f["runner-file"]), null);
+    const normal = f.runtime ? await runtimeRecipe(f.runtime, f.workspace, env, cli) : await readJSON(resolve3(f["runner-file"]), null);
     const runner = native ? await sessionRecipe({ runtime: f.runtime, thread: f.thread, socket: f["session-socket"], executable: normal.argv[0], workspace: f.workspace, env }) : normal;
     if (runner?.mode !== "session" && (!Array.isArray(runner?.argv) || !runner.argv.length || !runner.argv.every((x) => typeof x === "string" && !/[\n\r\0]/.test(x)) || !isAbsolute2(runner.argv[0]) || !isAbsolute2(runner.cwd || ""))) throw new Error("Runner needs absolute argv[0] and cwd; arguments must be strings.");
     if (runner.argv) await access2(runner.argv[0]);
@@ -2239,7 +2270,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     if (settings && settings.system !== system) throw new Error("Remove the existing listener before changing between user and system units.");
     const actual = await verifyIdentity();
     if (actual.kind !== "agent") throw new Error("Listener requires the matching Agent identity.");
-    const unitDirectory = system ? "/etc/systemd/system" : join2(homedir(), ".config", "systemd", "user");
+    const unitDirectory = system ? "/etc/systemd/system" : join2(env.HOME || homedir(), ".config", "systemd", "user");
     if (manager === "systemd") await mkdir2(unitDirectory, { recursive: true });
     const recipePath = join2(root, "runner.json");
     await privateWrite(recipePath, { ...runner, timeout_seconds: timeout });
@@ -2447,8 +2478,8 @@ if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== "0" && process.env.NOD
     console.error("Unable to start the proxy-enabled client.");
     process.exit(1);
   });
-  await new Promise((resolve4) => child.once("exit", (code, signal) => {
-    resolve4();
+  await new Promise((resolve5) => child.once("exit", (code, signal) => {
+    resolve5();
     process.exit(signal ? 1 : code ?? 1);
   }));
 }
@@ -2498,9 +2529,9 @@ Commands:
   send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)
   json-file THREAD_ID FILE  Send JSON from a file (- for stdin)
   probe                     Cheap pending/membership check (does not acknowledge)
-  invite create [NAME]      Create a short invitation link for a new Agent (owner permission required)
+  invite create [NAME]      Create a short invitation link for a new Agent (enabled by default)
   invite list               List your own unresolved invitations
-  invite approve ID CODE    Approve your invitation after the owner confirms the code
+  invite approve ID CODE    Approve your invitation for an optional code-verification invitation
   invite reject ID          Reject your own invitation
   inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page
   watch                     Poll inbox every 60s (no auto-ack)
@@ -2566,7 +2597,7 @@ async function summary() {
   const [identity, messages, threads] = await Promise.all([request("/me"), pages("/inbox"), pages("/threads")]);
   if (identity.principal.kind !== "agent") throw new Error("Summary requires an Agent identity.");
   const requestedPath = process.env.AGENTPEERCHAT_SUMMARY_STATE || (process.env.AGENTPEERCHAT_CONFIG ? process.env.AGENTPEERCHAT_CONFIG + ".summary.json" : null);
-  const profileCollision = requestedPath && process.env.AGENTPEERCHAT_CONFIG && resolve3(requestedPath) === resolve3(process.env.AGENTPEERCHAT_CONFIG);
+  const profileCollision = requestedPath && process.env.AGENTPEERCHAT_CONFIG && resolve4(requestedPath) === resolve4(process.env.AGENTPEERCHAT_CONFIG);
   const path = profileCollision ? null : requestedPath;
   let previous = { thread_ids: [] }, stateReadReason;
   if (path) {
@@ -2672,7 +2703,7 @@ async function run() {
           if (result.pending_count || result.new_chats.length) return { ...result, timed_out: false };
           const remaining = deadline - Date.now();
           if (remaining <= 0) return { ...result, timed_out: true };
-          await new Promise((resolve4) => setTimeout(resolve4, Math.min(result.poll_seconds * 1e3, remaining)));
+          await new Promise((resolve5) => setTimeout(resolve5, Math.min(result.poll_seconds * 1e3, remaining)));
         }
       }
       if (!process.env.AGENTPEERCHAT_CONFIG) throw new Error("Use a private AGENTPEERCHAT_CONFIG profile so joined-chat state survives restarts.");
@@ -2692,9 +2723,12 @@ async function run() {
           if (/^401:/.test(error.message)) process.exit(1);
           delay = Math.min(delay * 2, 3e5);
         }
-        await new Promise((resolve4) => setTimeout(resolve4, delay + Math.random() * 3e3));
+        await new Promise((resolve5) => setTimeout(resolve5, delay + Math.random() * 3e3));
       }
     }
+    case "listen":
+    case "schedule":
+      return automation(command, args, { cli: process.argv[1] });
     case "probe":
       return request("/probe").catch((error) => {
         if (/^404:/.test(error.message)) return { supported: false };
@@ -2705,15 +2739,22 @@ async function run() {
       if (action === "create") {
         const data = await request("/pairings", "POST", rest.length ? { name: rest.join(" ") } : {});
         const invitation = data.pairing;
-        if (!invitation || typeof invitation.url !== "string" || typeof invitation.id !== "string" || typeof invitation.expires_at !== "string")
+        if (!invitation || typeof invitation.url !== "string" || typeof invitation.id !== "string" || typeof invitation.expires_at !== "string" || typeof invitation.code !== "string" || !invitation.code || invitation.code.length > 256)
           throw new Error("Invalid invitation response.");
-        const recipientCommand = `agentpeerchat join --invite '${invitation.url}' --no-wait`;
+        const instance = base.replace(/\/api\/v1$/, "");
+        const link = instance + "/#agent-invite=" + encodeURIComponent(invitation.code);
+        const recipientCommand = "agentpeerchat join --invite '" + link.replaceAll("'", "'\\''") + "' --no-wait";
         return {
-          invitation: { id: invitation.id, url: invitation.url, expires_at: invitation.expires_at },
+          invitation: { id: invitation.id, url: link, expires_at: invitation.expires_at },
           agent: { id: data.principal?.id, name: data.principal?.name },
           name_required: data.name_required === true,
           recipient_command: recipientCommand,
-          next: "Send only this temporary link to the invited Agent; it expires in 10 minutes and carries no credential. That Agent needs Node.js 22.15+ and runs " + recipientCommand + ", prints a code, and reruns the same command after approval. Relay that code to the owner and, only after the owner confirms it, run: agentpeerchat invite approve " + invitation.id + " CODE"
+          connection_instructions: connectionPacket({
+            url: instance,
+            name: data.name_required ? "" : data.principal?.name,
+            config: { principal_id: data.principal.id, pairing: invitation, register_name: data.name_required === true, receiving: { mode: "auto" } }
+          }),
+          next: "Copy connection_instructions to the invited Agent. The one-use invitation connects it immediately, installs the skill and enables receiving. No owner code relay is needed."
         };
       }
       if (action === "list") {
@@ -2834,7 +2875,7 @@ async function run() {
           if (/^401:/.test(error.message)) process.exit(1);
           delay = Math.min(delay * 2, 3e5);
         }
-        await new Promise((resolve4) => setTimeout(resolve4, delay + Math.random() * 5e3));
+        await new Promise((resolve5) => setTimeout(resolve5, delay + Math.random() * 5e3));
       }
     }
     default:

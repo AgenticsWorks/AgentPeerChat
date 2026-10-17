@@ -10,6 +10,7 @@ let mf, db, ownerKey, ownerId, dots, muse, scribe;
 const setup = 'local-test-setup-secret-with-32-bytes';
 const origin = 'https://agentpeerchat.test';
 async function call(path, { method = 'GET', key = ownerKey, body } = {}) {
+  if(path==='/pairings'&&method==='POST')body={approval_required:true,...body};
   const response = await mf.dispatchFetch(`${origin}/api/v1${path}`, {
     method, headers: { ...(key ? { Authorization: `Bearer ${key}` } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body)
@@ -60,6 +61,31 @@ test('invitation permission is owner-only, boolean, agent-only, and on by defaul
   const granted = await call(`/principals/${dots.id}`, { method: 'PATCH', body: { can_invite_agents: true } });
   assert.equal(granted.status, 200); assert.equal(granted.data.principal.can_invite_agents, 1);
   assert.equal((await call(`/principals/${scribe.id}`, { method: 'PATCH', body: { can_invite_agents: true } })).status, 200);
+});
+
+test('default invitations connect immediately, bind one device, and keep access after invite expiry',async()=>{
+ const created=await call('/pairings',{method:'POST',key:scribe.key,body:{approval_required:false,name:'Instant peer'}});
+ assert.equal(created.status,201);assert.equal(created.data.pairing.approval_required,false);
+ assert.ok(Date.parse(created.data.pairing.expires_at)>Date.now()+23*3600000);
+ const code=created.data.pairing.code,device=proof(),token_hash=await tokenHash(device);
+ const raced=await Promise.all([token_hash,'7'.repeat(64)].map(hash=>call('/pairings/request',{method:'POST',key:null,body:{code,token_hash:hash}})));
+ assert.deepEqual(raced.map(r=>r.status).sort(),[200,410]);
+ const accepted=raced.find(r=>r.status===200);assert.equal(accepted.data.pairing.status,'approved');
+ // Read back which device won; no other hash can ever mint a second credential.
+ const row=await db.prepare('SELECT token_hash,token_id,principal_id FROM pairings WHERE id = ?').bind(created.data.pairing.id).first();
+ assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM tokens WHERE principal_id = ?').bind(row.principal_id).first()).n,1);
+ if(row.token_hash===token_hash){
+  assert.equal((await call('/me',{key:device})).status,200);
+  assert.equal((await call('/me',{key:device})).data.principal.can_invite_agents,1);
+  await db.prepare('UPDATE pairings SET expires_at = ? WHERE id = ?').bind('2000-01-01T00:00:00Z',created.data.pairing.id).run();
+  assert.equal((await call('/me',{key:device})).status,200,'saved access is not tied to invitation expiry');
+ }
+ assert.equal((await call('/pairings/resolve',{method:'POST',key:null,body:{code}})).status,410);
+ // Retrying an approved proof must not undo a later owner revocation.
+ await call(`/principals/${row.principal_id}`,{method:'PATCH',body:{active:false}});
+ await call('/pairings/request',{method:'POST',key:null,body:{code,token_hash:row.token_hash}});
+ assert.equal((await db.prepare('SELECT active FROM principals WHERE id = ?').bind(row.principal_id).first()).active,0);
+ assert.notEqual((await db.prepare('SELECT revoked_at FROM tokens WHERE id = ?').bind(row.token_id).first()).revoked_at,null);
 });
 
 let firstInvitation;

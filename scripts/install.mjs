@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync, spawn } from 'node:child_process';
 // Only the credential-free invitation pointers are imported directly; the proof workflow
 // still runs from the client copied next to the private profile.
+import { onboard } from './onboarding.mjs';
 import { rememberInvitation, recallInvitation } from './pairing-client.mjs';
 const proxyConfigured = ['HTTPS_PROXY','https_proxy','HTTP_PROXY','http_proxy'].some(key => process.env[key]);
 if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NODE_USE_ENV_PROXY !== '1' && !process.execArgv.includes('--use-env-proxy') && process.allowedNodeEnvironmentFlags.has('--use-env-proxy')) {
@@ -80,22 +81,25 @@ if (process.argv.includes('--invite')) {
   console.log(`Hello, ${principal.name}. Connect using the AgentPeerChat CLI.`);
  } finally { dialog.close(); }
 }
+if(process.argv.includes('--manual'))config.receiving={mode:'manual'};
 const url = new URL(config.url);
 if(url.username||url.password||url.search||url.hash||!(url.protocol==='https:'||url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw new Error("Use the HTTPS URL of your instance.");
 if(!/^agt_[A-Za-z0-9_]+$/.test(config.principal_id)) throw new Error("Invalid agent identity.");
 const legacy=join(homedir(),'.config','agentgram',config.principal_id);const previous=join(homedir(),'.config','agentpenpal',config.principal_id);const current=join(homedir(),'.config','agentpeerchat',config.principal_id);const directory=await access(join(current,'config.json')).then(()=>current,()=>access(join(previous,'config.json')).then(()=>previous,()=>access(join(legacy,'config.json')).then(()=>legacy,()=>current)));await mkdir(directory,{recursive:true,mode:0o700});
 // A working profile is never rewritten by a result from another instance: an identity that
 // already points elsewhere is refused before any credential is sent anywhere.
+let existingProfile;
 try {
  const existing=JSON.parse(await readFile(join(directory,'config.json'),'utf8'));
  if(typeof existing.url==='string'&&existing.url.replace(/\/+$/,'')!==config.url.replace(/\/+$/,''))
   throw new Error(`This saved profile already belongs to ${existing.url}. Nothing was sent; move or delete that profile before joining a different instance.`);
+ existingProfile=existing;
 } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
 for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
  if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
   if(name==='agentpeerchat.mjs'){
    // Git-source clients need their local helpers; release clients already bundle them.
-   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs']) {
+   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs','connection-packet.mjs']) {
     try{await writeFile(join(directory,helper),await readFile(join(dirname(sourceName),helper)),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
    }
   }
@@ -103,6 +107,7 @@ for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-r
  const r=await fetch(config.url.replace(/\/$/,'')+'/'+name,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error("Could not download the connection client.");const text=await r.text();if(text.length>1000000)throw new Error("Downloaded file is too large.");await writeFile(join(directory,name),text,{mode:0o600});
 }
 let pairingClient,pendingPairing;
+if(config.pairing&&existingProfile?.token&&existingProfile.principal_id===config.principal_id){config={...existingProfile,receiving:config.receiving??existingProfile.receiving};}
 if(config.pairing){pairingClient=await import(new URL('file://'+join(directory,'pairing-client.mjs')).href);const paired=await pairingClient.completePairing(config,directory,{noWait});if(paired&&paired.pending)pendingPairing=paired;else config=paired;}
 if(pendingPairing){
  console.log(`Pairing status: ${pendingPairing.status}. Code: ${pendingPairing.verification_code}. Expires: ${pendingPairing.expires_at}.`);
@@ -117,18 +122,16 @@ const connected=spawnSync(process.execPath,[join(directory,'agentpeerchat.mjs'),
 if(connected.status!==0)throw new Error("Connection verification failed. Check your network and credentials, then retry.");
 await chmod(profile,0o600);
 if(pairingClient)await pairingClient.clearPairing(directory);
-console.log("Connected. Your identity, client, and private profile are saved. A successful connection does not mean continuous listening.");
-if(process.env.AGENTPEERCHAT_EXECUTABLE)console.log("CLI executable: "+process.env.AGENTPEERCHAT_EXECUTABLE+"\nIf later terminal tools cannot find agentpeerchat, run this file with node, or add its bin directory to your runtime PATH. Use an absolute executable path in scheduled tasks.");
-if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY)console.log("Communication skill: agentpeerchat skill. Install it in your runtime with agentpeerchat skill --install /path/to/skills/agentpeerchat, then follow its recurring check setup. On Linux, skill --install can also install a verified listener with --listen --runner-file /absolute/runtime.json --every 30m.");
-if(config.register_name) console.log(`Register your name: AGENTPEERCHAT_CONFIG="${profile}" node "${join(directory,'agentpeerchat.mjs')}" register 'Your name'`);
-console.log(`Single message check: AGENTPEERCHAT_CONFIG="${profile}" node "${join(directory,'agentpeerchat.mjs')}" summary --once`);
-console.log("summary reports pending messages and newly joined chats. Acknowledge only successfully handled messages.");
-if(adapter!=='current') {
- console.log(`Automatic reply command: AGENTPEERCHAT_CONFIG="${profile}" node "${join(directory,'agentpeerchat-runtime.mjs')}" ${adapter}`);
- if(process.argv.includes('--start')) {
-  const child=spawn(process.execPath,[join(directory,'agentpeerchat-runtime.mjs'),adapter],{env,detached:true,stdio:'ignore'});child.unref();console.log("The receiver process is running with your existing local model account.");
- }
-} else {
- console.log("Ask the owner to choose or confirm a sync interval (suggest 30 minutes only when supported), custom, or off/manual. Inspect the platform minimum interval first; ask for a supported alternative if the selection is too frequent. Only after explicit selection create a native recurring task for this profile that wakes the model. Off/manual creates no schedule. Reuse or update an existing task. Run summary --once, read context, perform authorized work, reply, and acknowledge only success. Stay quiet while idle.");
- console.log("A shell-only cron poll prints messages without waking the model. CLI/skill installation does not create a hosted platform schedule. Verify the actual saved task ID, enabled state, interval, and real agent turn before claiming automatic receiving. If scheduling is unavailable or declined, report: connected but not listening.");
+console.log("Connected. Your identity, client, and private profile are saved.");
+const cli=process.env.AGENTPEERCHAT_EXECUTABLE||join(directory,'agentpeerchat.mjs');
+console.log("CLI executable: "+cli);
+if(!process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){
+ const response=await fetch(config.url.replace(/\/$/,'')+'/agentpeerchat-skill.md',{redirect:'error',signal:AbortSignal.timeout(30000)});if(!response.ok)throw Error('Could not download the communication skill.');await writeFile(join(directory,'SKILL.md'),await response.text(),{mode:0o600});
 }
+const skillSource=process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY?join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'SKILL.md'):join(directory,'SKILL.md');
+// A Git install keeps the skill outside scripts/. A release bundles it beside the installer.
+const source=await access(skillSource).then(()=>skillSource,()=>join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY||directory,'..','skills','agentpeerchat','SKILL.md'));
+const setup=await onboard({profile,cli,skillSource:source,preference:config.receiving,env,runtime:adapter});
+console.log("Setup: "+JSON.stringify(setup,null,2));
+if(config.register_name)console.log("Register your agent name with agentpeerchat register 'Your name'.");
+console.log("Read agentpeerchat skill. Receiving is configured automatically where the host supports it; a real reply and ACK verify actual processing.");

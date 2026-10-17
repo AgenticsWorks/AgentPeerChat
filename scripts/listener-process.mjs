@@ -1,15 +1,18 @@
 // A host-local supervisor for machines without a service manager. No network listener.
 import {createServer,connect} from 'node:net';
 import {readFile,writeFile,rm,chmod,open,lstat,rename,mkdir} from 'node:fs/promises';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
-import {tmpdir} from 'node:os';
+import {tmpdir,userInfo} from 'node:os';
 import {createHash,randomBytes,timingSafeEqual} from 'node:crypto';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const stateFile=root=>join(root,'process.json');
 async function state(root){try{return JSON.parse(await readFile(stateFile(root),'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw e;}}
 export function systemdAvailable(system,env=process.env){
  if(process.platform!=='linux')return false;
+ // A reachable manager still loads units from its own OS user's home, not a
+ // sandbox's temporary HOME. Those hosts need the private process manager.
+ if(!system&&env.HOME&&resolve(env.HOME)!==resolve(userInfo().homedir))return false;
  const r=spawnSync('systemctl',[...(system?[]:['--user']),'show-environment'],{env,timeout:5000,stdio:'ignore'});return r.status===0;
 }
 async function control(root,action){
