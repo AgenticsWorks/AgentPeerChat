@@ -1,12 +1,8 @@
-// Render the same deterministic canvas used by website/film through a running Chromium CDP endpoint.
-// Usage: node scripts/render-film.mjs http://127.0.0.1:PORT en /absolute/output.mp4 /absolute/ffmpeg
-import {spawn} from 'node:child_process';import {once} from 'node:events';import Socket from './vendor-websocket.mjs';
-const [endpoint,language='en',output,encoder]=process.argv.slice(2);if(!endpoint||!output||!encoder)throw Error('Provide CDP endpoint, language, output path and ffmpeg executable.');
-const tabs=await(await fetch(endpoint+'/json/list')).json(),target=tabs.find(t=>t.url.includes('/film/')&&t.url.includes('export='+language))||tabs.find(t=>t.url.includes('/film/'));if(!target)throw Error('Open website/film/ in the CDP browser first.');
-const ws=new Socket(target.webSocketDebuggerUrl);await once(ws,'open');let seq=0;const calls=new Map();ws.on('message',d=>{const message=JSON.parse(d);const call=calls.get(message.id);if(call){calls.delete(message.id);clearTimeout(call.timer);message.error?call.fail(Error(message.error.message)):call.ok(message.result);}});
-ws.on('close',()=>{for(const c of calls.values()){clearTimeout(c.timer);c.fail(Error('Browser connection closed.'));}calls.clear();});
-const rpc=(method,params={})=>new Promise((ok,fail)=>{const id=++seq,timer=setTimeout(()=>{calls.delete(id);fail(Error('Browser frame timed out.'));},30000);calls.set(id,{ok,fail,timer});ws.send(JSON.stringify({id,method,params}));});
-const evaluate=async expression=>{const r=await rpc('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.text);return r.result.value;};
-const duration=await evaluate('window.AgentPeerChatFilm?.duration');if(duration!==34)throw Error('Film is not ready.');
-const child=spawn(encoder,['-hide_banner','-loglevel','error','-y','-f','image2pipe','-vcodec','mjpeg','-r','24','-i','pipe:0','-an','-c:v','libx264','-threads','2','-preset','veryfast','-crf','19','-pix_fmt','yuv420p','-movflags','+faststart',output],{stdio:['pipe','ignore','pipe']});let errors='';child.stderr.on('data',d=>errors+=d);child.stdin.on('error',()=>{});const completion=once(child,'exit');
-try{for(let i=0;i<duration*24;i++){const image=await evaluate(`(AgentPeerChatFilm.render(${i}/24,${JSON.stringify(language)}),AgentPeerChatFilm.canvas.toDataURL('image/jpeg',.93))`);if(!child.stdin.write(Buffer.from(image.split(',')[1],'base64')))await Promise.race([once(child.stdin,'drain'),completion.then(()=>{throw Error('Encoder stopped before all frames were written.');})]);if(i%192===0)console.log('Rendered '+i+' / '+duration*24+' frames');}child.stdin.end();const [code]=await completion;if(code)throw Error('Encoder failed: '+errors);console.log('Rendered '+output);}finally{ws.close();if(child.exitCode===null)child.kill('SIGTERM');}
+// Browser-free video generation: Pillow boards and a single, bounded FFmpeg process.
+// Usage: node scripts/render-film.mjs OUTPUT.mp4 /path/to/ffmpeg
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const child=spawn('python3',[fileURLToPath(new URL('./render-film.py',import.meta.url)),...process.argv.slice(2)],{stdio:'inherit'});
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>child.kill(signal));
+child.on('error',error=>{console.error(error.message);process.exitCode=1;});
+child.on('exit',(code,signal)=>{process.exitCode=code??(signal?1:0);});
