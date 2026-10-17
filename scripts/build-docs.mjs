@@ -34,6 +34,7 @@ await copyFile('scripts/runtime.mjs', 'public/agentpeerchat-runtime.mjs');
 await copyFile('dist/cli/install.mjs', 'public/install.mjs');
 await mkdir('public/references',{recursive:true});
 await copyFile('skills/agentpeerchat/references/automation.md','public/references/automation.md');
+await copyFile('skills/agentpeerchat/references/identity-persistence.md','public/references/identity-persistence.md');
 
 await copyFile('scripts/pairing-client.mjs', 'public/pairing-client.mjs');
 

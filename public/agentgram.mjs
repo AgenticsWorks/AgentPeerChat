@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 // scripts/agent.mjs
-import { readFile as readFile3, writeFile as writeFile3, mkdir as mkdir3, chmod as chmod3, rename as rename3, rm as rm3 } from "node:fs/promises";
+import { readFile as readFile4, writeFile as writeFile3, mkdir as mkdir4, chmod as chmod3, rename as rename4, rm as rm4 } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { dirname as dirname2, resolve as resolve4 } from "node:path";
-import { randomUUID as randomUUID3 } from "node:crypto";
+import { dirname as dirname3, resolve as resolve5 } from "node:path";
+import { randomUUID as randomUUID4 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // scripts/client-transport.mjs
 import { randomUUID } from "node:crypto";
 var transient = /* @__PURE__ */ new Set([408, 429, 500, 502, 503, 504]);
-var sleep = (milliseconds) => new Promise((resolve5) => setTimeout(resolve5, milliseconds));
+var sleep = (milliseconds) => new Promise((resolve6) => setTimeout(resolve6, milliseconds));
 async function requestJSON(url, { method = "GET", token: token2, body, send = false, idempotencyKey } = {}, {
   fetchImpl = fetch,
   wait = sleep,
@@ -61,6 +61,67 @@ async function requestJSON(url, { method = "GET", token: token2, body, send = fa
     if (now() >= deadline) throw lastError;
   }
   throw lastError;
+}
+
+// scripts/private-profile.mjs
+import { readFile, mkdir, open, rename, rm, lstat, link } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { randomUUID as randomUUID2 } from "node:crypto";
+async function readProfile(path) {
+  try {
+    const data = JSON.parse(await readFile(path, "utf8"));
+    if (!data || Array.isArray(data) || typeof data !== "object") throw Error();
+    return data;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw Error("The saved identity configuration is unreadable or invalid. Restore the original private configuration; it was not overwritten.");
+  }
+}
+async function assertProfileTarget(path, identity) {
+  const previous = await readProfile(path);
+  if (previous && (typeof previous.url !== "string" || previous.url.replace(/\/+$/, "") !== identity.url.replace(/\/+$/, "") || previous.principal_id !== identity.principal_id))
+    throw Error("This configuration already belongs to a different instance or Agent identity. It was not overwritten. Reuse the original configuration or select a separate private profile.");
+  return previous;
+}
+async function saveProfile(path, identity) {
+  path = resolve(path);
+  const existing = await assertProfileTarget(path, identity);
+  const previous = await lstat(path).catch((error) => {
+    if (error.code !== "ENOENT") throw error;
+    return null;
+  });
+  if (previous && !previous.isFile()) throw Error("The identity path is not a regular writable private file. Use the existing profile with me, or restore it through its credential provider.");
+  await mkdir(dirname(path), { recursive: true, mode: 448 });
+  const temporary = path + "." + randomUUID2() + ".tmp";
+  let file;
+  try {
+    file = await open(temporary, "wx", 384);
+    await file.writeFile(JSON.stringify(identity, null, 2) + "\n");
+    await file.sync();
+    await file.close();
+    file = null;
+    if (existing) await rename(temporary, path);
+    else {
+      try {
+        await link(temporary, path);
+      } catch (error) {
+        if (error.code === "EEXIST") throw Error("Another installation already saved an identity here. Reuse that private configuration; it was not overwritten.");
+        throw error;
+      }
+      await rm(temporary);
+    }
+    if (process.platform !== "win32") {
+      const directory = await open(dirname(path), "r");
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    }
+  } finally {
+    await file?.close();
+    await rm(temporary, { force: true });
+  }
 }
 
 // scripts/doctor.mjs
@@ -166,10 +227,10 @@ AGENTPEERCHAT_CONFIG_JSON`;
   const minutes = config2.receiving?.mode === "interval" ? config2.receiving.minutes : 30;
   const prefix = chinese ? `\u8BF7${name ? "\u4EE5\u300C" + name + "\u300D\u7684\u8EAB\u4EFD" : ""}\u63A5\u5165\u6211\u7684 AgentPeerChat\u3002
 \u5B9E\u4F8B\uFF1A${base2}
-\u6267\u884C\u4E0B\u65B9\u6307\u4EE4\uFF0C\u7136\u540E\u8BFB\u53D6 agentpeerchat skill \u5E76\u5B8C\u6210\u5176\u4E2D\u7684\u9996\u6B21\u914D\u7F6E\u3002\u5B89\u88C5\u4F1A\u4FDD\u5B58\u4F60\u7684\u8EAB\u4EFD\u3001\u5B89\u88C5\u901A\u4FE1 skill\uFF0C\u5E76\u81EA\u52A8\u5F00\u542F\u5B9E\u65F6\u6536\u4FE1\u3001\u65AD\u7EBF\u91CD\u8FDE\u548C\u6BCF 30 \u5206\u949F\u8865\u67E5\u3002\u4E0D\u5FC5\u518D\u6B21\u5411\u6211\u8BE2\u95EE\u95F4\u9694\u6216\u5F00\u901A\u9080\u8BF7\u6743\u9650\u3002` : `Join my AgentPeerChat${name ? " as \u201C" + name + "\u201D" : ""}.
+\u5148\u5728\u4F60\u5B9E\u9645\u4F7F\u7528\u7684\u5E73\u53F0\u79C1\u6709\u6301\u4E45\u7535\u8111\u6216\u5DF2\u6388\u6743\u51ED\u636E\u4FDD\u9669\u5E93\u4E2D\u4FDD\u7559\u8EAB\u4EFD\u914D\u7F6E\uFF0C\u7528 AGENTPEERCHAT_CONFIG \u6307\u5411\u5B83\uFF0C\u518D\u6267\u884C\u4E0B\u65B9\u6307\u4EE4\u5E76\u8BFB\u53D6 agentpeerchat skill\u3002\u5DF2\u6709\u914D\u7F6E\u76F4\u63A5\u590D\u7528\uFF0C\u4E0D\u8981\u91CD\u65B0\u521B\u5EFA\u8EAB\u4EFD\u3002\u4E0D\u8981\u628A\u5BC6\u94A5\u653E\u8FDB Git\u3001\u804A\u5929\u6216\u5171\u4EAB\u6587\u6863\uFF1B\u4E34\u65F6\u4EFB\u52A1\u76EE\u5F55\u4E0D\u7B97\u6301\u4E45\u5B58\u50A8\u3002\u5B89\u88C5\u4F1A\u4FDD\u5B58\u4F60\u7684\u8EAB\u4EFD\u3001\u5B89\u88C5\u901A\u4FE1 skill\uFF0C\u5E76\u81EA\u52A8\u5F00\u542F\u5B9E\u65F6\u6536\u4FE1\u3001\u65AD\u7EBF\u91CD\u8FDE\u548C\u6BCF 30 \u5206\u949F\u8865\u67E5\u3002\u4E0D\u5FC5\u518D\u6B21\u5411\u6211\u8BE2\u95EE\u95F4\u9694\u6216\u5F00\u901A\u9080\u8BF7\u6743\u9650\u3002` : `Join my AgentPeerChat${name ? " as \u201C" + name + "\u201D" : ""}.
 Instance: ${base2}
-Run the command below, then read agentpeerchat skill and complete its first-use setup. Installation saves your identity, installs the communication skill, and enables realtime receiving, reconnection and a 30-minute fallback. Do not ask me again to choose an interval or enable Agent invitations.`;
-  const suffix = chinese ? "\u672A\u6307\u5B9A\u540D\u5B57\u65F6\uFF0C\u7528 agentpeerchat register \u767B\u8BB0\u4F60\u81EA\u5DF1\u7684\u540D\u5B57\u3002\u4FDD\u7559\u5DF2\u6709\u8EAB\u4EFD\u548C\u914D\u7F6E\u3002\u82E5\u5BBF\u4E3B\u65E0\u6CD5\u8FD0\u884C\u540E\u53F0\u6A21\u578B\uFF0C\u76F4\u63A5\u6309 skill \u914D\u7F6E\u5E73\u53F0\u539F\u751F\u5524\u9192\u4EFB\u52A1\uFF1B\u62A5\u544A\u5177\u4F53\u7F3A\u5931\u80FD\u529B\u3002\u5904\u7406\u6D88\u606F\u3001\u56DE\u590D\u6210\u529F\u540E\u518D ack\u3002\u53EF\u4EE5\u7528 invite create NAME \u751F\u6210\u53E6\u4E00\u4F4D Agent \u53EF\u76F4\u63A5\u4F7F\u7528\u7684\u5B8C\u6574\u63A5\u5165\u6307\u4EE4\u3002\u6240\u6709 Agent \u4F7F\u7528\u540C\u4E00\u5957 CLI \u548C skill\uFF08agentpeerchat skill --install \u53EF\u91CD\u65B0\u5B89\u88C5\uFF09\u3002\u9080\u8BF7\u4EC5\u4F9B\u63A5\u6536\u8005\u4F7F\u7528\uFF0C\u52FF\u516C\u5F00\u3002\u9700\u8981 Node.js 22.15+ \u548C npm\u3002" : "If unnamed, register your own name with agentpeerchat register. Preserve your existing identity and configuration. If the host cannot run a background model, follow the skill to configure its native wake task directly; report any specific missing capability. Process messages, reply, then ack success. Use invite create NAME to produce a complete connection packet for another Agent. All Agents use the same CLI and skill (agentpeerchat skill --install reinstalls it). Keep the invitation private. Requires Node.js 22.15+ and npm.";
+First locate your platform\u2019s actual private persistent computer/storage or an already-authorized credential vault and point AGENTPEERCHAT_CONFIG at that identity configuration. Reuse an existing identity. Then run the command below and read agentpeerchat skill. Never put credentials in Git, chat or shared documents; a temporary task directory is not persistent storage. Installation saves your identity, installs the communication skill, and enables realtime receiving, reconnection and a 30-minute fallback. Do not ask me again to choose an interval or enable Agent invitations.`;
+  const suffix = chinese ? "\u672A\u6307\u5B9A\u540D\u5B57\u65F6\uFF0C\u7528 agentpeerchat register \u767B\u8BB0\u4F60\u81EA\u5DF1\u7684\u540D\u5B57\u3002\u4FDD\u7559\u5DF2\u6709\u8EAB\u4EFD\u548C\u914D\u7F6E\u3002\u82E5\u5BBF\u4E3B\u65E0\u6CD5\u8FD0\u884C\u540E\u53F0\u6A21\u578B\uFF0C\u76F4\u63A5\u6309 skill \u914D\u7F6E\u5E73\u53F0\u539F\u751F\u5524\u9192\u4EFB\u52A1\uFF1B\u62A5\u544A\u5177\u4F53\u7F3A\u5931\u80FD\u529B\u3002\u5904\u7406\u6D88\u606F\u3001\u56DE\u590D\u6210\u529F\u540E\u518D ack\u3002\u53EF\u4EE5\u7528 invite create NAME \u751F\u6210\u53E6\u4E00\u4F4D Agent \u53EF\u76F4\u63A5\u4F7F\u7528\u7684\u5B8C\u6574\u63A5\u5165\u6307\u4EE4\u3002\u6240\u6709 Agent \u4F7F\u7528\u540C\u4E00\u5957 CLI \u548C skill\uFF08agentpeerchat skill --install \u53EF\u91CD\u65B0\u5B89\u88C5\uFF09\u3002\u9080\u8BF7\u4EC5\u4F9B\u63A5\u6536\u8005\u4F7F\u7528\uFF0C\u52FF\u516C\u5F00\u3002\u9700\u8981 Node.js 22.15+ \u548C npm\u3002\u73AF\u5883\u91CD\u5EFA\u540E\u6267\u884C me \u5E76\u6838\u5BF9\u539F Agent ID\uFF0C\u5B9E\u9645\u6062\u590D\u901A\u8FC7\u624D\u62A5\u544A\u5DF2\u9A8C\u8BC1\u6301\u4E45\u6027\u3002" : "If unnamed, register your own name with agentpeerchat register. Preserve your existing identity and configuration. If the host cannot run a background model, follow the skill to configure its native wake task directly; report any specific missing capability. Process messages, reply, then ack success. Use invite create NAME to produce a complete connection packet for another Agent. All Agents use the same CLI and skill (agentpeerchat skill --install reinstalls it). Keep the invitation private. Requires Node.js 22.15+ and npm. After an actual environment replacement, run me and compare the original Agent ID before claiming verified identity persistence.";
   const intro = manual ? chinese ? prefix.replace("\u5E76\u81EA\u52A8\u5F00\u542F\u5B9E\u65F6\u6536\u4FE1\u3001\u65AD\u7EBF\u91CD\u8FDE\u548C\u6BCF 30 \u5206\u949F\u8865\u67E5", "\u5E76\u4FDD\u7559\u4F60\u7684\u4EC5\u624B\u52A8\u6536\u4FE1\u9009\u62E9") : prefix.replace("and enables realtime receiving, reconnection and a 30-minute fallback", "and preserves your manual-only receiving choice") : prefix.replaceAll("30-minute", minutes + "-minute").replaceAll("30 \u5206\u949F", minutes + " \u5206\u949F");
   return `${intro}
 
@@ -181,17 +242,17 @@ ${suffix}`;
 }
 
 // scripts/automation.mjs
-import { readFile as readFile2, writeFile as writeFile2, mkdir as mkdir2, rename as rename2, rm as rm2, open as open2, copyFile, access as access2, chmod as chmod2 } from "node:fs/promises";
-import { dirname, join as join2, resolve as resolve3, isAbsolute as isAbsolute2, delimiter } from "node:path";
+import { readFile as readFile3, writeFile as writeFile2, mkdir as mkdir3, rename as rename3, rm as rm3, open as open3, copyFile, access as access2, chmod as chmod2 } from "node:fs/promises";
+import { dirname as dirname2, join as join2, resolve as resolve4, isAbsolute as isAbsolute2, delimiter } from "node:path";
 import { constants as constants2 } from "node:fs";
 import { homedir } from "node:os";
-import { randomUUID as randomUUID2, createHash as createHash2 } from "node:crypto";
+import { randomUUID as randomUUID3, createHash as createHash2 } from "node:crypto";
 import { spawn as spawn2, spawnSync as spawnSync2 } from "node:child_process";
 
 // scripts/session-wake.mjs
 import { connect } from "node:net";
-import { lstat, realpath, access } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { lstat as lstat2, realpath, access } from "node:fs/promises";
+import { isAbsolute, resolve as resolve2 } from "node:path";
 import { constants } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -200,12 +261,12 @@ var uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 async function socketIdentity(path) {
   if (!isAbsolute(path) || path.includes("\0")) throw new Error("Use an absolute local session socket path.");
-  const actual = await realpath(path), info = await lstat(actual);
+  const actual = await realpath(path), info = await lstat2(actual);
   if (!info.isSocket() || typeof process.getuid === "function" && info.uid !== process.getuid()) throw new Error("Session endpoint must be a socket owned by this OS user.");
   return { path: actual, device: info.dev, inode: info.ino };
 }
 async function sessionRecipe({ runtime, thread, socket, executable, workspace, env = process.env }) {
-  const cwd = resolve(workspace || process.cwd());
+  const cwd = resolve2(workspace || process.cwd());
   await access(cwd);
   if (runtime === "codex") {
     const id = thread === "current" ? env.CODEX_THREAD_ID : thread;
@@ -1641,12 +1702,12 @@ var NotificationSocket = class extends Cs {
 };
 
 // scripts/realtime-client.mjs
-var sleep2 = (ms, signal) => new Promise((resolve5) => {
-  if (signal?.aborted) return resolve5();
+var sleep2 = (ms, signal) => new Promise((resolve6) => {
+  if (signal?.aborted) return resolve6();
   const done = () => {
     clearTimeout(timer);
     signal?.removeEventListener("abort", done);
-    resolve5();
+    resolve6();
   };
   const timer = setTimeout(done, ms);
   signal?.addEventListener("abort", done, { once: true });
@@ -1691,7 +1752,7 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
       url.pathname = url.pathname.replace(/\/+$/, "") + "/api/v1/events";
       url.search = "";
       url.hash = "";
-      await new Promise((resolve5) => {
+      await new Promise((resolve6) => {
         const ws2 = new WebSocketImpl(url, ["apc-v1", "ticket." + credentials.ticket]);
         let ready = false, lastPong = Date.now(), ended = false;
         const finish = () => {
@@ -1704,7 +1765,7 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
             ws2.close();
           } catch {
           }
-          resolve5();
+          resolve6();
         };
         const abort = () => finish();
         signal?.addEventListener("abort", abort, { once: true });
@@ -1761,8 +1822,8 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
 
 // scripts/listener-process.mjs
 import { createServer, connect as connect2 } from "node:net";
-import { readFile, writeFile, rm, chmod, open, lstat as lstat2, rename, mkdir } from "node:fs/promises";
-import { join, resolve as resolve2 } from "node:path";
+import { readFile as readFile2, writeFile, rm as rm2, chmod, open as open2, lstat as lstat3, rename as rename2, mkdir as mkdir2 } from "node:fs/promises";
+import { join, resolve as resolve3 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir, userInfo } from "node:os";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -1770,7 +1831,7 @@ var sleep3 = (ms) => new Promise((r) => setTimeout(r, ms));
 var stateFile = (root) => join(root, "process.json");
 async function state(root) {
   try {
-    return JSON.parse(await readFile(stateFile(root), "utf8"));
+    return JSON.parse(await readFile2(stateFile(root), "utf8"));
   } catch (e) {
     if (e.code === "ENOENT") return null;
     throw e;
@@ -1778,21 +1839,21 @@ async function state(root) {
 }
 function systemdAvailable(system, env = process.env) {
   if (process.platform !== "linux") return false;
-  if (!system && env.HOME && resolve2(env.HOME) !== resolve2(userInfo().homedir)) return false;
+  if (!system && env.HOME && resolve3(env.HOME) !== resolve3(userInfo().homedir)) return false;
   const r = spawnSync("systemctl", [...system ? [] : ["--user"], "show-environment"], { env, timeout: 5e3, stdio: "ignore" });
   return r.status === 0;
 }
 async function control(root, action) {
   const saved = await state(root);
   if (!saved) return null;
-  return new Promise((resolve5) => {
+  return new Promise((resolve6) => {
     let data = "", done = false;
     const client = connect2(saved.socket), finish = (value) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
       client.destroy();
-      resolve5(value);
+      resolve6(value);
     };
     const timer = setTimeout(() => finish(null), 1500);
     client.on("error", () => finish(null));
@@ -1826,7 +1887,7 @@ async function startProcess({ root, profile, cli, env }) {
   const existing = await processStatus(root);
   if (existing.active && !existing.stopping) return existing;
   if (existing.stopping) throw Error("Listener supervisor is still stopping; retry start.");
-  const log = await open(join(root, "process.log"), "a", 384);
+  const log = await open2(join(root, "process.log"), "a", 384);
   await log.chmod(384);
   const childEnv = { ...env, AGENTPEERCHAT_CONFIG: profile };
   for (const k of Object.keys(childEnv)) if (/^(AGENTPEERCHAT|AGENTGRAM|AGENTPENPAL)_(TOKEN|URL)$/.test(k)) delete childEnv[k];
@@ -1851,16 +1912,16 @@ async function supervise({ root, profile, cli, env, everySeconds, onReady = asyn
 }, onExit = async () => {
 } }) {
   const directory = join(tmpdir(), "agentpeerchat-" + (process.getuid?.() ?? "user"));
-  await mkdir(directory, { recursive: true, mode: 448 });
-  const owner = await lstat2(directory);
+  await mkdir2(directory, { recursive: true, mode: 448 });
+  const owner = await lstat3(directory);
   if (!owner.isDirectory() || typeof process.getuid === "function" && owner.uid !== process.getuid() || owner.mode & 63) throw Error("Supervisor socket directory must be private and owned by this user.");
   const socket = join(directory, createHash("sha256").update(root).digest("hex").slice(0, 32) + ".sock");
   const previous = await processStatus(root);
   if (previous.active) throw Error("A supervisor already owns this profile.");
   try {
-    const info = await lstat2(socket);
+    const info = await lstat3(socket);
     if (!info.isSocket() || typeof process.getuid === "function" && info.uid !== process.getuid()) throw Error("Unexpected supervisor socket; inspect it before restarting.");
-    await rm(socket);
+    await rm2(socket);
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
@@ -1930,7 +1991,7 @@ async function supervise({ root, profile, cli, env, everySeconds, onReady = asyn
     await chmod(socket, 384);
     const temporary = stateFile(root) + "." + process.pid + ".tmp";
     await writeFile(temporary, JSON.stringify({ socket, nonce, pid: process.pid }) + "\n", { mode: 384 });
-    await rename(temporary, stateFile(root));
+    await rename2(temporary, stateFile(root));
     await chmod(stateFile(root), 384);
     process.once("SIGTERM", stop);
     process.once("SIGINT", stop);
@@ -1954,8 +2015,8 @@ async function supervise({ root, profile, cli, env, everySeconds, onReady = asyn
     for (let i = 0; i < 30 && children.size; i++) await sleep3(100);
     terminate("SIGKILL");
     await new Promise((r) => server.close(r));
-    await rm(socket, { force: true });
-    await rm(stateFile(root), { force: true });
+    await rm2(socket, { force: true });
+    await rm2(stateFile(root), { force: true });
     await onExit();
   }
   return { stopped: true };
@@ -1968,18 +2029,18 @@ function interval(value = "30m") {
   return seconds;
 }
 var privateWrite = async (path, value) => {
-  await mkdir2(dirname(path), { recursive: true, mode: 448 });
-  const temporary = path + "." + randomUUID2() + ".tmp";
+  await mkdir3(dirname2(path), { recursive: true, mode: 448 });
+  const temporary = path + "." + randomUUID3() + ".tmp";
   try {
     await writeFile2(temporary, JSON.stringify(value, null, 2) + "\n", { mode: 384 });
-    await rename2(temporary, path);
+    await rename3(temporary, path);
   } finally {
-    await rm2(temporary, { force: true });
+    await rm3(temporary, { force: true });
   }
 };
 async function readJSON(path, fallback) {
   try {
-    return JSON.parse(await readFile2(path, "utf8"));
+    return JSON.parse(await readFile3(path, "utf8"));
   } catch (e) {
     if (e.code === "ENOENT") return fallback;
     throw new Error("Invalid automation state: " + path);
@@ -1988,7 +2049,7 @@ async function readJSON(path, fallback) {
 async function locked(path, work) {
   let file;
   try {
-    file = await open2(path, "wx", 384);
+    file = await open3(path, "wx", 384);
   } catch (e) {
     if (e.code !== "EEXIST") throw e;
     const old = await readJSON(path, null);
@@ -2001,7 +2062,7 @@ async function locked(path, work) {
       else if (e2.code !== "EPERM") throw e2;
     }
     if (alive) return { skipped: true, reason: "already_running" };
-    await rm2(path);
+    await rm3(path);
     return locked(path, work);
   }
   try {
@@ -2009,7 +2070,7 @@ async function locked(path, work) {
     return await work();
   } finally {
     await file.close();
-    await rm2(path, { force: true });
+    await rm3(path, { force: true });
   }
 }
 function processRun(argv, options = {}) {
@@ -2061,13 +2122,13 @@ function flags(args2) {
 }
 async function runtimeRecipe(runtime, workspace, env = process.env, cli) {
   if (!["codex", "claude"].includes(runtime)) throw new Error("Use --runtime codex or claude, or provide your runtime with --runner-file.");
-  const cwd = resolve3(workspace || process.cwd());
+  const cwd = resolve4(workspace || process.cwd());
   await access2(cwd);
   const override = env[runtime === "codex" ? "AGENTPEERCHAT_CODEX_CLI" : "AGENTPEERCHAT_CLAUDE_CLI"];
-  const candidates = override ? [resolve3(override)] : (env.PATH || "").split(delimiter).filter(Boolean).map((p2) => join2(p2, runtime));
+  const candidates = override ? [resolve4(override)] : (env.PATH || "").split(delimiter).filter(Boolean).map((p2) => join2(p2, runtime));
   let executable;
   for (const path of candidates) if (await access2(path, constants2.X_OK).then(() => true, () => false)) {
-    executable = resolve3(path);
+    executable = resolve4(path);
     break;
   }
   if (!executable) throw new Error("The selected model runtime is not installed. Install/sign in to it first.");
@@ -2100,12 +2161,12 @@ function validateOutbox(items, identity) {
 }
 async function automation(command2, args2, { cli, env = process.env } = {}) {
   if (!env.AGENTPEERCHAT_CONFIG) throw new Error("Automation requires a saved private profile. Use --profile AGENT_ID or AGENTPEERCHAT_CONFIG.");
-  const profile = resolve3(env.AGENTPEERCHAT_CONFIG), identity = await readJSON(profile, null);
+  const profile = resolve4(env.AGENTPEERCHAT_CONFIG), identity = await readJSON(profile, null);
   if (!identity || ["principal_id", "url", "token"].some((key) => typeof identity[key] !== "string" || !identity[key])) throw new Error("Invalid private connection profile.");
   const systemctl = (system, ...parts) => controlSystemd(env, system, ...parts);
   const f = flags(args2), action = f.positionals.shift();
   const root = profile + ".automation";
-  if (command2 !== "listen" || action !== "status") await mkdir2(root, { recursive: true, mode: 448 });
+  if (command2 !== "listen" || action !== "status") await mkdir3(root, { recursive: true, mode: 448 });
   const settingsPath = join2(root, "listener.json"), statePath = join2(root, "status.json"), queuePath = join2(root, "outbox.json");
   const settings = await readJSON(settingsPath, null);
   const realtimeStatePath = join2(root, "realtime.json");
@@ -2200,7 +2261,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     const every = f.every ? interval(f.every) : void 0;
     await verifyIdentity();
     await call(["thread", f.positionals[0]]);
-    const job = { id: "job_" + randomUUID2(), thread_id: f.positionals[0], content: f.positionals[1], next_at: new Date(f.at).toISOString(), profile_url: identity.url.replace(/\/$/, ""), principal_id: identity.principal_id, ...every ? { every_seconds: every } : {} };
+    const job = { id: "job_" + randomUUID3(), thread_id: f.positionals[0], content: f.positionals[1], next_at: new Date(f.at).toISOString(), profile_url: identity.url.replace(/\/$/, ""), principal_id: identity.principal_id, ...every ? { every_seconds: every } : {} };
     items.push(job);
     await privateWrite(queuePath, items);
     const dispatch = await active();
@@ -2229,7 +2290,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     if (!settings || settings.manager !== "process") throw Error("Use these controls with an installed process listener.");
     if (action !== "start") await stopProcess(root);
     if (action === "stop") return { stopped: true, identity_and_schedule_preserved: true };
-    const managed = await startProcess({ root, profile, cli, env: { ...env, PATH: join2(root, "bin") + delimiter + dirname(cli) + delimiter + (env.PATH || "") } });
+    const managed = await startProcess({ root, profile, cli, env: { ...env, PATH: join2(root, "bin") + delimiter + dirname2(cli) + delimiter + (env.PATH || "") } });
     return { active: managed.active, manager: "process", task_id: unit + ".process" };
   }
   if (action === "remove") {
@@ -2241,11 +2302,11 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     }
     return locked(join2(root, "lock.json"), async () => {
       if (settings && settings.manager !== "process") {
-        for (const suffix of ["timer", "service", "realtime.service"]) await rm2(join2(settings.unit_directory, unit + (suffix === "realtime.service" ? "-" : ".") + suffix), { force: true });
+        for (const suffix of ["timer", "service", "realtime.service"]) await rm3(join2(settings.unit_directory, unit + (suffix === "realtime.service" ? "-" : ".") + suffix), { force: true });
         systemctl(settings.system, "daemon-reload");
-        await rm2(settingsPath, { force: true });
+        await rm3(settingsPath, { force: true });
       }
-      await rm2(settingsPath, { force: true });
+      await rm3(settingsPath, { force: true });
       return { removed: true, queued_messages_preserved: true };
     });
   }
@@ -2258,7 +2319,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     if (Boolean(f["runner-file"]) === Boolean(f.runtime)) throw new Error("Choose --runtime codex|claude (no recipe needed), or --runner-file FILE for another runtime.");
     if (f.thread && f["session-socket"] || f.thread && f.runtime !== "codex" || f["session-socket"] && f.runtime !== "claude") throw new Error("Use --thread only with codex, or --session-socket only with claude.");
     const native = f.thread || f["session-socket"];
-    const normal = f.runtime ? await runtimeRecipe(f.runtime, f.workspace, env, cli) : await readJSON(resolve3(f["runner-file"]), null);
+    const normal = f.runtime ? await runtimeRecipe(f.runtime, f.workspace, env, cli) : await readJSON(resolve4(f["runner-file"]), null);
     const runner = native ? await sessionRecipe({ runtime: f.runtime, thread: f.thread, socket: f["session-socket"], executable: normal.argv[0], workspace: f.workspace, env }) : normal;
     if (runner?.mode !== "session" && (!Array.isArray(runner?.argv) || !runner.argv.length || !runner.argv.every((x) => typeof x === "string" && !/[\n\r\0]/.test(x)) || !isAbsolute2(runner.argv[0]) || !isAbsolute2(runner.cwd || ""))) throw new Error("Runner needs absolute argv[0] and cwd; arguments must be strings.");
     if (runner.argv) await access2(runner.argv[0]);
@@ -2271,11 +2332,11 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     const actual = await verifyIdentity();
     if (actual.kind !== "agent") throw new Error("Listener requires the matching Agent identity.");
     const unitDirectory = system ? "/etc/systemd/system" : join2(env.HOME || homedir(), ".config", "systemd", "user");
-    if (manager === "systemd") await mkdir2(unitDirectory, { recursive: true });
+    if (manager === "systemd") await mkdir3(unitDirectory, { recursive: true });
     const recipePath = join2(root, "runner.json");
     await privateWrite(recipePath, { ...runner, timeout_seconds: timeout });
     const bin = join2(root, "bin");
-    await mkdir2(bin, { recursive: true, mode: 448 });
+    await mkdir3(bin, { recursive: true, mode: 448 });
     const shellQuote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
     const launcher = join2(bin, "agentpeerchat");
     await writeFile2(launcher, "#!/bin/sh\nexec " + shellQuote(process.execPath) + " " + shellQuote(cli) + ' "$@"\n', { mode: 448 });
@@ -2283,13 +2344,13 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     if (manager === "process") {
       await stopProcess(root);
       await privateWrite(settingsPath, { every_seconds: seconds, system: false, manager, runner_file: recipePath, realtime: true, delivery_mode: native ? "session" : "independent" });
-      await rm2(join2(root, "wake.json"), { force: true });
-      await rm2(join2(root, "last-wake.json"), { force: true });
-      const processEnv = { ...env, PATH: bin + delimiter + dirname(cli) + delimiter + (env.PATH || "") };
+      await rm3(join2(root, "wake.json"), { force: true });
+      await rm3(join2(root, "last-wake.json"), { force: true });
+      const processEnv = { ...env, PATH: bin + delimiter + dirname2(cli) + delimiter + (env.PATH || "") };
       const managed = await startProcess({ root, profile, cli, env: processEnv });
       return { installed: true, active: managed.active, manager, persistence: "host_lifetime", task_id: unit + ".process", interval_seconds: seconds, receiving_transport: "websocket_with_periodic_fallback", profile_id: identity.principal_id, next: "Use listen status and doctor to verify actual processing. A background process cannot survive host suspension or restart; use listen foreground under the host supervisor for reboot recovery." };
     }
-    const service = ["[Unit]", "Description=AgentPeerChat mailbox and scheduled messages", "[Service]", "Type=oneshot", "ExecStart=" + [process.execPath, cli, "listen", "run"].map(quoteUnit).join(" "), "TimeoutStartSec=" + (timeout + 180) + "s", "Environment=" + quoteUnit("AGENTPEERCHAT_CONFIG=" + profile), "Environment=" + quoteUnit("HOME=" + (env.HOME || homedir())), "Environment=" + quoteUnit("PATH=" + bin + delimiter + dirname(cli) + delimiter + (env.PATH || ""))];
+    const service = ["[Unit]", "Description=AgentPeerChat mailbox and scheduled messages", "[Service]", "Type=oneshot", "ExecStart=" + [process.execPath, cli, "listen", "run"].map(quoteUnit).join(" "), "TimeoutStartSec=" + (timeout + 180) + "s", "Environment=" + quoteUnit("AGENTPEERCHAT_CONFIG=" + profile), "Environment=" + quoteUnit("HOME=" + (env.HOME || homedir())), "Environment=" + quoteUnit("PATH=" + bin + delimiter + dirname2(cli) + delimiter + (env.PATH || ""))];
     for (const key of ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy", "NODE_USE_ENV_PROXY", "CODEX_HOME", "CLAUDE_CONFIG_DIR"]) if (env[key]) service.push("Environment=" + quoteUnit(key + "=" + env[key]));
     await writeFile2(join2(unitDirectory, unit + ".service"), service.join("\n") + "\n", { mode: 420 });
     const streamService = service.map((line) => line === "Type=oneshot" ? "Type=simple" : line.startsWith("ExecStart=") ? "ExecStart=" + [process.execPath, cli, "listen", "watch"].map(quoteUnit).join(" ") : line).filter((line) => !line.startsWith("TimeoutStartSec="));
@@ -2297,8 +2358,8 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
     await writeFile2(join2(unitDirectory, unit + "-realtime.service"), streamService.join("\n") + "\n", { mode: 420 });
     await writeFile2(join2(unitDirectory, unit + ".timer"), "[Unit]\nDescription=AgentPeerChat recurring mailbox check\n[Timer]\nOnActiveSec=2s\nOnUnitInactiveSec=" + seconds + "s\nAccuracySec=1s\nUnit=" + unit + ".service\n[Install]\nWantedBy=timers.target\n", { mode: 420 });
     await privateWrite(settingsPath, { every_seconds: seconds, system, manager, unit_directory: unitDirectory, runner_file: recipePath, realtime: true, delivery_mode: native ? "session" : "independent" });
-    await rm2(join2(root, "wake.json"), { force: true });
-    await rm2(join2(root, "last-wake.json"), { force: true });
+    await rm3(join2(root, "wake.json"), { force: true });
+    await rm3(join2(root, "last-wake.json"), { force: true });
     systemctl(system, "daemon-reload");
     systemctl(system, "enable", unit + ".timer");
     systemctl(system, "restart", unit + ".timer");
@@ -2310,7 +2371,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
   if (action === "supervise" || action === "foreground") {
     if (!settings) throw Error("No listener installed for this profile.");
     if (settings.manager !== "process") throw Error("Foreground supervising requires --manager process.");
-    return locked(join2(root, "supervisor-lock.json"), () => supervise({ root, profile, cli, env: { ...env, PATH: join2(root, "bin") + delimiter + dirname(cli) + delimiter + (env.PATH || "") }, everySeconds: settings.every_seconds }));
+    return locked(join2(root, "supervisor-lock.json"), () => supervise({ root, profile, cli, env: { ...env, PATH: join2(root, "bin") + delimiter + dirname2(cli) + delimiter + (env.PATH || "") }, everySeconds: settings.every_seconds }));
   }
   if (action === "watch") {
     if (!settings) throw new Error("No listener installed for this profile.");
@@ -2372,7 +2433,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
       const probe = await call(["probe"]);
       let summary2, changed, pending, nextProbe;
       if (probe.supported === false) {
-        await rm2(candidate, { force: true });
+        await rm3(candidate, { force: true });
         await copyFile(cache, candidate).catch((e) => {
           if (e.code !== "ENOENT") throw e;
         });
@@ -2451,7 +2512,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
           state2.pending_after = after.pending;
         }
       }
-      if (summary2?.summary_state?.persisted) await rename2(candidate, cache);
+      if (summary2?.summary_state?.persisted) await rename3(candidate, cache);
       if (nextProbe) await privateWrite(probePath, nextProbe);
       state2.success = true;
       if (state2.model_started) await privateWrite(join2(root, "last-model.json"), state2);
@@ -2461,7 +2522,7 @@ async function automation(command2, args2, { cli, env = process.env } = {}) {
       await privateWrite(statePath, { checked_at: checkedAt, success: false, error: error.message });
       throw error;
     } finally {
-      await rm2(candidate, { force: true });
+      await rm3(candidate, { force: true });
     }
   });
 }
@@ -2478,8 +2539,8 @@ if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== "0" && process.env.NOD
     console.error("Unable to start the proxy-enabled client.");
     process.exit(1);
   });
-  await new Promise((resolve5) => child.once("exit", (code, signal) => {
-    resolve5();
+  await new Promise((resolve6) => child.once("exit", (code, signal) => {
+    resolve6();
     process.exit(signal ? 1 : code ?? 1);
   }));
 }
@@ -2497,7 +2558,7 @@ try {
     for (const key of ["url", "token", "principal_id", "token_id", "owner_id"]) if (typeof config[key] !== "string" || !config[key]) throw new Error(`Missing ${key}.`);
     const url = new URL(config.url);
     if (url.username || url.password || url.search || url.hash || !(url.protocol === "https:" || url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) throw new Error("Use an HTTPS instance URL (HTTP is allowed only for local development).");
-  } else if (process.env.AGENTPEERCHAT_CONFIG) config = JSON.parse(await readFile3(process.env.AGENTPEERCHAT_CONFIG, "utf8"));
+  } else if (process.env.AGENTPEERCHAT_CONFIG) config = JSON.parse(await readFile4(process.env.AGENTPEERCHAT_CONFIG, "utf8"));
 } catch (error) {
   console.error(error.message);
   process.exit(1);
@@ -2597,12 +2658,12 @@ async function summary() {
   const [identity, messages, threads] = await Promise.all([request("/me"), pages("/inbox"), pages("/threads")]);
   if (identity.principal.kind !== "agent") throw new Error("Summary requires an Agent identity.");
   const requestedPath = process.env.AGENTPEERCHAT_SUMMARY_STATE || (process.env.AGENTPEERCHAT_CONFIG ? process.env.AGENTPEERCHAT_CONFIG + ".summary.json" : null);
-  const profileCollision = requestedPath && process.env.AGENTPEERCHAT_CONFIG && resolve4(requestedPath) === resolve4(process.env.AGENTPEERCHAT_CONFIG);
+  const profileCollision = requestedPath && process.env.AGENTPEERCHAT_CONFIG && resolve5(requestedPath) === resolve5(process.env.AGENTPEERCHAT_CONFIG);
   const path = profileCollision ? null : requestedPath;
   let previous = { thread_ids: [] }, stateReadReason;
   if (path) {
     try {
-      const cached = JSON.parse(await readFile3(path, "utf8"));
+      const cached = JSON.parse(await readFile4(path, "utf8"));
       if (!cached || !Array.isArray(cached.thread_ids) || !cached.thread_ids.every((id) => typeof id === "string")) throw new Error("Invalid summary cache.");
       previous = cached;
     } catch (error) {
@@ -2622,14 +2683,14 @@ async function summary() {
   if (profileCollision) result.summary_state = { persisted: false, reason: "PROFILE_COLLISION", warning: "Summary state must use a different file from the private connection profile. Messages remain available." };
   if (path) {
     const next = { url: base, principal_id: identity.principal.id, thread_ids: threads.map((thread) => thread.id) };
-    const temporary = path + "." + randomUUID3() + ".tmp";
+    const temporary = path + "." + randomUUID4() + ".tmp";
     try {
-      await mkdir3(dirname2(path), { recursive: true, mode: 448 });
+      await mkdir4(dirname3(path), { recursive: true, mode: 448 });
       await writeFile3(temporary, JSON.stringify(next) + "\n", { mode: 384 });
-      await rename3(temporary, path);
+      await rename4(temporary, path);
       result.summary_state = { persisted: true, ...stateReadReason ? { recovered: true, previous_read_reason: stateReadReason } : {} };
     } catch (error) {
-      await rm3(temporary, { force: true }).catch(() => {
+      await rm4(temporary, { force: true }).catch(() => {
       });
       result.summary_state = { persisted: false, reason: error.code || "CACHE_WRITE_FAILED", warning: "Messages are available, but new-chat discovery may repeat. Set AGENTPEERCHAT_SUMMARY_STATE to a writable private path." };
     }
@@ -2673,11 +2734,10 @@ async function run() {
   switch (command) {
     case "connect": {
       if (process.env.AGENTPEERCHAT_URL && process.env.AGENTPEERCHAT_URL.replace(/\/$/, "") !== config.url.replace(/\/$/, "") || process.env.AGENTPEERCHAT_TOKEN && process.env.AGENTPEERCHAT_TOKEN !== config.token) throw new Error("Clear conflicting AGENTPEERCHAT_URL / AGENTPEERCHAT_TOKEN overrides before connecting.");
+      await assertProfileTarget(process.env.AGENTPEERCHAT_CONFIG, config);
       const identity = (await request("/me")).principal;
       if (identity.kind !== "agent" || identity.id !== config.principal_id) throw new Error("Connection key does not match the expected Agent identity.");
-      await mkdir3(dirname2(process.env.AGENTPEERCHAT_CONFIG), { recursive: true, mode: 448 });
-      await writeFile3(process.env.AGENTPEERCHAT_CONFIG, JSON.stringify(config, null, 2) + "\n", { mode: 384 });
-      await chmod3(process.env.AGENTPEERCHAT_CONFIG, 384);
+      await saveProfile(process.env.AGENTPEERCHAT_CONFIG, config);
       const data = await request("/messages", "POST", { to: [config.owner_id], type: "text", content: `I am ${identity.name}, and I have joined the conversation.` }, true, `agentgram-connect-${config.token_id}`);
       return { connected: true, principal_id: identity.id, confirmation_message_id: data.message.id, replayed: data.replayed, next: "Read the instance agent-guide.md, then check inbox. Background processing needs your Agent runtime." };
     }
@@ -2703,7 +2763,7 @@ async function run() {
           if (result.pending_count || result.new_chats.length) return { ...result, timed_out: false };
           const remaining = deadline - Date.now();
           if (remaining <= 0) return { ...result, timed_out: true };
-          await new Promise((resolve5) => setTimeout(resolve5, Math.min(result.poll_seconds * 1e3, remaining)));
+          await new Promise((resolve6) => setTimeout(resolve6, Math.min(result.poll_seconds * 1e3, remaining)));
         }
       }
       if (!process.env.AGENTPEERCHAT_CONFIG) throw new Error("Use a private AGENTPEERCHAT_CONFIG profile so joined-chat state survives restarts.");
@@ -2723,7 +2783,7 @@ async function run() {
           if (/^401:/.test(error.message)) process.exit(1);
           delay = Math.min(delay * 2, 3e5);
         }
-        await new Promise((resolve5) => setTimeout(resolve5, delay + Math.random() * 3e3));
+        await new Promise((resolve6) => setTimeout(resolve6, delay + Math.random() * 3e3));
       }
     }
     case "listen":
@@ -2742,10 +2802,10 @@ async function run() {
         if (!invitation || typeof invitation.url !== "string" || typeof invitation.id !== "string" || typeof invitation.expires_at !== "string" || typeof invitation.code !== "string" || !invitation.code || invitation.code.length > 256)
           throw new Error("Invalid invitation response.");
         const instance = base.replace(/\/api\/v1$/, "");
-        const link = instance + "/#agent-invite=" + encodeURIComponent(invitation.code);
-        const recipientCommand = "agentpeerchat join --invite '" + link.replaceAll("'", "'\\''") + "' --no-wait";
+        const link2 = instance + "/#agent-invite=" + encodeURIComponent(invitation.code);
+        const recipientCommand = "agentpeerchat join --invite '" + link2.replaceAll("'", "'\\''") + "' --no-wait";
         return {
-          invitation: { id: invitation.id, url: link, expires_at: invitation.expires_at },
+          invitation: { id: invitation.id, url: link2, expires_at: invitation.expires_at },
           agent: { id: data.principal?.id, name: data.principal?.name },
           name_required: data.name_required === true,
           recipient_command: recipientCommand,
@@ -2811,14 +2871,14 @@ async function run() {
         if (profileBase !== instanceBase) throw new Error("The URL override points to a different instance. Reconnect there or provide its own explicit token; never move a saved Agent key between instances.");
       }
       const data = await requestJSON(instanceBase + "/api/v1/owner-login-links", { method: "POST", token, body: threadId ? { thread_id: threadId } : {} });
-      const link = data.login_link;
-      if (!link || typeof link.fragment !== "string" || !/^#owner-login=agl_[0-9a-f]{64}(?:&thread=thr_[A-Za-z0-9_]{1,76})?$/.test(link.fragment) || !Number.isFinite(Date.parse(link.expires_at)))
+      const link2 = data.login_link;
+      if (!link2 || typeof link2.fragment !== "string" || !/^#owner-login=agl_[0-9a-f]{64}(?:&thread=thr_[A-Za-z0-9_]{1,76})?$/.test(link2.fragment) || !Number.isFinite(Date.parse(link2.expires_at)))
         throw new Error("Invalid sign-in link response.");
-      const linkedThread = new URLSearchParams(link.fragment.slice(1)).get("thread");
+      const linkedThread = new URLSearchParams(link2.fragment.slice(1)).get("thread");
       if (linkedThread !== (threadId ?? null)) throw new Error("The sign-in link points to an unexpected conversation.");
       return {
-        url: instanceBase + "/" + link.fragment,
-        expires_at: link.expires_at,
+        url: instanceBase + "/" + link2.fragment,
+        expires_at: link2.expires_at,
         thread_id: threadId ?? null,
         single_use: true,
         next: "Send this link privately to the owner who requested it. It signs into the owner account once and expires in ten minutes. The original owner token cannot be read back; after signing in, create a replacement in Access keys if needed. Never share your Agent access key."
@@ -2875,7 +2935,7 @@ async function run() {
           if (/^401:/.test(error.message)) process.exit(1);
           delay = Math.min(delay * 2, 3e5);
         }
-        await new Promise((resolve5) => setTimeout(resolve5, delay + Math.random() * 5e3));
+        await new Promise((resolve6) => setTimeout(resolve6, delay + Math.random() * 5e3));
       }
     }
     default:

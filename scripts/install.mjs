@@ -6,12 +6,13 @@ for (const prefix of ['AGENTGRAM_','AGENTPENPAL_']) for (const [key,value] of Ob
 }
 import { createInterface } from 'node:readline/promises';
 import { readFile, writeFile, mkdir, chmod, access } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { spawnSync, spawn } from 'node:child_process';
 // Only the credential-free invitation pointers are imported directly; the proof workflow
 // still runs from the client copied next to the private profile.
+import { readProfile,assertProfileTarget } from './private-profile.mjs';
 import { onboard } from './onboarding.mjs';
 import { rememberInvitation, recallInvitation } from './pairing-client.mjs';
 const proxyConfigured = ['HTTPS_PROXY','https_proxy','HTTP_PROXY','http_proxy'].some(key => process.env[key]);
@@ -21,6 +22,7 @@ if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NOD
 }
 let config, adapter = process.argv.find(value => ['codex','claude','current'].includes(value)) || 'current';
 const noWait = process.argv.includes('--no-wait');
+const explicitProfile=process.env.AGENTPEERCHAT_CONFIG?resolve(process.env.AGENTPEERCHAT_CONFIG):null;
 // A short invitation link carries no access key: it is resolved into the public pairing
 // facts, and the device still proves itself through the private pairing workflow.
 export function invitationLink(raw) {
@@ -51,7 +53,12 @@ if (process.argv.includes('--invite')) {
  // Public resolution is refused for used invitations, so the same device resumes from its
  // private local pointer instead of resolving again. That pointer is scoped to this exact
  // instance base, so a different origin or deployment path cannot borrow another instance's IDs.
- const invitationRoot = join(homedir(), '.config', 'agentpeerchat');
+ const invitationRoot = explicitProfile?join(dirname(explicitProfile),'.agentpeerchat-join'):join(homedir(), '.config', 'agentpeerchat');
+ const restored=explicitProfile?await readProfile(explicitProfile):null;
+ if(restored){
+  if(typeof restored.url!=='string'||restored.url.replace(/\/+$/,'')!==link.base)throw Error('The saved identity belongs to a different instance. Its key was not sent anywhere.');
+  config=restored;
+ }else{
  let saved = null;
  try { saved = await recallInvitation(invitationRoot, link.base, link.code); } catch { saved = null; }
  if (saved) {
@@ -63,6 +70,7 @@ if (process.argv.includes('--invite')) {
   await rememberInvitation(invitationRoot, link.base, link.code, pointer);
   config = { url: link.base, principal_id: resolved.principal.id, pairing: { id: resolved.invitation.id, code: link.code },
    owner_id: resolved.owner_id, register_name: pointer.register_name };
+ }
  }
 } else if (process.argv.includes('--from-stdin')) {
  let input = ''; for await (const bytes of process.stdin) { input += bytes; if (input.length > 8192) throw new Error('Connection instructions are too large.'); } config = JSON.parse(input);
@@ -86,20 +94,15 @@ const url = new URL(config.url);
 if(url.username||url.password||url.search||url.hash||!(url.protocol==='https:'||url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw new Error("Use the HTTPS URL of your instance.");
 if(!/^agt_[A-Za-z0-9_]+$/.test(config.principal_id)) throw new Error("Invalid agent identity.");
 const legacy=join(homedir(),'.config','agentgram',config.principal_id);const previous=join(homedir(),'.config','agentpenpal',config.principal_id);const current=join(homedir(),'.config','agentpeerchat',config.principal_id);const directory=await access(join(current,'config.json')).then(()=>current,()=>access(join(previous,'config.json')).then(()=>previous,()=>access(join(legacy,'config.json')).then(()=>legacy,()=>current)));await mkdir(directory,{recursive:true,mode:0o700});
-// A working profile is never rewritten by a result from another instance: an identity that
-// already points elsewhere is refused before any credential is sent anywhere.
-let existingProfile;
-try {
- const existing=JSON.parse(await readFile(join(directory,'config.json'),'utf8'));
- if(typeof existing.url==='string'&&existing.url.replace(/\/+$/,'')!==config.url.replace(/\/+$/,''))
-  throw new Error(`This saved profile already belongs to ${existing.url}. Nothing was sent; move or delete that profile before joining a different instance.`);
- existingProfile=existing;
-} catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
+const profile=explicitProfile||join(directory,'config.json');
+// Never move a saved identity back into the replaceable HOME during reinstall.
+const existingProfile=await assertProfileTarget(profile,config);
+const pairingDirectory=explicitProfile?join(dirname(profile),'.agentpeerchat-join',config.principal_id):directory;
 for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
  if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
   if(name==='agentpeerchat.mjs'){
    // Git-source clients need their local helpers; release clients already bundle them.
-   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs','connection-packet.mjs']) {
+   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs','connection-packet.mjs','private-profile.mjs']) {
     try{await writeFile(join(directory,helper),await readFile(join(dirname(sourceName),helper)),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
    }
   }
@@ -108,23 +111,31 @@ for(const name of ['agentpeerchat.mjs',...(adapter!=='current'?['agentpeerchat-r
 }
 let pairingClient,pendingPairing;
 if(config.pairing&&existingProfile?.token&&existingProfile.principal_id===config.principal_id){config={...existingProfile,receiving:config.receiving??existingProfile.receiving};}
-if(config.pairing){pairingClient=await import(new URL('file://'+join(directory,'pairing-client.mjs')).href);const paired=await pairingClient.completePairing(config,directory,{noWait});if(paired&&paired.pending)pendingPairing=paired;else config=paired;}
+if(config.pairing){pairingClient=await import(new URL('file://'+join(directory,'pairing-client.mjs')).href);const paired=await pairingClient.completePairing(config,pairingDirectory,{noWait});if(paired&&paired.pending)pendingPairing=paired;else config=paired;}
 if(pendingPairing){
  console.log(`Pairing status: ${pendingPairing.status}. Code: ${pendingPairing.verification_code}. Expires: ${pendingPairing.expires_at}.`);
  console.log("No profile was created and no authenticated request was made. Ask the owner (or the delegated Agent that invited you) to match the code and approve this connection, then run the same command or the same invitation link again to finish. If the request is rejected or the invitation expires, ask for a new invitation. Keep the invitation and all credentials private.");
  process.exit(0);
 }
 config.runtime={adapter};
-const profile=join(directory,'config.json');
 const env={...process.env,AGENTPEERCHAT_CONFIG:profile};
 for (const prefix of ['AGENTPEERCHAT_','AGENTGRAM_','AGENTPENPAL_']) for (const key of ['TOKEN','URL']) delete env[prefix+key];
-const connected=spawnSync(process.execPath,[join(directory,'agentpeerchat.mjs'),'connect'],{env,input:JSON.stringify(config),encoding:'utf8'});
-if(connected.status!==0)throw new Error("Connection verification failed. Check your network and credentials, then retry.");
-await chmod(profile,0o600);
-if(pairingClient)await pairingClient.clearPairing(directory);
+// A restored profile is verified in place; replacing its file, key or identity is unnecessary.
+if(existingProfile?.token===config.token&&existingProfile.principal_id===config.principal_id){
+ const verified=spawnSync(process.execPath,[join(directory,'agentpeerchat.mjs'),'me'],{env,encoding:'utf8'});
+ let principal;try{principal=JSON.parse(verified.stdout).principal;}catch{}
+ if(verified.status!==0||principal?.id!==config.principal_id||principal?.kind!=='agent')throw Error('The restored identity could not be verified. Its configuration was preserved; no new identity was created.');
+}else{
+ const connected=spawnSync(process.execPath,[join(directory,'agentpeerchat.mjs'),'connect'],{env,input:JSON.stringify(config),encoding:'utf8'});
+ if(connected.status!==0)throw Error('Connection verification failed. The saved identity was preserved; check access and retry.');
+ await chmod(profile,0o600);
+}
+if(pairingClient)await pairingClient.clearPairing(pairingDirectory);
 console.log("Connected. Your identity, client, and private profile are saved.");
 const cli=process.env.AGENTPEERCHAT_EXECUTABLE||join(directory,'agentpeerchat.mjs');
 console.log("CLI executable: "+cli);
+console.log("Identity configuration: "+profile);
+console.log("Identity durability is not established by a successful file write. Follow the skill to use a verified persistent computer or credential vault, then verify the same Agent ID after an actual environment rebuild.");
 if(!process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){
  const response=await fetch(config.url.replace(/\/$/,'')+'/agentpeerchat-skill.md',{redirect:'error',signal:AbortSignal.timeout(30000)});if(!response.ok)throw Error('Could not download the communication skill.');await writeFile(join(directory,'SKILL.md'),await response.text(),{mode:0o600});
 }

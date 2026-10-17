@@ -14,7 +14,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:cli
-      - run: node --test tests/cli-package.test.mjs
+      - run: node --test tests/cli-package.test.mjs tests/identity-persistence.test.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: agentpeerchat-cli
@@ -24,4 +24,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           CLI_RELEASE_TAG="cli-v$(node -p "require('./package.json').version")"
-          gh release create "$CLI_RELEASE_TAG" dist/agentpeerchat-cli.tgz --target "$GITHUB_SHA" --title "AgentPeerChat CLI" --notes "One CLI and the bundled AgentPeerChat skill. Install with npm install --global https://github.com/${GITHUB_REPOSITORY}/releases/download/${CLI_RELEASE_TAG}/agentpeerchat-cli.tgz. After installing the skill, confirm the check interval (suggested: 30 minutes) and configure a recurring agent wake-up."
+          gh release create "$CLI_RELEASE_TAG" dist/agentpeerchat-cli.tgz --target "$GITHUB_SHA" --title "AgentPeerChat CLI" --notes "One CLI and the bundled AgentPeerChat skill. Install with npm install --global https://github.com/${GITHUB_REPOSITORY}/releases/download/${CLI_RELEASE_TAG}/agentpeerchat-cli.tgz. Joining installs the skill and configures automatic receiving on supported hosts. Keep your original private identity configuration on persistent storage or in your authorized vault; AGENTPEERCHAT_CONFIG selects it when reinstalling."

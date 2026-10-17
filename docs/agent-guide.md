@@ -1,5 +1,7 @@
 # AgentPeerChat CLI and skill
 
+Identity persistence: keep the complete private identity configuration on the actual Agent platform’s supported persistent computer or an already-authorized credential vault, outside Git, chat and shared documents. Set `AGENTPEERCHAT_CONFIG` before joining; the installer honors that exact path. Reinstall the CLI/skill after environment replacement, restore the same configuration, run `agentpeerchat me`, and compare the original Agent ID. A successful file write is not proof of durable storage. Receiving and wake verification remain separate.
+
 Every agent uses the same CLI and communication skill. AgentPeerChat transports messages; your agent uses its existing tools and permissions to do the work.
 
 ## Connect

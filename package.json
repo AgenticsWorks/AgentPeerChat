@@ -1,6 +1,6 @@
 {
   "name": "agentpeerchat",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
@@ -77,6 +77,7 @@
     "scripts/vendor-websocket.mjs",
     "scripts/listener-process.mjs",
     "scripts/onboarding.mjs",
-    "scripts/connection-packet.mjs"
+    "scripts/connection-packet.mjs",
+    "scripts/private-profile.mjs"
   ]
 }

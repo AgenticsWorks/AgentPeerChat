@@ -2,21 +2,40 @@
 
 // scripts/install.mjs
 import { createInterface } from "node:readline/promises";
-import { readFile as readFile5, writeFile as writeFile5, mkdir as mkdir5, chmod as chmod4, access as access4 } from "node:fs/promises";
-import { join as join5, dirname as dirname3 } from "node:path";
+import { readFile as readFile6, writeFile as writeFile5, mkdir as mkdir6, chmod as chmod4, access as access4 } from "node:fs/promises";
+import { join as join5, dirname as dirname3, resolve as resolve5 } from "node:path";
 import { homedir as homedir3 } from "node:os";
 import { createHash as createHash4 } from "node:crypto";
 import { spawnSync as spawnSync3, spawn as spawn3 } from "node:child_process";
 
+// scripts/private-profile.mjs
+import { readFile, mkdir, open, rename, rm, lstat, link } from "node:fs/promises";
+async function readProfile(path) {
+  try {
+    const data = JSON.parse(await readFile(path, "utf8"));
+    if (!data || Array.isArray(data) || typeof data !== "object") throw Error();
+    return data;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw Error("The saved identity configuration is unreadable or invalid. Restore the original private configuration; it was not overwritten.");
+  }
+}
+async function assertProfileTarget(path, identity) {
+  const previous2 = await readProfile(path);
+  if (previous2 && (typeof previous2.url !== "string" || previous2.url.replace(/\/+$/, "") !== identity.url.replace(/\/+$/, "") || previous2.principal_id !== identity.principal_id))
+    throw Error("This configuration already belongs to a different instance or Agent identity. It was not overwritten. Reuse the original configuration or select a separate private profile.");
+  return previous2;
+}
+
 // scripts/onboarding.mjs
-import { access as access3, readFile as readFile3, writeFile as writeFile3, mkdir as mkdir3, cp, rename as rename3 } from "node:fs/promises";
+import { access as access3, readFile as readFile4, writeFile as writeFile3, mkdir as mkdir4, cp, rename as rename4 } from "node:fs/promises";
 import { constants as constants3 } from "node:fs";
 import { join as join3, dirname as dirname2, resolve as resolve4, delimiter as delimiter2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
 import { randomUUID as randomUUID3 } from "node:crypto";
 
 // scripts/automation.mjs
-import { readFile as readFile2, writeFile as writeFile2, mkdir as mkdir2, rename as rename2, rm as rm2, open as open2, copyFile, access as access2, chmod as chmod2 } from "node:fs/promises";
+import { readFile as readFile3, writeFile as writeFile2, mkdir as mkdir3, rename as rename3, rm as rm3, open as open3, copyFile, access as access2, chmod as chmod2 } from "node:fs/promises";
 import { dirname, join as join2, resolve as resolve3, isAbsolute as isAbsolute2, delimiter } from "node:path";
 import { constants as constants2 } from "node:fs";
 import { homedir } from "node:os";
@@ -25,7 +44,7 @@ import { spawn as spawn2, spawnSync as spawnSync2 } from "node:child_process";
 
 // scripts/session-wake.mjs
 import { connect } from "node:net";
-import { lstat, realpath, access } from "node:fs/promises";
+import { lstat as lstat2, realpath, access } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { constants } from "node:fs";
 import { execFile } from "node:child_process";
@@ -35,7 +54,7 @@ var uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 async function socketIdentity(path) {
   if (!isAbsolute(path) || path.includes("\0")) throw new Error("Use an absolute local session socket path.");
-  const actual = await realpath(path), info = await lstat(actual);
+  const actual = await realpath(path), info = await lstat2(actual);
   if (!info.isSocket() || typeof process.getuid === "function" && info.uid !== process.getuid()) throw new Error("Session endpoint must be a socket owned by this OS user.");
   return { path: actual, device: info.dev, inode: info.ino };
 }
@@ -106,7 +125,7 @@ async function wakeSession(recipe, prompt, { env: env2 = process.env } = {}) {
 // scripts/client-transport.mjs
 import { randomUUID } from "node:crypto";
 var transient = /* @__PURE__ */ new Set([408, 429, 500, 502, 503, 504]);
-var sleep = (milliseconds) => new Promise((resolve5) => setTimeout(resolve5, milliseconds));
+var sleep = (milliseconds) => new Promise((resolve6) => setTimeout(resolve6, milliseconds));
 async function requestJSON(url2, { method = "GET", token, body, send = false, idempotencyKey } = {}, {
   fetchImpl = fetch,
   wait = sleep,
@@ -1532,12 +1551,12 @@ var NotificationSocket = class extends Cs {
 };
 
 // scripts/realtime-client.mjs
-var sleep2 = (ms, signal) => new Promise((resolve5) => {
-  if (signal?.aborted) return resolve5();
+var sleep2 = (ms, signal) => new Promise((resolve6) => {
+  if (signal?.aborted) return resolve6();
   const done = () => {
     clearTimeout(timer);
     signal?.removeEventListener("abort", done);
-    resolve5();
+    resolve6();
   };
   const timer = setTimeout(done, ms);
   signal?.addEventListener("abort", done, { once: true });
@@ -1582,7 +1601,7 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
       url2.pathname = url2.pathname.replace(/\/+$/, "") + "/api/v1/events";
       url2.search = "";
       url2.hash = "";
-      await new Promise((resolve5) => {
+      await new Promise((resolve6) => {
         const ws2 = new WebSocketImpl(url2, ["apc-v1", "ticket." + credentials.ticket]);
         let ready = false, lastPong = Date.now(), ended = false;
         const finish = () => {
@@ -1595,7 +1614,7 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
             ws2.close();
           } catch {
           }
-          resolve5();
+          resolve6();
         };
         const abort = () => finish();
         signal?.addEventListener("abort", abort, { once: true });
@@ -1652,7 +1671,7 @@ async function receiveNotifications({ identity, onWork, onState = async () => {
 
 // scripts/listener-process.mjs
 import { createServer, connect as connect2 } from "node:net";
-import { readFile, writeFile, rm, chmod, open, lstat as lstat2, rename, mkdir } from "node:fs/promises";
+import { readFile as readFile2, writeFile, rm as rm2, chmod, open as open2, lstat as lstat3, rename as rename2, mkdir as mkdir2 } from "node:fs/promises";
 import { join, resolve as resolve2 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir, userInfo } from "node:os";
@@ -1661,7 +1680,7 @@ var sleep3 = (ms) => new Promise((r) => setTimeout(r, ms));
 var stateFile = (root) => join(root, "process.json");
 async function state(root) {
   try {
-    return JSON.parse(await readFile(stateFile(root), "utf8"));
+    return JSON.parse(await readFile2(stateFile(root), "utf8"));
   } catch (e) {
     if (e.code === "ENOENT") return null;
     throw e;
@@ -1676,14 +1695,14 @@ function systemdAvailable(system, env2 = process.env) {
 async function control(root, action) {
   const saved = await state(root);
   if (!saved) return null;
-  return new Promise((resolve5) => {
+  return new Promise((resolve6) => {
     let data = "", done = false;
     const client = connect2(saved.socket), finish = (value) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
       client.destroy();
-      resolve5(value);
+      resolve6(value);
     };
     const timer = setTimeout(() => finish(null), 1500);
     client.on("error", () => finish(null));
@@ -1717,7 +1736,7 @@ async function startProcess({ root, profile: profile2, cli: cli2, env: env2 }) {
   const existing = await processStatus(root);
   if (existing.active && !existing.stopping) return existing;
   if (existing.stopping) throw Error("Listener supervisor is still stopping; retry start.");
-  const log = await open(join(root, "process.log"), "a", 384);
+  const log = await open2(join(root, "process.log"), "a", 384);
   await log.chmod(384);
   const childEnv = { ...env2, AGENTPEERCHAT_CONFIG: profile2 };
   for (const k of Object.keys(childEnv)) if (/^(AGENTPEERCHAT|AGENTGRAM|AGENTPENPAL)_(TOKEN|URL)$/.test(k)) delete childEnv[k];
@@ -1742,16 +1761,16 @@ async function supervise({ root, profile: profile2, cli: cli2, env: env2, everyS
 }, onExit = async () => {
 } }) {
   const directory2 = join(tmpdir(), "agentpeerchat-" + (process.getuid?.() ?? "user"));
-  await mkdir(directory2, { recursive: true, mode: 448 });
-  const owner = await lstat2(directory2);
+  await mkdir2(directory2, { recursive: true, mode: 448 });
+  const owner = await lstat3(directory2);
   if (!owner.isDirectory() || typeof process.getuid === "function" && owner.uid !== process.getuid() || owner.mode & 63) throw Error("Supervisor socket directory must be private and owned by this user.");
   const socket = join(directory2, createHash("sha256").update(root).digest("hex").slice(0, 32) + ".sock");
   const previous2 = await processStatus(root);
   if (previous2.active) throw Error("A supervisor already owns this profile.");
   try {
-    const info = await lstat2(socket);
+    const info = await lstat3(socket);
     if (!info.isSocket() || typeof process.getuid === "function" && info.uid !== process.getuid()) throw Error("Unexpected supervisor socket; inspect it before restarting.");
-    await rm(socket);
+    await rm2(socket);
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
@@ -1821,7 +1840,7 @@ async function supervise({ root, profile: profile2, cli: cli2, env: env2, everyS
     await chmod(socket, 384);
     const temporary = stateFile(root) + "." + process.pid + ".tmp";
     await writeFile(temporary, JSON.stringify({ socket, nonce, pid: process.pid }) + "\n", { mode: 384 });
-    await rename(temporary, stateFile(root));
+    await rename2(temporary, stateFile(root));
     await chmod(stateFile(root), 384);
     process.once("SIGTERM", stop);
     process.once("SIGINT", stop);
@@ -1845,8 +1864,8 @@ async function supervise({ root, profile: profile2, cli: cli2, env: env2, everyS
     for (let i = 0; i < 30 && children.size; i++) await sleep3(100);
     terminate("SIGKILL");
     await new Promise((r) => server.close(r));
-    await rm(socket, { force: true });
-    await rm(stateFile(root), { force: true });
+    await rm2(socket, { force: true });
+    await rm2(stateFile(root), { force: true });
     await onExit();
   }
   return { stopped: true };
@@ -1859,18 +1878,18 @@ function interval(value = "30m") {
   return seconds;
 }
 var privateWrite = async (path, value) => {
-  await mkdir2(dirname(path), { recursive: true, mode: 448 });
+  await mkdir3(dirname(path), { recursive: true, mode: 448 });
   const temporary = path + "." + randomUUID2() + ".tmp";
   try {
     await writeFile2(temporary, JSON.stringify(value, null, 2) + "\n", { mode: 384 });
-    await rename2(temporary, path);
+    await rename3(temporary, path);
   } finally {
-    await rm2(temporary, { force: true });
+    await rm3(temporary, { force: true });
   }
 };
 async function readJSON(path, fallback) {
   try {
-    return JSON.parse(await readFile2(path, "utf8"));
+    return JSON.parse(await readFile3(path, "utf8"));
   } catch (e) {
     if (e.code === "ENOENT") return fallback;
     throw new Error("Invalid automation state: " + path);
@@ -1879,7 +1898,7 @@ async function readJSON(path, fallback) {
 async function locked(path, work) {
   let file;
   try {
-    file = await open2(path, "wx", 384);
+    file = await open3(path, "wx", 384);
   } catch (e) {
     if (e.code !== "EEXIST") throw e;
     const old = await readJSON(path, null);
@@ -1892,7 +1911,7 @@ async function locked(path, work) {
       else if (e2.code !== "EPERM") throw e2;
     }
     if (alive) return { skipped: true, reason: "already_running" };
-    await rm2(path);
+    await rm3(path);
     return locked(path, work);
   }
   try {
@@ -1900,7 +1919,7 @@ async function locked(path, work) {
     return await work();
   } finally {
     await file.close();
-    await rm2(path, { force: true });
+    await rm3(path, { force: true });
   }
 }
 function processRun(argv, options = {}) {
@@ -1996,7 +2015,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
   const systemctl = (system, ...parts) => controlSystemd(env2, system, ...parts);
   const f = flags(args), action = f.positionals.shift();
   const root = profile2 + ".automation";
-  if (command !== "listen" || action !== "status") await mkdir2(root, { recursive: true, mode: 448 });
+  if (command !== "listen" || action !== "status") await mkdir3(root, { recursive: true, mode: 448 });
   const settingsPath = join2(root, "listener.json"), statePath = join2(root, "status.json"), queuePath = join2(root, "outbox.json");
   const settings = await readJSON(settingsPath, null);
   const realtimeStatePath = join2(root, "realtime.json");
@@ -2132,11 +2151,11 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
     }
     return locked(join2(root, "lock.json"), async () => {
       if (settings && settings.manager !== "process") {
-        for (const suffix of ["timer", "service", "realtime.service"]) await rm2(join2(settings.unit_directory, unit + (suffix === "realtime.service" ? "-" : ".") + suffix), { force: true });
+        for (const suffix of ["timer", "service", "realtime.service"]) await rm3(join2(settings.unit_directory, unit + (suffix === "realtime.service" ? "-" : ".") + suffix), { force: true });
         systemctl(settings.system, "daemon-reload");
-        await rm2(settingsPath, { force: true });
+        await rm3(settingsPath, { force: true });
       }
-      await rm2(settingsPath, { force: true });
+      await rm3(settingsPath, { force: true });
       return { removed: true, queued_messages_preserved: true };
     });
   }
@@ -2162,11 +2181,11 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
     const actual = await verifyIdentity();
     if (actual.kind !== "agent") throw new Error("Listener requires the matching Agent identity.");
     const unitDirectory = system ? "/etc/systemd/system" : join2(env2.HOME || homedir(), ".config", "systemd", "user");
-    if (manager === "systemd") await mkdir2(unitDirectory, { recursive: true });
+    if (manager === "systemd") await mkdir3(unitDirectory, { recursive: true });
     const recipePath = join2(root, "runner.json");
     await privateWrite(recipePath, { ...runner, timeout_seconds: timeout });
     const bin = join2(root, "bin");
-    await mkdir2(bin, { recursive: true, mode: 448 });
+    await mkdir3(bin, { recursive: true, mode: 448 });
     const shellQuote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
     const launcher = join2(bin, "agentpeerchat");
     await writeFile2(launcher, "#!/bin/sh\nexec " + shellQuote(process.execPath) + " " + shellQuote(cli2) + ' "$@"\n', { mode: 448 });
@@ -2174,8 +2193,8 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
     if (manager === "process") {
       await stopProcess(root);
       await privateWrite(settingsPath, { every_seconds: seconds, system: false, manager, runner_file: recipePath, realtime: true, delivery_mode: native ? "session" : "independent" });
-      await rm2(join2(root, "wake.json"), { force: true });
-      await rm2(join2(root, "last-wake.json"), { force: true });
+      await rm3(join2(root, "wake.json"), { force: true });
+      await rm3(join2(root, "last-wake.json"), { force: true });
       const processEnv = { ...env2, PATH: bin + delimiter + dirname(cli2) + delimiter + (env2.PATH || "") };
       const managed = await startProcess({ root, profile: profile2, cli: cli2, env: processEnv });
       return { installed: true, active: managed.active, manager, persistence: "host_lifetime", task_id: unit + ".process", interval_seconds: seconds, receiving_transport: "websocket_with_periodic_fallback", profile_id: identity.principal_id, next: "Use listen status and doctor to verify actual processing. A background process cannot survive host suspension or restart; use listen foreground under the host supervisor for reboot recovery." };
@@ -2188,8 +2207,8 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
     await writeFile2(join2(unitDirectory, unit + "-realtime.service"), streamService.join("\n") + "\n", { mode: 420 });
     await writeFile2(join2(unitDirectory, unit + ".timer"), "[Unit]\nDescription=AgentPeerChat recurring mailbox check\n[Timer]\nOnActiveSec=2s\nOnUnitInactiveSec=" + seconds + "s\nAccuracySec=1s\nUnit=" + unit + ".service\n[Install]\nWantedBy=timers.target\n", { mode: 420 });
     await privateWrite(settingsPath, { every_seconds: seconds, system, manager, unit_directory: unitDirectory, runner_file: recipePath, realtime: true, delivery_mode: native ? "session" : "independent" });
-    await rm2(join2(root, "wake.json"), { force: true });
-    await rm2(join2(root, "last-wake.json"), { force: true });
+    await rm3(join2(root, "wake.json"), { force: true });
+    await rm3(join2(root, "last-wake.json"), { force: true });
     systemctl(system, "daemon-reload");
     systemctl(system, "enable", unit + ".timer");
     systemctl(system, "restart", unit + ".timer");
@@ -2263,7 +2282,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
       const probe = await call(["probe"]);
       let summary, changed, pending, nextProbe;
       if (probe.supported === false) {
-        await rm2(candidate, { force: true });
+        await rm3(candidate, { force: true });
         await copyFile(cache, candidate).catch((e) => {
           if (e.code !== "ENOENT") throw e;
         });
@@ -2342,7 +2361,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
           state2.pending_after = after.pending;
         }
       }
-      if (summary?.summary_state?.persisted) await rename2(candidate, cache);
+      if (summary?.summary_state?.persisted) await rename3(candidate, cache);
       if (nextProbe) await privateWrite(probePath, nextProbe);
       state2.success = true;
       if (state2.model_started) await privateWrite(join2(root, "last-model.json"), state2);
@@ -2352,7 +2371,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
       await privateWrite(statePath, { checked_at: checkedAt, success: false, error: error.message });
       throw error;
     } finally {
-      await rm2(candidate, { force: true });
+      await rm3(candidate, { force: true });
     }
   });
 }
@@ -2372,25 +2391,25 @@ async function detectRuntime(env2 = process.env) {
 async function installSkill({ source: source2, target, env: env2 = process.env, runtime } = {}) {
   const home = env2.HOME || homedir2();
   const directory2 = target ? resolve4(target) : env2.AGENTPEERCHAT_SKILL_DIRECTORY ? resolve4(env2.AGENTPEERCHAT_SKILL_DIRECTORY) : runtime === "claude" ? join3(env2.CLAUDE_CONFIG_DIR || join3(home, ".claude"), "skills", "agentpeerchat") : runtime === "codex" ? join3(env2.CODEX_HOME || join3(home, ".codex"), "skills", "agentpeerchat") : join3(home, ".agents", "skills", "agentpeerchat");
-  await mkdir3(directory2, { recursive: true });
-  await writeFile3(join3(directory2, "SKILL.md"), await readFile3(source2, "utf8"));
+  await mkdir4(directory2, { recursive: true });
+  await writeFile3(join3(directory2, "SKILL.md"), await readFile4(source2, "utf8"));
   const references = join3(dirname2(source2), "references");
   if (await access3(references).then(() => true, () => false)) await cp(references, join3(directory2, "references"), { recursive: true });
   return directory2;
 }
 var read = async (path) => {
   try {
-    return JSON.parse(await readFile3(path, "utf8"));
+    return JSON.parse(await readFile4(path, "utf8"));
   } catch (e) {
     if (e.code === "ENOENT") return null;
     throw e;
   }
 };
 var save = async (path, value) => {
-  await mkdir3(dirname2(path), { recursive: true, mode: 448 });
+  await mkdir4(dirname2(path), { recursive: true, mode: 448 });
   const tmp = path + "." + randomUUID3() + ".tmp";
   await writeFile3(tmp, JSON.stringify(value, null, 2) + "\n", { mode: 384 });
-  await rename3(tmp, path);
+  await rename4(tmp, path);
 };
 async function onboard({ profile: profile2, cli: cli2, skillSource: skillSource2, preference, env: env2 = process.env, runtime } = {}) {
   const statePath = profile2 + ".onboarding.json", previous2 = await read(statePath);
@@ -2412,7 +2431,7 @@ async function onboard({ profile: profile2, cli: cli2, skillSource: skillSource2
       const minutes = choice.mode === "interval" ? Number(choice.minutes) : 30;
       if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) throw Error("Invalid receiving interval (1..1440 minutes).");
       const args = ["install", ...env2.AGENTPEERCHAT_RUNNER_FILE ? ["--runner-file", resolve4(env2.AGENTPEERCHAT_RUNNER_FILE)] : ["--runtime", selected], "--workspace", resolve4(env2.AGENTPEERCHAT_WORKSPACE || process.cwd()), "--every", minutes + "m"];
-      const hostedCodex = await readFile3("/proc/1/comm", "utf8").then((value) => value.trim() === "codex", () => false);
+      const hostedCodex = await readFile4("/proc/1/comm", "utf8").then((value) => value.trim() === "codex", () => false);
       if (selected === "codex" && env2.CODEX_THREAD_ID && (hostedCodex || env2.AGENTPEERCHAT_SESSION_PERSISTENT === "1") && !env2.AGENTPEERCHAT_RUNNER_FILE) {
         try {
           report.listener = await automation("listen", [...args, "--thread", "current"], context);
@@ -2441,16 +2460,16 @@ async function onboard({ profile: profile2, cli: cli2, skillSource: skillSource2
 
 // scripts/pairing-client.mjs
 import { randomBytes as randomBytes2, createHash as createHash3 } from "node:crypto";
-import { readFile as readFile4, writeFile as writeFile4, mkdir as mkdir4, chmod as chmod3, unlink, rename as rename4 } from "node:fs/promises";
+import { readFile as readFile5, writeFile as writeFile4, mkdir as mkdir5, chmod as chmod3, unlink, rename as rename5 } from "node:fs/promises";
 import { join as join4 } from "node:path";
 var baseOf = (value) => String(value || "").replace(/\/+$/, "");
 var locatorFile = (root, base, code) => join4(root, "invitations", createHash3("sha256").update(base + "\n" + code).digest("hex") + ".json");
 async function rememberInvitation(root, base, code, invitation) {
   const file = locatorFile(root, base, code), temporary = file + "." + randomBytes2(8).toString("hex") + ".tmp";
   try {
-    await mkdir4(join4(root, "invitations"), { recursive: true, mode: 448 });
+    await mkdir5(join4(root, "invitations"), { recursive: true, mode: 448 });
     await writeFile4(temporary, JSON.stringify({ ...invitation, base: baseOf(base) }) + "\n", { mode: 384 });
-    await rename4(temporary, file);
+    await rename5(temporary, file);
     await chmod3(file, 384);
   } catch (error) {
     await unlink(temporary).catch(() => {
@@ -2461,7 +2480,7 @@ async function rememberInvitation(root, base, code, invitation) {
 async function recallInvitation(root, base, code) {
   let saved;
   try {
-    saved = JSON.parse(await readFile4(locatorFile(root, baseOf(base), code), "utf8"));
+    saved = JSON.parse(await readFile5(locatorFile(root, baseOf(base), code), "utf8"));
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
     return null;
@@ -2476,14 +2495,15 @@ for (const prefix of ["AGENTGRAM_", "AGENTPENPAL_"]) for (const [key, value] of 
 var proxyConfigured = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"].some((key) => process.env[key]);
 if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== "0" && process.env.NODE_USE_ENV_PROXY !== "1" && !process.execArgv.includes("--use-env-proxy") && process.allowedNodeEnvironmentFlags.has("--use-env-proxy")) {
   const child = spawn3(process.execPath, ["--use-env-proxy", ...process.execArgv, ...process.argv.slice(1)], { stdio: "inherit" });
-  await new Promise((resolve5) => child.on("exit", (code) => {
-    resolve5();
+  await new Promise((resolve6) => child.on("exit", (code) => {
+    resolve6();
     process.exit(code ?? 1);
   }));
 }
 var config;
 var adapter = process.argv.find((value) => ["codex", "claude", "current"].includes(value)) || "current";
 var noWait = process.argv.includes("--no-wait");
+var explicitProfile = process.env.AGENTPEERCHAT_CONFIG ? resolve5(process.env.AGENTPEERCHAT_CONFIG) : null;
 function invitationLink(raw) {
   if (typeof raw !== "string" || !raw.trim()) throw new Error("Provide the invitation URL after --invite.");
   let url2;
@@ -2502,12 +2522,12 @@ function invitationLink(raw) {
   if (!code || code.length > 256) throw new Error("The invitation link has no usable invitation code.");
   return { base: url2.origin + url2.pathname.replace(/\/+$/, ""), code };
 }
-async function resolveInvitation(link) {
-  const response = await fetch(link.base + "/api/v1/pairings/resolve", {
+async function resolveInvitation(link2) {
+  const response = await fetch(link2.base + "/api/v1/pairings/resolve", {
     method: "POST",
     redirect: "error",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code: link.code }),
+    body: JSON.stringify({ code: link2.code }),
     signal: AbortSignal.timeout(3e4)
   });
   const data = await response.json().catch(() => null);
@@ -2517,33 +2537,39 @@ async function resolveInvitation(link) {
   return data;
 }
 if (process.argv.includes("--invite")) {
-  const link = invitationLink(process.argv[process.argv.indexOf("--invite") + 1]);
-  const invitationRoot = join5(homedir3(), ".config", "agentpeerchat");
-  let saved = null;
-  try {
-    saved = await recallInvitation(invitationRoot, link.base, link.code);
-  } catch {
-    saved = null;
-  }
-  if (saved) {
-    config = {
-      url: link.base,
-      principal_id: saved.principal_id,
-      pairing: { id: saved.id, code: link.code },
-      owner_id: saved.owner_id,
-      register_name: saved.register_name === true
-    };
+  const link2 = invitationLink(process.argv[process.argv.indexOf("--invite") + 1]);
+  const invitationRoot = explicitProfile ? join5(dirname3(explicitProfile), ".agentpeerchat-join") : join5(homedir3(), ".config", "agentpeerchat");
+  const restored = explicitProfile ? await readProfile(explicitProfile) : null;
+  if (restored) {
+    if (typeof restored.url !== "string" || restored.url.replace(/\/+$/, "") !== link2.base) throw Error("The saved identity belongs to a different instance. Its key was not sent anywhere.");
+    config = restored;
   } else {
-    const resolved = await resolveInvitation(link);
-    const pointer = { id: resolved.invitation.id, principal_id: resolved.principal.id, owner_id: resolved.owner_id, register_name: resolved.name_required === true };
-    await rememberInvitation(invitationRoot, link.base, link.code, pointer);
-    config = {
-      url: link.base,
-      principal_id: resolved.principal.id,
-      pairing: { id: resolved.invitation.id, code: link.code },
-      owner_id: resolved.owner_id,
-      register_name: pointer.register_name
-    };
+    let saved = null;
+    try {
+      saved = await recallInvitation(invitationRoot, link2.base, link2.code);
+    } catch {
+      saved = null;
+    }
+    if (saved) {
+      config = {
+        url: link2.base,
+        principal_id: saved.principal_id,
+        pairing: { id: saved.id, code: link2.code },
+        owner_id: saved.owner_id,
+        register_name: saved.register_name === true
+      };
+    } else {
+      const resolved = await resolveInvitation(link2);
+      const pointer = { id: resolved.invitation.id, principal_id: resolved.principal.id, owner_id: resolved.owner_id, register_name: resolved.name_required === true };
+      await rememberInvitation(invitationRoot, link2.base, link2.code, pointer);
+      config = {
+        url: link2.base,
+        principal_id: resolved.principal.id,
+        pairing: { id: resolved.invitation.id, code: link2.code },
+        owner_id: resolved.owner_id,
+        register_name: pointer.register_name
+      };
+    }
   }
 } else if (process.argv.includes("--from-stdin")) {
   let input = "";
@@ -2578,24 +2604,18 @@ var legacy = join5(homedir3(), ".config", "agentgram", config.principal_id);
 var previous = join5(homedir3(), ".config", "agentpenpal", config.principal_id);
 var current = join5(homedir3(), ".config", "agentpeerchat", config.principal_id);
 var directory = await access4(join5(current, "config.json")).then(() => current, () => access4(join5(previous, "config.json")).then(() => previous, () => access4(join5(legacy, "config.json")).then(() => legacy, () => current)));
-await mkdir5(directory, { recursive: true, mode: 448 });
-var existingProfile;
-try {
-  const existing = JSON.parse(await readFile5(join5(directory, "config.json"), "utf8"));
-  if (typeof existing.url === "string" && existing.url.replace(/\/+$/, "") !== config.url.replace(/\/+$/, ""))
-    throw new Error(`This saved profile already belongs to ${existing.url}. Nothing was sent; move or delete that profile before joining a different instance.`);
-  existingProfile = existing;
-} catch (error) {
-  if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
-}
+await mkdir6(directory, { recursive: true, mode: 448 });
+var profile = explicitProfile || join5(directory, "config.json");
+var existingProfile = await assertProfileTarget(profile, config);
+var pairingDirectory = explicitProfile ? join5(dirname3(profile), ".agentpeerchat-join", config.principal_id) : directory;
 for (const name of ["agentpeerchat.mjs", ...adapter !== "current" ? ["agentpeerchat-runtime.mjs"] : [], ...config.pairing ? ["pairing-client.mjs"] : []]) {
   if (process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY) {
     const sourceName = name === "agentpeerchat.mjs" ? process.env.AGENTPEERCHAT_BUNDLED_CLIENT || join5(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY, "client.mjs") : join5(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY, name);
-    await writeFile5(join5(directory, name), await readFile5(sourceName), { mode: 384 });
+    await writeFile5(join5(directory, name), await readFile6(sourceName), { mode: 384 });
     if (name === "agentpeerchat.mjs") {
-      for (const helper of ["client-transport.mjs", "doctor.mjs", "automation.mjs", "session-wake.mjs", "realtime-client.mjs", "listener-process.mjs", "websocket-transport.mjs", "vendor-websocket.mjs", "connection-packet.mjs"]) {
+      for (const helper of ["client-transport.mjs", "doctor.mjs", "automation.mjs", "session-wake.mjs", "realtime-client.mjs", "listener-process.mjs", "websocket-transport.mjs", "vendor-websocket.mjs", "connection-packet.mjs", "private-profile.mjs"]) {
         try {
-          await writeFile5(join5(directory, helper), await readFile5(join5(dirname3(sourceName), helper)), { mode: 384 });
+          await writeFile5(join5(directory, helper), await readFile6(join5(dirname3(sourceName), helper)), { mode: 384 });
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
         }
@@ -2616,7 +2636,7 @@ if (config.pairing && existingProfile?.token && existingProfile.principal_id ===
 }
 if (config.pairing) {
   pairingClient = await import(new URL("file://" + join5(directory, "pairing-client.mjs")).href);
-  const paired = await pairingClient.completePairing(config, directory, { noWait });
+  const paired = await pairingClient.completePairing(config, pairingDirectory, { noWait });
   if (paired && paired.pending) pendingPairing = paired;
   else config = paired;
 }
@@ -2626,16 +2646,27 @@ if (pendingPairing) {
   process.exit(0);
 }
 config.runtime = { adapter };
-var profile = join5(directory, "config.json");
 var env = { ...process.env, AGENTPEERCHAT_CONFIG: profile };
 for (const prefix of ["AGENTPEERCHAT_", "AGENTGRAM_", "AGENTPENPAL_"]) for (const key of ["TOKEN", "URL"]) delete env[prefix + key];
-var connected = spawnSync3(process.execPath, [join5(directory, "agentpeerchat.mjs"), "connect"], { env, input: JSON.stringify(config), encoding: "utf8" });
-if (connected.status !== 0) throw new Error("Connection verification failed. Check your network and credentials, then retry.");
-await chmod4(profile, 384);
-if (pairingClient) await pairingClient.clearPairing(directory);
+if (existingProfile?.token === config.token && existingProfile.principal_id === config.principal_id) {
+  const verified = spawnSync3(process.execPath, [join5(directory, "agentpeerchat.mjs"), "me"], { env, encoding: "utf8" });
+  let principal;
+  try {
+    principal = JSON.parse(verified.stdout).principal;
+  } catch {
+  }
+  if (verified.status !== 0 || principal?.id !== config.principal_id || principal?.kind !== "agent") throw Error("The restored identity could not be verified. Its configuration was preserved; no new identity was created.");
+} else {
+  const connected = spawnSync3(process.execPath, [join5(directory, "agentpeerchat.mjs"), "connect"], { env, input: JSON.stringify(config), encoding: "utf8" });
+  if (connected.status !== 0) throw Error("Connection verification failed. The saved identity was preserved; check access and retry.");
+  await chmod4(profile, 384);
+}
+if (pairingClient) await pairingClient.clearPairing(pairingDirectory);
 console.log("Connected. Your identity, client, and private profile are saved.");
 var cli = process.env.AGENTPEERCHAT_EXECUTABLE || join5(directory, "agentpeerchat.mjs");
 console.log("CLI executable: " + cli);
+console.log("Identity configuration: " + profile);
+console.log("Identity durability is not established by a successful file write. Follow the skill to use a verified persistent computer or credential vault, then verify the same Agent ID after an actual environment rebuild.");
 if (!process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY) {
   const response = await fetch(config.url.replace(/\/$/, "") + "/agentpeerchat-skill.md", { redirect: "error", signal: AbortSignal.timeout(3e4) });
   if (!response.ok) throw Error("Could not download the communication skill.");
