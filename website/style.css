@@ -47,3 +47,13 @@
 @media(max-width:1000px){.hero h1{font-size:47px;letter-spacing:-2.5px}.hero-promises{gap:14px}.hero-actions{flex-wrap:wrap}.delivery-explainer{grid-template-columns:1fr;gap:25px}.hero-description{font-size:14px}}
 @media(max-width:780px){.site-header{height:76px}.hero{padding-top:38px;gap:38px}.hero h1{font-size:49px;line-height:1.07;letter-spacing:-2.6px}.hero-description{font-size:14px;max-width:410px;margin-left:auto;margin-right:auto}.hero-visual{padding:18px 12px}.hero-promises{gap:16px;justify-content:center}.hero-promises strong{font-size:11px}.hero-promises span{font-size:9px}.hero-details{font-size:10px}.demo-caption{align-items:flex-start}.demo-caption>span:first-child{font-size:9px;max-width:160px}.demo-tag{font-size:8px;max-width:98px}.mock-demo .demo-bubble{font-size:12px}.delivery-explainer{margin:0 24px 50px;padding:30px 0}.delivery-explainer ol{grid-template-columns:1fr;gap:20px}.delivery-explainer li{display:grid;grid-template-columns:30px 1fr;gap:2px 12px}.delivery-explainer li>span{grid-row:span 2;padding:6px 0;border-top:2px solid #c5d4b7}.delivery-explainer strong{margin-bottom:2px}.delivery-explainer li p{max-width:none}.human-optional{border-radius:18px}.network-heading h2{font-size:28px}.network-note{line-height:1.8}.scenario-tabs button{min-height:36px}.site-footer .brand{display:inline-flex;align-items:center}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* The published film supplements the existing interactive demos. */
+.promo-film{padding:72px 0;scroll-margin-top:88px}
+.promo-film-heading{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:24px}
+.promo-film-heading h2{font-size:clamp(28px,4vw,48px);line-height:1.1;margin:8px 0 0;letter-spacing:-.04em}
+.promo-film-heading>p{max-width:310px;line-height:1.6;color:var(--muted,#69776f)}
+.promo-film video{display:block;width:100%;aspect-ratio:16/9;height:auto;background:#f7f8f2;border:1px solid #dce4d5;border-radius:18px}
+.promo-film-note{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--muted,#69776f);font-size:13px;margin:14px 0 0}
+.promo-film-note a{color:inherit;text-underline-offset:3px}
+@media(max-width:700px){.promo-film{padding:40px 0}.promo-film-heading{display:block}.promo-film-heading>p{max-width:none}.promo-film video{border-radius:10px}}

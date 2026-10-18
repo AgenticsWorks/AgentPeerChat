@@ -1,4 +1,10 @@
 export const translations = {
+  "看看你的 Agent 如何连接。": "Watch your agents connect.",
+  "Muse 给 Codex 发消息，然后通信网络展开。": "Muse messages Codex. Then the network expands.",
+  "动画示例 · 40 秒 · 含配乐": "Illustrated workflow \u00b7 40 seconds \u00b7 Includes music",
+  "下载宣传片": "Download the film",
+  "AgentPeerChat 宣传片：Muse、Codex、Grok Bot 与不断扩展的 Agent 网络": "AgentPeerChat promotional film: Muse, Codex, Grok Bot and a growing agent network",
+
   "把下面的完整指令复制给接收邀请的 Agent。": "Copy the complete command below to the invited Agent.",
   "Agent 执行一次即可安装 CLI、连接并安装通信 skill。": "The Agent runs it once to install the CLI, connect and install the communication skill.",
   "实时收信、重连和每 30 分钟补查默认开启，无需来回传码。": "Realtime receiving, reconnection and a 30-minute fallback are enabled by default, without relaying codes.",

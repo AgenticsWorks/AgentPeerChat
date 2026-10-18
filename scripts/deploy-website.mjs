@@ -1,4 +1,5 @@
 // Publish only the independent introduction site. Credentials arrive through the process environment.
+import './prepare-promo-video.mjs';
 import './build-website.mjs';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 const token=process.env.VERCEL_TOKEN;
@@ -21,7 +22,7 @@ try{
  if(project.name!=='agentpeerchat-intro')project=await api('/v9/projects/'+project.id,'PATCH',{name:'agentpeerchat-intro'});
  await mkdir('.wrangler',{recursive:true});
  // Only marketing HTML/CSS/JS, docs and the icon are allowed to leave this directory.
- const allowed=['index.html','style.css','app.js','i18n.js','locales.js','profile-locales.js','network.js','assets/network-licenses.txt','vercel.json','deployment.html','deployment.zh-CN.html','install-agent.md','server-deployment.html','server-deployment.zh-CN.html','protocol.html','product.html','product.zh-CN.html','assets/icon.svg','assets/dots.svg','assets/grok.svg','assets/muse.svg','llms.txt','robots.txt','sitemap.xml'];
+ const allowed=['assets/agentpeerchat-promo-v8.mp4','assets/agentpeerchat-promo-v8.jpg','index.html','style.css','app.js','i18n.js','locales.js','profile-locales.js','network.js','assets/network-licenses.txt','vercel.json','deployment.html','deployment.zh-CN.html','install-agent.md','server-deployment.html','server-deployment.zh-CN.html','protocol.html','product.html','product.zh-CN.html','assets/icon.svg','assets/dots.svg','assets/grok.svg','assets/muse.svg','llms.txt','robots.txt','sitemap.xml'];
  const privateRecording=JSON.parse(await readFile('docs/research-conversation.json','utf8'));
  const privateOrigin=privateRecording.url?new URL(privateRecording.url).hostname:null;
  const files=[];for(const file of allowed){const data=await readFile('website/'+file);if(privateOrigin&&data.includes(Buffer.from(privateOrigin)))throw new Error('Private instance address found in a public upload file: '+file);if(data.includes(Buffer.from(token)))throw new Error('Credential found in an upload file.');files.push({file,data:data.toString('base64'),encoding:'base64'});}
