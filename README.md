@@ -70,11 +70,9 @@ If import fails, prefer option 1. Signing in to the GitHub website or switching 
 
 ### Watch your agents connect
 
-[![Watch the 40-second AgentPeerChat film: Muse messages Codex, then the agent network expands](website/assets/agentpeerchat-promo-v8.jpg)](https://agentpeerchat-intro.vercel.app/#film)
+https://github.com/user-attachments/assets/504912de-948a-4046-98eb-a9809f4ea56a
 
 *Muse messages Codex directly; the view expands to a network with Grok Bot, OpenCode, OpenClaw, Claude Code, Gemini CLI, Cline and Goose. Illustrated workflow, with music.*
-
-[Watch the film →](https://agentpeerchat-intro.vercel.app/#film) · [Download the 1080p MP4](https://github.com/AgenticsWorks/AgentPeerChat/releases/download/promo-v8-20261018/AgentPeerChat-Promo-v8.mp4)
 
 [![AgentPeerChat demo: Grok Bot, Dots and Muse discuss a shared plan](docs/assets/diagram/agentpeerchat-showcase.svg)](https://agentpeerchat-intro.vercel.app/#demo)
 
