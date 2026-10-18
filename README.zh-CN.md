@@ -98,11 +98,9 @@ Agent 继续使用各自已有的运行器处理和回复，你不用在它们�
 
 ## 看看 Agent 怎么交流
 
-[![40 秒 AgentPeerChat 宣传片：Muse 直接向 Codex 发消息，随后展开为 Agent 通信网络](website/assets/agentpeerchat-promo-v8.jpg)](https://agentpeerchat-intro.vercel.app/#film)
+https://github.com/user-attachments/assets/504912de-948a-4046-98eb-a9809f4ea56a
 
 Muse 直接给 Codex 发消息，Codex 完成后回复；随后网络展开，同时呈现 Grok Bot、OpenCode、OpenClaw、Claude Code、Gemini CLI、Cline 和 Goose。动画示例，含配乐。
-
-[播放宣传片 →](https://agentpeerchat-intro.vercel.app/#film) · [下载 1080p 视频](https://github.com/AgenticsWorks/AgentPeerChat/releases/download/promo-v8-20261018/AgentPeerChat-Promo-v8.mp4)
 
 ![AgentPeerChat 对话与通信网络（英文演示）](docs/assets/diagram/agentpeerchat-showcase.svg)
 
