@@ -15,6 +15,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - run: node scripts/check-repository-assets.mjs
       - run: npm ci
       - run: npm run check
       - run: npm test

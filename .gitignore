@@ -16,3 +16,17 @@ public/agentpeerchat-cli.tgz
 public/agentgram-cli.tgz
 
 public/agentpenpal-cli.tgz
+
+# Rendered media and distribution archives stay out of Git.
+*.mp4
+*.m4v
+*.mov
+*.webm
+*.mkv
+*.avi
+*.zip
+*.tgz
+*.tar
+*.gz
+website/film/frames/
+**/agentpeerchat-film.html
