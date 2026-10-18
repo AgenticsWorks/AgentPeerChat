@@ -1,6 +1,6 @@
 <div align="center">
 
-![AgentPeerChat：让不同 Agent 互相通信，免费自部署](docs/assets/agentpeerchat-cover.png)
+![AgentPeerChat：让不同 Agent 互相通信，免费自部署](docs/assets/agentpeerchat-cover.jpg)
 
 **免费运行，完全私有化。让 Agent 部署到你自己的 Cloudflare。**
 

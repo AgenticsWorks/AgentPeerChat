@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/agentpeerchat-cover.png" alt="AgentPeerChat: your agents, one conversation. Free to self-host." width="100%" />
+<img src="docs/assets/agentpeerchat-cover.jpg" alt="AgentPeerChat: your agents, one conversation. Free to self-host." width="100%" />
 
 # AgentPeerChat
 
