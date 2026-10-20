@@ -6,11 +6,11 @@ import { connectionInstructions } from './connection-kit.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: false, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: window.matchMedia('(min-width: 1280px)').matches, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
-const avatarColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#eeae5e', '#6ec9cb'];
+const avatarColors = ['#a45767', '#547767', '#526c9c', '#7861a0', '#916c43', '#477e85'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
-function toggleMenu(open) { $('#main-menu').hidden = !open; $('#menu-backdrop').hidden = !open; $('#menu-toggle').setAttribute('aria-expanded', String(open)); if (open) $('#main-menu [data-view]').focus(); else $('#menu-toggle').focus(); }
+function toggleMenu(open) { const wasOpen = !$('#main-menu').hidden; $('#main-menu').hidden = !open; $('#menu-backdrop').hidden = !open; $('#menu-toggle').setAttribute('aria-expanded', String(open)); if (open) $('#main-menu [data-view]').focus(); else if (wasOpen) $('#menu-toggle').focus(); }
 $('#menu-toggle').addEventListener('click', () => toggleMenu($('#main-menu').hidden));
 $('#menu-backdrop').addEventListener('click', () => toggleMenu(false));
 document.addEventListener('keydown', event => { if (event.key === 'Escape') { if (!$('#main-menu').hidden) toggleMenu(false); if (state.inspector) { state.inspector = false; renderMembers(); } } });
@@ -169,7 +169,7 @@ $('#logout').addEventListener('click', async () => {
 function showView(view) {
   state.view = view; $('.skip-link').href = `#${view}`; toggleMenu(false);
   for (const name of ['conversations', 'network', 'access', 'graph']) $(`#${name}`).hidden = name !== view;
-  document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  document.querySelectorAll('[data-view]').forEach(button => { const active = button.dataset.view === view; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); });
   if (view === 'graph') renderGraph();
   if (view === 'access') loadAccess().catch(error => toast(error.message));
 }
@@ -183,7 +183,7 @@ function renderThreads() {
   $('#thread-list').replaceChildren();
   if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? t("没有找到聊天。") : t("选择联系人，开始第一段聊天。")));
   for (const thread of [...filtered].sort((a, b) => (b.last_message_seq ?? 0) - (a.last_message_seq ?? 0))) {
-    const button = el('button', 'thread-item'); button.classList.toggle('selected', thread.id === state.selected);
+    const button = el('button', 'thread-item'); button.classList.toggle('selected', thread.id === state.selected); button.setAttribute('aria-current', thread.id === state.selected ? 'true' : 'false');
     const copy = el('div', 'thread-copy');
     const last = thread.last_message;
     const preview = !last ? t("还没有消息") : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? t("内容") : last.content;
@@ -248,7 +248,7 @@ function renderMembers() {
   for (const p of state.members) {
     const row = el('div', 'member-row'), summary = el('div');
     summary.append(el('strong', '', p.name), el('small', '', p.kind === 'agent' ? p.description || 'Agent' : p.kind === 'owner' ? t("拥有者") : t("联系人")));
-    row.append(el('div', `avatar ${p.kind === 'agent' ? 'agent-avatar' : 'human-avatar'}`, p.name.slice(0, 1).toUpperCase()), summary);
+    row.append(personAvatar(p), summary);
     if (!p.active) row.append(el('span', 'badge off', 'OFF'));
     $('#inspector-member-list').append(row);
   }
@@ -294,7 +294,9 @@ function renderMessages(forceScroll = false) {
     const name = principal?.name ?? message.sender_id;
     article.append(personAvatar(principal ?? {id:message.sender_id,name}));
     const content = el('div', 'message-body'), meta = el('div', 'message-meta');
-    meta.append(el('strong', '', messageDirection(state.currentThread, message.sender_id, name)));
+    meta.append(el('strong', '', name));
+    if (principal?.kind === 'agent') meta.append(el('span', 'agent-label', t('Agent')));
+    meta.append(el('span', 'message-target', messageDirection(state.currentThread, message.sender_id, name).slice(name.length).trim()));
     const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(getLocale()); timestamp.dateTime = message.created_at;
     const bubble = el('div', 'bubble');
     if (message.type === 'text') bubble.textContent = message.content;
@@ -313,7 +315,8 @@ function renderMessages(forceScroll = false) {
       link.href = message.type === 'artifact' ? message.content.url : message.content; link.target = '_blank'; link.rel = 'noopener noreferrer'; bubble.append(link);
       if (message.type === 'artifact') { bubble.classList.add('artifact-message'); bubble.prepend(el('span', 'artifact-icon', '↗'), el('span', 'eyebrow', 'DELIVERABLE')); }
     }
-    const footer = el('div', 'message-id'); footer.append(timestamp);
+    meta.append(timestamp);
+    const footer = el('div', 'message-id');
     const receipts = el('button', 'receipt-button', t('Saved · details')); receipts.type = 'button'; receipts.title = t("消息状态"); receipts.setAttribute('aria-label', t("消息状态"));
     receipts.addEventListener('click', async () => {
       try {
