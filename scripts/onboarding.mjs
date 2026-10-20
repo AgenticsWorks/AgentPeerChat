@@ -4,7 +4,11 @@ import {join,dirname,resolve,delimiter} from 'node:path';
 import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {automation} from './automation.mjs';
+import {workbuddyWakePlan} from './native-wake.mjs';
 export async function detectRuntime(env=process.env){
+ // WorkBuddy owns its model login and native task scheduler. Its embedded
+ // CodeBuddy executable is not evidence of independently authenticated CLI access.
+ if(env.CODEBUDDY_HOST==='workbuddy-desktop')return 'workbuddy';
  const exists=async runtime=>{const override=env[runtime==='codex'?'AGENTPEERCHAT_CODEX_CLI':'AGENTPEERCHAT_CLAUDE_CLI'];return (await Promise.all((override?[override]:(env.PATH||'').split(delimiter).filter(Boolean).map(p=>join(p,runtime))).map(p=>access(p,constants.X_OK).then(()=>true,()=>false)))).some(Boolean);};
  // Prefer the invoking runtime over an unrelated executable also on PATH.
  const preferred=env.CODEX_THREAD_ID?'codex':env.CLAUDECODE||env.CLAUDE_CODE_MESSAGING_SOCKET?'claude':null;
@@ -14,7 +18,7 @@ export async function detectRuntime(env=process.env){
 }
 export async function installSkill({source,target,env=process.env,runtime}={}){
  const home=env.HOME||homedir();
- const directory=target?resolve(target):env.AGENTPEERCHAT_SKILL_DIRECTORY?resolve(env.AGENTPEERCHAT_SKILL_DIRECTORY):runtime==='claude'?join(env.CLAUDE_CONFIG_DIR||join(home,'.claude'),'skills','agentpeerchat'):runtime==='codex'?join(env.CODEX_HOME||join(home,'.codex'),'skills','agentpeerchat'):join(home,'.agents','skills','agentpeerchat');
+ const directory=target?resolve(target):env.AGENTPEERCHAT_SKILL_DIRECTORY?resolve(env.AGENTPEERCHAT_SKILL_DIRECTORY):runtime==='workbuddy'?join(env.WORKBUDDY_CONFIG_DIR||join(home,'.workbuddy'),'skills','agentpeerchat'):runtime==='claude'?join(env.CLAUDE_CONFIG_DIR||join(home,'.claude'),'skills','agentpeerchat'):runtime==='codex'?join(env.CODEX_HOME||join(home,'.codex'),'skills','agentpeerchat'):join(home,'.agents','skills','agentpeerchat');
  await mkdir(directory,{recursive:true});
  await writeFile(join(directory,'SKILL.md'),await readFile(source,'utf8'));
  const references=join(dirname(source),'references');if(await access(references).then(()=>true,()=>false))await cp(references,join(directory,'references'),{recursive:true});
@@ -38,6 +42,12 @@ export async function onboard({profile,cli,skillSource,preference,env=process.en
   } else if(status.installed){
    if(!status.active&&status.manager==='process')await automation('listen',['start'],context);
    report.listener=await automation('listen',['status'],context);report.status=report.listener.active?'receiving_configured':'needs_attention';
+  } else if(selected==='workbuddy'&&!env.AGENTPEERCHAT_RUNNER_FILE){
+   const identity=await read(profile);
+   if(!/^agt_[A-Za-z0-9_]+$/.test(identity?.principal_id||''))throw Error('Invalid Agent identity.');
+   report.status='native_wake_required';
+   report.native_wake=workbuddyWakePlan({profile,cli,skill:join(skill,'SKILL.md'),workspace:env.AGENTPEERCHAT_WORKSPACE||process.cwd(),principalId:identity.principal_id,minutes:choice.mode==='interval'?Number(choice.minutes):30});
+   report.next=report.native_wake.next;
   } else if(selected||env.AGENTPEERCHAT_RUNNER_FILE){
    const minutes=choice.mode==='interval'?Number(choice.minutes):30;
    if(!Number.isInteger(minutes)||minutes<1||minutes>1440)throw Error('Invalid receiving interval (1..1440 minutes).');

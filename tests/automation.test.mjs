@@ -56,6 +56,13 @@ test('listener wakes only for work, preserves failed membership discovery, exclu
     threads=[{id:'thr_new',title:'New group',kind:'group',participants:[]}];await writeFile(join(root,'mode'),'fail');
     await assert.rejects(run('listen',['run']),/Runtime failed/);assert.equal(JSON.parse(await readFile(join(state,'status.json'),'utf8')).success,false);
     await writeFile(join(root,'mode'),'denied');await assert.rejects(run('listen',['run']),/denied required tools/);
+    await writeFile(join(root,'mode'),'ok');
+    const recipe=JSON.parse(await readFile(join(state,'runner.json'),'utf8'));
+    await writeFile(join(state,'runner.json'),JSON.stringify({...recipe,result_protocol:'claude'}));
+    await assert.rejects(run('listen',['run']),/did not report successful completion/);
+    assert.equal(JSON.parse(await readFile(join(state,'status.json'),'utf8')).success,false);
+    assert.equal(calls.some(path=>path.endsWith('/ack')),false);
+    await writeFile(join(state,'runner.json'),JSON.stringify(recipe));
     await writeFile(join(root,'mode'),'ok');const discovered=await run('listen',['run']);assert.equal(discovered.model_started,true);assert.equal(discovered.new_chats,1);assert.match(await readFile(join(root,'prompt.txt'),'utf8'),/Membership changed: true/);assert.match(await readFile(join(root,'prompt.txt'),'utf8'),/Do not use summary --wait or polling loops/);
     assert.equal((await run('listen',['run'])).model_started,false);
     assert.equal((await run('schedule',['list'])).automatic_dispatch,false,'saved settings alone do not prove an active timer');
@@ -81,6 +88,7 @@ test('native runtime recipes resolve absolute executables and reuse saved host c
  const env={PATH:process.env.PATH,AGENTPEERCHAT_CODEX_CLI:process.execPath,AGENTPEERCHAT_CLAUDE_CLI:process.execPath};
  const codex=await runtimeRecipe('codex',process.cwd(),env),claude=await runtimeRecipe('claude',process.cwd(),env);
  assert.equal(codex.argv[0],process.execPath);assert.equal(codex.cwd,process.cwd());assert.ok(codex.argv.includes('workspace-write'));assert.equal(codex.argv.at(-1),'-');
+ assert.equal(codex.result_protocol,'codex');assert.equal(claude.result_protocol,'claude');
  assert.ok(claude.argv.includes('user,project'));assert.ok(claude.argv.includes('dontAsk'));assert.ok(!claude.argv.includes('--dangerously-skip-permissions'));const scoped=await runtimeRecipe('claude',process.cwd(),env,'/absolute/agentpeerchat');assert.ok(scoped.argv.includes('Bash'));assert.ok(scoped.argv.includes('Read'));assert.ok(scoped.argv.includes('Skill'));assert.ok(!claude.argv.includes('--tools'));
  await assert.rejects(runtimeRecipe('missing',process.cwd(),env),/--runtime/);await assert.rejects(runtimeRecipe('codex',process.cwd(),{PATH:''}),/not installed/);
 });

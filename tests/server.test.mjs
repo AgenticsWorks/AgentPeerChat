@@ -55,7 +55,7 @@ test('server refuses weak setup secrets and public HTTP origins before creating 
  await assert.rejects(createApplication({ ...options, databasePath: '/unused', publicUrl: 'http://public.example' }), /HTTPS/);
 });
 
-for(const installMode of ['download','source']) test(`${installMode} installer waits for pairing approval and saves a runnable private client`, {timeout:20000}, async t => {
+for(const installMode of ['download','source','source-workbuddy','bundled-workbuddy']) test(`${installMode} installer waits for pairing approval and saves a runnable private client`, {timeout:20000}, async t => {
  const {spawn}=await import('node:child_process');const {readFile}=await import('node:fs/promises');
  const directory=await mkdtemp(join(tmpdir(),'agentpeerchat-pair-install-'));
  const app=await createApplication({...options,databasePath:join(directory,'store.sqlite')});
@@ -66,7 +66,9 @@ for(const installMode of ['download','source']) test(`${installMode} installer w
  const owner=await call('/setup',null,{name:'Owner',setup_secret:secret});
  const issued=await call('/pairings',owner.access_key,{name:'Installer Agent'});
  const profile=join(directory,'.config','agentpeerchat',issued.principal.id,'config.json');
- const child=spawn(process.execPath,(installMode==='source'?['cli/agentpeerchat.mjs','join']:['scripts/install.mjs','--from-stdin']),{env:{...process.env,HOME:directory,AGENTPEERCHAT_CONFIG:profile,AGENTPEERCHAT_TOKEN:'',AGENTPEERCHAT_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
+ const workbuddy=installMode.endsWith('-workbuddy');
+ const command=installMode.startsWith('source')?['cli/agentpeerchat.mjs','join']:installMode==='bundled-workbuddy'?['dist/cli/agentpeerchat.mjs','join']:['scripts/install.mjs','--from-stdin'];
+ const child=spawn(process.execPath,[...command,...workbuddy?['workbuddy']:[]],{env:{...process.env,HOME:directory,WORKBUDDY_CONFIG_DIR:join(directory,'.workbuddy'),AGENTPEERCHAT_CONFIG:profile,AGENTPEERCHAT_TOKEN:'',AGENTPEERCHAT_URL:'',NO_PROXY:'127.0.0.1,localhost',no_proxy:'127.0.0.1,localhost'}});
  t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL');});
  let out='',err='',approval;
  child.stdout.on('data',bytes=>{out+=bytes;const code=/Pairing code: ([A-F0-9]{4}-[A-F0-9]{4})/.exec(out)?.[1];if(code&&!approval)approval=call(`/pairings/${issued.pairing.id}/approve`,owner.access_key,{verification_code:code});});child.stderr.on('data',bytes=>err+=bytes);
@@ -74,6 +76,13 @@ for(const installMode of ['download','source']) test(`${installMode} installer w
  const result=await new Promise(resolve=>child.on('close',resolve));await approval;assert.equal(result,0,err);
  const saved=JSON.parse(await readFile(profile,'utf8'));assert.equal(saved.pairing,undefined);assert.equal((await stat(profile)).mode&0o777,0o600);assert.ok(!out.includes(saved.token));
  assert.equal((await call('/me',saved.token)).principal.id,issued.principal.id);
+ if(workbuddy){
+  const setup=JSON.parse(await readFile(profile+'.onboarding.json','utf8'));
+  assert.equal(setup.runtime,'workbuddy');assert.equal(setup.status,'native_wake_required');
+  assert.equal(setup.native_wake.installed,false);assert.equal(setup.native_wake.interval_minutes,30);
+  assert.equal(setup.skill_directory,join(directory,'.workbuddy','skills','agentpeerchat'));
+  assert.ok(!JSON.stringify(setup).includes(saved.token));
+ }
  const {execFile}=await import('node:child_process');const {promisify}=await import('node:util');
  const checked=await promisify(execFile)(process.execPath,[join(directory,'.config','agentpeerchat',issued.principal.id,'agentpeerchat.mjs'),'me'],{env:{...process.env,AGENTPEERCHAT_CONFIG:profile,AGENTPEERCHAT_URL:'',AGENTPEERCHAT_TOKEN:'',NODE_USE_ENV_PROXY:'0'}});
  assert.equal(JSON.parse(checked.stdout).principal.id,issued.principal.id);
