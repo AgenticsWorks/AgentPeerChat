@@ -78,21 +78,29 @@ if (!credentials.group) {
   browse('click', '#modal-submit'); await waitFor('#field-secret');
   const packet = browserValue('document.querySelector("#field-secret").value');
   const connection = JSON.parse(packet.match(/AGENTPEERCHAT_CONFIG_JSON'\n([\s\S]*?)\nAGENTPEERCHAT_CONFIG_JSON/)[1]);
-  assert.equal(connection.register_name,true); assert.ok(packet.includes(' summary'));
+  assert.equal(connection.register_name,true); assert.ok(packet.includes('agentpeerchat join --no-wait'));
+  assert.equal(connection.receiving.mode,'auto');
   assert.ok(!connection.token);assert.ok(connection.pairing.code);
+  assert.equal(connection.pairing.approval_required,false);
   const key = 'agt_'+randomUUID().replaceAll('-','');
   const requested=await api('/pairings/request',null,'POST',{code:connection.pairing.code,token_hash:createHash('sha256').update(key).digest('hex')});
-  const unauthorized=await fetch(base+'/api/v1/me',{headers:{Connection:'close',Authorization:'Bearer '+key}});assert.equal(unauthorized.status,401);
+  assert.equal(requested.pairing.status,'approved');
   browse('click', '#modal-submit');
-  await waitFor('#pairing-list .pairing-request');
-  assert.ok(browserValue('document.querySelector("#pairing-list").textContent').includes(requested.pairing.verification_code));
-  browse('click','#pairing-list .primary');
-  browse('wait','--fn','document.querySelector("#pairing-requests").hidden');
   await api('/me',key,'PATCH',{name:'Codex'});
   const agent = (await api('/me', key)).principal; credentials.codex = { id: agent.id, key };
-  for (const [name, description, field] of [['Researcher', 'Finds the evidence behind every decision', 'researcher'], ['Reviewer', 'Checks quality, clarity, and accessibility', 'reviewer']]) {
+  for (const [name, description, field] of [['Researcher', 'Finds the evidence behind every decision', 'researcher']]) {
     const r = await api('/agents', credentials.owner, 'POST', { name, description }); credentials[field] = { id: r.principal.id, key: r.token.token };
   }
+  // Approval is optional now; explicitly request it to retain coverage of the approval UI.
+  const invitation=await api('/pairings',credentials.owner,'POST',{name:'Reviewer',approval_required:true});
+  const reviewerKey='agt_'+randomUUID().replaceAll('-','');
+  const pending=await api('/pairings/request',null,'POST',{code:invitation.pairing.code,token_hash:createHash('sha256').update(reviewerKey).digest('hex')});
+  const unauthorized=await fetch(base+'/api/v1/me',{headers:{Connection:'close',Authorization:'Bearer '+reviewerKey}});assert.equal(unauthorized.status,401);
+  browse('open',base);await waitFor('#pairing-list .pairing-request');
+  assert.ok(browserValue('document.querySelector("#pairing-list").textContent').includes(pending.pairing.verification_code));
+  browse('click','#pairing-list .primary');
+  browse('wait','--fn','document.querySelector("#pairing-requests").hidden');
+  credentials.reviewer={id:(await api('/me',reviewerKey)).principal.id,key:reviewerKey};
   const group = await api('/threads', credentials.codex.key, 'POST', { title: 'AgentPeerChat · Launch crew', members: [credentials.researcher.id, me.id] });
   credentials.group = group.thread.id;
   // Agent proactively adds another agent after creating the group.
@@ -141,13 +149,39 @@ const messages = (await api(`/threads/${smoke.id}?limit=100`, credentials.owner)
 assert.ok(messages.some(m => m.sender_id === me.id && m.content === unique));
 assert.ok((await api('/inbox', credentials.codex.key)).items.some(m => m.content === unique));
 const humanMessage=messages.find(m=>m.sender_id===me.id&&m.content===unique);
+// Simulate visibility/connectivity events deterministically in the real page.
+// API writes must appear without reloading or waiting for the 30-second poll.
+browse('wait','--fn','document.querySelector("#sync-state").textContent.startsWith("Last synced ")');
+evaluate('window.resumeTestPage = true; Object.defineProperty(document, "hidden", {configurable:true, value:true}); document.dispatchEvent(new Event("visibilitychange"))');
+assert.equal(browserValue('document.querySelector("#sync-state").textContent'),'Sync paused');
 const reply='I will retain owner confirmation before publishing and calculate the daily request budget for this plan.';
-await api('/messages',credentials.codex.key,'POST',{thread_id:smoke.id,type:'text',content:reply},true);
+const agentReply=await api('/messages',credentials.codex.key,'POST',{thread_id:smoke.id,type:'text',content:reply},true);
 await api('/messages/'+humanMessage.id+'/ack',credentials.codex.key,'POST');
-browse('open',base);await waitFor('#shell:not([hidden])');
-browse('find','text',unique,'click');await waitFor('[data-message-id]');
+assert.equal(browserValue(`document.querySelector('#message-list').textContent.includes(${JSON.stringify(reply)})`),false);
+const resumedAt=Date.now();
+evaluate('delete document.hidden; document.dispatchEvent(new Event("visibilitychange"))');
 browse('wait','--fn',`document.querySelector('#message-list').textContent.includes(${JSON.stringify(reply)})`);
+assert.ok(Date.now()-resumedAt<10000,'Tab resume should refresh well before the 30-second poll');
+assert.equal(browserValue('window.resumeTestPage'),true,'The page must not reload to see replies');
+assert.equal(browserValue(`document.querySelectorAll('[data-message-id="${agentReply.message.id}"]').length`),1);
 assert.ok((await api('/messages/'+humanMessage.id,credentials.owner)).receipts.some(r=>r.recipient_id===credentials.codex.id&&r.acked_at));
+browse('click',`[data-message-id="${humanMessage.id}"] .receipt-button`);
+await waitFor('#modal[open]');
+assert.match(browserValue('document.querySelector("#modal-fields").textContent'),/Codex: Acknowledged/);
+browse('click','#modal-submit');
+browse('wait','--fn','document.querySelector("#sync-state").textContent.startsWith("Last synced ")');
+evaluate('Object.defineProperty(navigator, "onLine", {configurable:true, value:false}); window.dispatchEvent(new Event("offline"))');
+assert.equal(browserValue('document.querySelector("#sync-state").textContent'),'Offline');
+const reconnectReply=await api('/messages',credentials.codex.key,'POST',{thread_id:smoke.id,type:'text',content:'Network recovery verification'},true);
+const reconnectedAt=Date.now();
+evaluate('delete navigator.onLine; window.dispatchEvent(new Event("online"))');
+browse('wait','--fn',`document.querySelectorAll('[data-message-id="${reconnectReply.message.id}"]').length === 1`);
+assert.ok(Date.now()-reconnectedAt<10000,'Network recovery should refresh well before the 30-second poll');
+browse('wait','--fn','document.querySelector("#sync-state").textContent.startsWith("Last synced ")');
+browse('select','[data-language-switch]','zh');
+assert.match(browserValue('document.querySelector("#sync-state").textContent'),/^上次同步 /);
+browse('select','[data-language-switch]','en');
+assert.match(browserValue('document.querySelector("#sync-state").textContent'),/^Last synced /);
 
 browse('find', 'text', 'AgentPeerChat · Launch crew', 'click'); await waitFor('[data-message-id]');
 evaluate('document.querySelector("#message-list").scrollTop = 0');

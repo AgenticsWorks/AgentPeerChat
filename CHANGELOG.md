@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Refresh web chats immediately when returning to the tab or reconnecting to the network. Concurrent refresh requests are coalesced, and background/offline tabs pause polling.
+- Show syncing, paused, offline, retrying, and the last successful sync time instead of implying that a polling snapshot is always up to date.
+
 ## 0.1.17
 
 - Receiving automatically uses systemd when available or a private background supervisor when it is offline. The supervisor restarts the WebSocket receiver and runs periodic fallback and scheduled sends.
