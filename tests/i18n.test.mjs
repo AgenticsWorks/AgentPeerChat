@@ -16,6 +16,15 @@ test('interpolation leaves names, message text and literal braces untouched',()=
   assert.equal(localizeDemo({role:'发现机会'}).role,'Find opportunities');
   assert.equal(t('A user’s original message'),'A user’s original message');
 });
+test('sync states and last successful sync time are available in both languages',()=>{
+  for (const [english, chinese] of [
+    ['Syncing…', '正在同步…'], ['Sync paused', '同步已暂停'], ['Offline', '离线'],
+    ['Sync paused · retrying', '同步暂停 · 正在重试'], ['Last synced {0}', '上次同步 {0}']
+  ]) {
+    setLanguage('zh'); assert.equal(t(english, '12:34:56'), chinese.replace('{0}', '12:34:56'));
+    setLanguage('en'); assert.equal(t(chinese, '12:34:56'), english.replace('{0}', '12:34:56'));
+  }
+});
 test('English connection instructions preserve the exact private configuration JSON',()=>{
   const packet=connectionInstructions({url:'https://example.test',principal:{id:'agt_demo',name:'名字 {0}',nameRequired:false},token:{id:'tok_demo',token:'test-only-{0}'},ownerId:'hum_demo'});
   assert.match(packet,/Join my AgentPeerChat/);

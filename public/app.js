@@ -3,10 +3,11 @@ import { chatName, messageDirection } from './chat-presentation.js';
 import { threadPeople, visibleThreads, avatarIcon } from './conversation-view.js';
 import { renderConversationGraph } from './conversation-graph.js';
 import { connectionInstructions } from './connection-kit.js';
+import { createChatSync } from './chat-sync.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, pollDelay: 30000, timer: null, inspector: window.matchMedia('(min-width: 1280px)').matches, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: window.matchMedia('(min-width: 1280px)').matches, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#a45767', '#547767', '#526c9c', '#7861a0', '#916c43', '#477e85'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -35,6 +36,7 @@ async function allPages(path, initial = '0') {
   return { items, next_cursor: cursor, last };
 }
 function authMode(mode) {
+  chatSync.stop();
   state.authMode = mode;
   $('.skip-link').href = '#onboarding'; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
@@ -131,7 +133,7 @@ async function enter() {
   $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? t("拥有者") : t("联系人");
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
-  await refresh(); schedulePoll();
+  await chatSync.start();
   await consumePendingThread();
 }
 // A deep link (#thread=…) survives manual sign-in: the target is held until a session exists.
@@ -141,30 +143,35 @@ async function consumePendingThread() {
   showView('conversations');
   await selectThread(target);
 }
-async function refresh() {
-  state.principals = (await api('/principals')).items;
-  state.threads = (await allPages('/threads')).items;
+async function refreshData(isCurrent) {
+  const principals = (await api('/principals')).items;
+  if (!isCurrent()) return;
+  const threads = (await allPages('/threads')).items;
+  if (!isCurrent()) return;
+  state.principals = principals; state.threads = threads;
   renderPerspective(); renderThreads(); renderPrincipals(); renderGraph();
   if (state.selected) await loadMessages();
-  if(state.me.kind==='owner') await renderPairings();
-  $('#sync-state').textContent = t('Up to date'); $('#sync-state').classList.remove('sync-warning');
-
+  if (isCurrent() && state.me.kind === 'owner') await renderPairings();
 }
-function schedulePoll() {
-  clearTimeout(state.timer);
-  state.timer = setTimeout(async () => {
-    if (!state.me || document.hidden) { schedulePoll(); return; }
-    try { await refresh(); state.pollDelay = 30000; }
-    catch (error) {
-      if (error.status === 401) { state.me = null; authMode('login'); toast(t("Session ended. Sign in again.")); return; }
-      state.pollDelay = Math.min(state.pollDelay * 2, 300000); $('#sync-state').textContent = t('Sync paused · retrying'); $('#sync-state').classList.add('sync-warning');
-    }
-    schedulePoll();
-  }, state.pollDelay + Math.random() * 5000);
+function renderSyncState({ status, lastSyncedAt }) {
+  const node = $('#sync-state');
+  const labels = { idle: '', syncing: t('Syncing…'), paused: t('Sync paused'), offline: t('Offline'), retrying: t('Sync paused · retrying') };
+  node.textContent = status === 'synced'
+    ? t('Last synced {0}', new Date(lastSyncedAt).toLocaleTimeString(getLocale()))
+    : labels[status];
+  node.title = lastSyncedAt === null ? '' : t('Last synced {0}', new Date(lastSyncedAt).toLocaleString(getLocale()));
+  node.classList.toggle('sync-warning', status === 'offline' || status === 'retrying');
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state.me) { state.pollDelay = 30000; schedulePoll(); } });
+const chatSync = createChatSync({
+  refresh: refreshData, onState: renderSyncState,
+  onUnauthorized: () => { state.me = null; authMode('login'); toast(t("Session ended. Sign in again.")); }
+});
+function refresh() { return chatSync.refresh(); }
+document.addEventListener('visibilitychange', chatSync.availabilityChanged);
+window.addEventListener('online', chatSync.availabilityChanged);
+window.addEventListener('offline', chatSync.availabilityChanged);
 $('#logout').addEventListener('click', async () => {
-  try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer); $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
+  try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 function showView(view) {
   state.view = view; $('.skip-link').href = `#${view}`; toggleMenu(false);
@@ -204,9 +211,9 @@ async function selectThread(threadId) {
   try { await loadMessages(true); } catch (error) { if (state.selected === threadId) { $('#message-list').replaceChildren(el('p', 'empty-list error', t('Could not load this conversation. Select it again to retry.'))); toast(error.message); } } finally { if (state.selected === threadId) $('#message-list').setAttribute('aria-busy', 'false'); }
 }
 async function loadMessages(forceScroll = false) {
-  const threadId = state.selected, cursor = state.cursor;
+  const threadId = state.selected, cursor = state.cursor, me = state.me;
   const result = await allPages(`/threads/${threadId}`, cursor);
-  if (state.selected !== threadId || state.cursor !== cursor) return;
+  if (state.me !== me || state.selected !== threadId || state.cursor !== cursor) return;
   $('#chat-title').textContent = chatName(result.last.thread, state.perspective === 'all' ? null : state.perspective);
   $('#chat-members').textContent = conversationSubtitle(result.last.thread);
   $('#chat-avatar').replaceChildren(...conversationAvatar(result.last.thread).childNodes); $('#chat-avatar').className = conversationAvatar(result.last.thread).className;
@@ -257,8 +264,9 @@ async function toggleInspector() { state.inspector = !state.inspector; renderMem
 $('#toggle-activity').addEventListener('click', toggleInspector); $('#group-info').addEventListener('click', toggleInspector); $('#close-inspector').addEventListener('click', () => { state.inspector = false; renderMembers(); });
 async function loadActivity(threadId) {
   if (!state.inspector) return;
+  const me = state.me;
   const activity = (await api(`/threads/${threadId}/activity`)).items;
-  if (state.selected !== threadId) return;
+  if (state.me !== me || state.selected !== threadId) return;
   $('#activity-list').replaceChildren();
   if (!activity.length) $('#activity-list').append(el('p', 'fine', t("还没有消息。")));
   for (const item of activity) {
@@ -591,7 +599,7 @@ async function redeemOwnerLogin(code, target) {
     toast(t("Signed in with a one-time link from your Agent."));
     if (target) { state.pendingThread = target; await consumePendingThread(); }
   } catch (error) {
-    state.me = null; state.selected = null; state.messages = []; clearTimeout(state.timer);
+    state.me = null; state.selected = null; state.messages = [];
     authMode('login');
     $('#auth-error').textContent = error.status === 410
       ? t("This sign-in link expired, was withdrawn, or was already used. Ask your Agent for a new one.")
@@ -602,7 +610,7 @@ async function redeemOwnerLogin(code, target) {
 window.addEventListener('hashchange',()=>{
  const params=new URLSearchParams(location.hash.slice(1));
  if(params.has('access_key')||params.has('invite')||params.has('agent-invite')||params.has('owner-login')){
-  clearTimeout(state.timer);$('#shell').hidden=true;$('#boot-state').hidden=false;
+  chatSync.stop();$('#shell').hidden=true;$('#boot-state').hidden=false;
   void boot();
   return;
  }
@@ -719,7 +727,9 @@ function renderGraphDetails(scope){
 boot();
 
 async function renderPairings(){
- const result=await api('/pairings'),list=$('#pairing-list');list.replaceChildren();
+ const me=state.me,result=await api('/pairings');
+ if(state.me!==me)return;
+ const list=$('#pairing-list');list.replaceChildren();
  const pending=result.items.filter(p=>p.status==='pending');$('#pairing-requests').hidden=!pending.length;
  for(const p of pending){
   const row=el('div','pairing-request');
@@ -739,6 +749,7 @@ async function renderPairings(){
 document.addEventListener("agentpeerchat:languagechange",()=>{
  if(state.inviteCode){void showAgentInvitation(state.inviteCode);return;}
  if(!state.me){authMode(state.authMode);return;}
+ renderSyncState(chatSync.snapshot());
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
  renderPerspective();renderThreads();renderPrincipals();renderMembers();renderMessages();renderGraph();
  if(state.perspective!=="all")$("#observe-actions span").textContent=t("Viewing as {0} · Read only",humanName(state.perspective));

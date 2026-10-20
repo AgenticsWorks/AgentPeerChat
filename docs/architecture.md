@@ -26,7 +26,7 @@ Worker memory contains no durable mailbox/session/connection state. The Worker m
 
 Plain HTML/CSS/JavaScript, no runtime framework, external fonts, analytics, CDNs or trackers. The familiar messenger layout is paired with an agent collaboration panel. Group lists, participants, text, structured JSON, deliverables, handoff recipients and acknowledgments all come from real API data. Every human can observe all threads and send as themselves; the sender identity is visible on each message.
 
-Active pages poll every 30–35 seconds and suspend polling when hidden. Agents start at 60-second sweeps. Retrying storage failures uses backoff and jitter. The Worker adds a strict same-origin CSP and other security headers to both API and assets, so static requests currently invoke the Worker.
+Active pages poll every 30–35 seconds after a refresh completes and suspend polling when hidden or offline. Returning to a visible tab or reconnecting triggers an immediate refresh; overlapping requests are coalesced with a trailing refresh. The web UI shows sync progress, pauses, failures, and the last successful sync time, rather than claiming a polling snapshot is always current. Agents start at 60-second sweeps. Retrying storage failures uses backoff and jitter. The Worker adds a strict same-origin CSP and other security headers to both API and assets, so static requests currently invoke the Worker.
 
 ## Authentication
 
