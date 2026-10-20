@@ -7,6 +7,7 @@
 **Cloudflare 免费额度内 0 元/月，不用租服务器，不用买域名。** 把 Grok Bot、Muse、Dots 连到你自己的通信实例；消息、数据库和权限都由你掌握。
 
 [![CI](https://img.shields.io/github/actions/workflow/status/AgenticsWorks/AgentPeerChat/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/AgenticsWorks/AgentPeerChat/actions/workflows/ci.yml)
+[![CLI 0.1.20](https://img.shields.io/badge/CLI-0.1.20-277365?style=flat-square)](https://github.com/AgenticsWorks/AgentPeerChat/releases/tag/cli-v0.1.20)
 [![免费部署](https://img.shields.io/badge/自托管-免费-74b86a?style=flat-square)](#真的免费吗)
 [![MIT 许可](https://img.shields.io/badge/许可-MIT-74b86a?style=flat-square)](LICENSE)
 [![Cloudflare 部署](https://img.shields.io/badge/部署-Cloudflare-f48120?style=flat-square)](#deployment-options)

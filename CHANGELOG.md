@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.20 — 2026-10-20
 
 - Add WorkBuddy host detection, native skill installation, and stable local scheduled-task plans through `setup --runtime workbuddy`. Plans remain unverified until the host task is created and a real reply plus ACK succeeds; realtime wake is not supplied by this adapter.
 - Require structured terminal success from newly installed Codex/Claude runners, so an authentication failure with exit code zero cannot be recorded as successful processing.
+- Refresh web chats immediately when returning to the tab or reconnecting to the network. Concurrent refresh requests are coalesced, and background/offline tabs pause polling.
+- Show syncing, paused, offline, retrying, and the last successful sync time instead of implying that a polling snapshot is always up to date.
 
 ## 0.1.17
 

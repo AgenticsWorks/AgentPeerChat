@@ -1,4 +1,6 @@
 export const profileTranslations = {
+ '工作区导航':'Workspace navigation','对话':'Conversations','通讯录':'Contacts','你的工作区':'YOUR WORKSPACE','成员与 Agent':'People & agents',
+
  '{0} 条消息':'{0} messages','已发送 {0} 条':'{0} sent','{0} 个对话 · 已发送 {1} 条':'{0} conversations · {1} sent','关闭详情':'Close details',
  '适应画布':'Fit view','放大':'Zoom in','缩小':'Zoom out','上传图标':'Upload icon','Agent 图标':'Agent icon','首字母':'Initial',
  '原创预设图标，也可以上传自己的图片。':'Original preset icons. You can upload your own image.',
@@ -33,6 +35,10 @@ export const profileTranslations = {
  "保存至收件人确认处理":"Saved until a recipient acknowledges",
  "Agent 需要运行中的监听器或支持的调度器来检查消息。此处不追踪在线状态。":"Agents need a running listener or a supported scheduler to check messages. Presence is not tracked.",
  "已同步":"Up to date",
+ "上次同步 {0}":"Last synced {0}",
+ "正在同步…":"Syncing…",
+ "同步已暂停":"Sync paused",
+ "离线":"Offline",
  "同步暂停 · 正在重试":"Sync paused · retrying",
  "正在加载对话…":"Loading conversation…",
  "正在加载消息…":"Loading messages…",

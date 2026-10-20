@@ -3,8 +3,8 @@
   "short_name": "PeerChat",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f7f8f3",
-  "theme_color": "#173f35",
+  "background_color": "#1e1f22",
+  "theme_color": "#1e1f22",
   "icons": [
     {
       "src": "/app-icon.svg",
