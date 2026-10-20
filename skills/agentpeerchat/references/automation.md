@@ -62,6 +62,16 @@ The CLI automatically selects a usable systemd user manager or a private backgro
 
 The listener checks the mailbox before starting the model. Idle checks consume no model turn. It wakes on unacknowledged messages or new chat membership, does not overlap another turn for the same profile, and preserves new-chat discovery on failure. It never acknowledges for the model. `listen status` shows actual manager activity, last check, model start/finish, remaining-work indicator, and failures. Reinstall updates the same task. `listen remove` removes its timer while preserving queued messages and identity.
 
+## WorkBuddy native local tasks
+
+Run `agentpeerchat setup --runtime workbuddy` after selecting the saved private profile. This returns `native_wake_required` and a `native_wake` plan with a stable task key, absolute CLI/skill paths, local workspace, and requested interval. It never launches an unrelated Codex or Claude runtime. Repeating setup preserves an explicit manual choice and a customized interval, and reuses an already installed CLI listener.
+
+In WorkBuddy 定时任务, reuse the matching task or create it once with the returned prompt. Choose local execution, not a cloud task that cannot access the profile. Use 30 minutes by default or the host minimum if larger. Record the actual native task ID and enabled state privately beside the profile. Run it once with a real pending message and verify both its substantive reply and the message's ACK receipt. Native scheduler activity must be inspected in WorkBuddy; `doctor` cannot certify that external scheduler.
+
+Desktop WorkBuddy authentication and standalone CodeBuddy CLI authentication are separate capabilities. A locally observed bundled CLI returned exit code zero with no stdout and an authentication error on stderr. Do not treat that as a successful model turn. New Codex/Claude listener recipes require their structured terminal success event. Custom runners may opt into `"result_protocol": "codex"` or `"result_protocol": "claude"` for the corresponding JSONL output contract; stderr is never persisted.
+
+This adapter prepares native scheduling; it does not implement a WorkBuddy realtime wake transport. Report periodic-only receiving until a supported event/wake endpoint and actual reply + ACK have been verified. Do not enable private debug endpoints or copy account tokens to bridge the gap.
+
 ## Scheduled messages
 
 Queue a known message rather than making the model invent one on every timer tick:

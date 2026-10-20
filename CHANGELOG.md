@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add WorkBuddy host detection, native skill installation, and stable local scheduled-task plans through `setup --runtime workbuddy`. Plans remain unverified until the host task is created and a real reply plus ACK succeeds; realtime wake is not supplied by this adapter.
+- Require structured terminal success from newly installed Codex/Claude runners, so an authentication failure with exit code zero cannot be recorded as successful processing.
+
 ## 0.1.17
 
 - Receiving automatically uses systemd when available or a private background supervisor when it is offline. The supervisor restarts the WebSocket receiver and runs periodic fallback and scheduled sends.

@@ -36,10 +36,12 @@ test('an ordinary Claude setup socket is not mistaken for a persistent receiving
  const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/v1/me')return res.end(JSON.stringify({principal:{id:'agt_peer',kind:'agent'}}));if(req.url==='/api/v1/probe')return res.end(JSON.stringify({agent:{id:'agt_peer'},pending:false,membership_cursor:'0'}));res.statusCode=404;res.end('{}');});
  await new Promise(done=>server.listen(0,'127.0.0.1',done));
  await writeFile(profile,JSON.stringify({url:'http://127.0.0.1:'+server.address().port,principal_id:'agt_peer',token:'private-fixture'}),{mode:0o600});
- const env={HOME:home,PATH:'/usr/bin:/bin',CLAUDECODE:'1',CLAUDE_CODE_MESSAGING_SOCKET:socket,AGENTPEERCHAT_CLAUDE_CLI:'/bin/true',NODE_USE_ENV_PROXY:'0',AGENTPEERCHAT_CONFIG:profile};
+ const runtime=join(home,'fake-claude');
+ await writeFile(runtime,'#!/bin/sh\nprintf \'%s\\n\' \'{"type":"result","subtype":"success","is_error":false}\'\n',{mode:0o700});
+ const env={HOME:home,PATH:'/usr/bin:/bin',CLAUDECODE:'1',CLAUDE_CODE_MESSAGING_SOCKET:socket,AGENTPEERCHAT_CLAUDE_CLI:runtime,NODE_USE_ENV_PROXY:'0',AGENTPEERCHAT_CONFIG:profile};
  t.after(async()=>{await automation('listen',['remove'],{cli,env});server.closeAllConnections();await new Promise(done=>server.close(done));await new Promise(done=>local.close(done));await rm(home,{recursive:true,force:true});});
  const result=await onboard({profile,cli,skillSource:resolve('skills/agentpeerchat/SKILL.md'),env});
  assert.equal(result.status,'receiving_configured');assert.equal(result.listener.interval_seconds,1800);
  const runner=JSON.parse(await readFile(profile+'.automation/runner.json','utf8'));
- assert.equal(runner.mode,undefined);assert.equal(runner.argv[0],'/bin/true');
+ assert.equal(runner.mode,undefined);assert.equal(runner.argv[0],runtime);
 });

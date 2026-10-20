@@ -78,6 +78,8 @@
     "scripts/listener-process.mjs",
     "scripts/onboarding.mjs",
     "scripts/connection-packet.mjs",
-    "scripts/private-profile.mjs"
+    "scripts/private-profile.mjs",
+    "scripts/native-wake.mjs",
+    "scripts/runtime-result.mjs"
   ]
 }
