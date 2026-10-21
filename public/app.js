@@ -404,32 +404,45 @@ async function connectNewAgent(name = '', avatar = null, syncPreference) {
   await showAgentConnection({...result.principal,nameRequired:result.name_required}, null, result.pairing, syncPreference);
   await refresh(); toast(t("把指令交给 Agent，它会自动完成连接。"));
 }
-function avatarPicker(initial = null) {
+function avatarPicker(initial = null, nameInput) {
   let selected=initial;
-  const section=el('div','avatar-picker'), preview=el('div','avatar-preview');
-  const update=()=>{preview.replaceChildren(personAvatar({name:'Agent',avatar:selected}));};
+  const section=el('fieldset','avatar-picker'), preview=el('div','avatar-preview');
   const choices=el('div','avatar-options');
-  for(const [value,label] of [[null,'Initial'],['preset:dots','Dots'],['preset:grok','Grok Bot'],['preset:muse','Muse']]){
-    const button=el('button','secondary');button.append(personAvatar({name:label,avatar:value}),el('span','',t(label)));button.type='button';button.addEventListener('click',()=>{selected=value;update();});choices.append(button);
+  const options=[];
+  const update=()=>{
+    const name=nameInput?.value.trim()||'Agent';
+    preview.replaceChildren(personAvatar({name,avatar:selected}),el('span','fine',t('Icon preview')));
+    for(const {value,button} of options){
+      button.setAttribute('aria-pressed',String(selected===value));
+      if(value===null){const icon=personAvatar({name,avatar:null});icon.setAttribute('aria-hidden','true');button.firstElementChild.replaceWith(icon);}
+    }
+  };
+  for(const [value,label] of [[null,'Default icon'],['preset:dots','Dots'],['preset:grok','Grok Bot'],['preset:muse','Muse']]){
+    const button=el('button','secondary avatar-option'), check=el('span','avatar-check','✓');
+    check.setAttribute('aria-hidden','true');
+    const icon=personAvatar({name:label,avatar:value});icon.setAttribute('aria-hidden','true');
+    button.append(icon,el('span','avatar-option-label',t(label)),check);button.type='button';
+    button.addEventListener('click',()=>{selected=value;update();});choices.append(button);options.push({value,button});
   }
   const upload=el('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';upload.setAttribute('aria-label',t('Upload icon'));upload.hidden=true;
-  const uploadButton=el('button','secondary',t('Upload icon'));uploadButton.type='button';uploadButton.addEventListener('click',()=>upload.click());
+  const uploadButton=el('button','secondary avatar-upload',t('Upload icon'));uploadButton.type='button';uploadButton.addEventListener('click',()=>upload.click());
   upload.addEventListener('change',async()=>{
     const file=upload.files[0];if(!file)return;
     try {
       if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>5*1024*1024)throw Error(t('Choose a PNG, JPEG or WebP image under 5 MB.'));
       const bitmap=await createImageBitmap(file), canvas=document.createElement('canvas');canvas.width=canvas.height=128;
       const ctx=canvas.getContext('2d'), size=Math.min(bitmap.width,bitmap.height);ctx.drawImage(bitmap,(bitmap.width-size)/2,(bitmap.height-size)/2,size,size,0,0,128,128);bitmap.close();
-      selected=canvas.toDataURL('image/webp',0.85);update();
+      selected=canvas.toDataURL('image/webp',0.85);$('#modal-error').textContent='';update();
     }catch(error){$('#modal-error').textContent=error.message;}
   });
-  section.append(el('strong','',t('Agent icon')),preview,choices,uploadButton,upload,el('small','fine',t('Original preset icons. You can upload your own image.')));$('#modal-fields').append(section);update();return()=>selected;
+  section.append(el('legend','',t('Agent icon')),preview,choices,uploadButton,upload,el('small','fine',t('Original preset icons. You can upload your own image.')));$('#modal-fields').append(section);
+  nameInput?.addEventListener('input',update);update();return()=>selected;
 }
 function connectAgentDialog() {
   let avatar;
   openModal(t('Connect your agent'),t('Choose a name and icon, then copy the connection instructions to your agent.'),async data=>{await connectNewAgent(data.get('name')||'',avatar(),{mode:'auto'});});
-  const name=field(t('Agent name (optional)'),'name');name.required=false;name.maxLength=80;avatar=avatarPicker();
-  $('#modal-fields').append(el('p','schedule-notice',t('Listening, reconnection and Agent invitations are enabled automatically. Copy the instructions to your Agent to connect.')));
+  const name=field(t('Agent name (optional)'),'name');name.required=false;name.maxLength=80;avatar=avatarPicker(null,name);
+  $('#modal-fields').append(el('p','schedule-notice',t('Copy the instructions to your agent. Receiving uses realtime notifications or scheduled checks, depending on its host. Verify a reply and acknowledgment after setup.')));
   $('#modal-submit').textContent=t('Generate instructions');
 }
 $('#connect-agent-button').addEventListener('click',connectAgentDialog);
@@ -437,7 +450,7 @@ $('#create-agent').addEventListener('click',connectAgentDialog);
 function editPrincipal(p){
   let avatar;
   openModal(t('Edit profile'),'',async data=>{await api(`/principals/${p.id}`,{method:'PATCH',data:{name:data.get('name'),avatar:avatar()}});closeModal();await refresh();});
-  const name=field(t('Name'),'name');name.value=p.name;name.maxLength=80;avatar=avatarPicker(p.avatar);$('#modal-submit').textContent=t('Save');
+  const name=field(t('Name'),'name');name.value=p.name;name.maxLength=80;avatar=avatarPicker(p.avatar,name);$('#modal-submit').textContent=t('Save');
 }
 $('#show-disabled').addEventListener('change', renderPrincipals);
 function renderPrincipals() {

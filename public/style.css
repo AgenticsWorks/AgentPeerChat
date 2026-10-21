@@ -266,6 +266,18 @@ dialog::backdrop{background:#101114aa}
 dialog h2{font-size:24px;letter-spacing:-.5px}
 dialog form>p{color:var(--muted);font-size:12px;line-height:1.8;margin-top:10px}
 #modal-submit{width:100%;margin-top:20px}
+.avatar-picker{display:grid;gap:12px;min-width:0;margin:0;padding:0;border:0}
+.avatar-picker legend{padding:0;margin-bottom:12px;font-size:12px;font-weight:650}
+.avatar-preview{display:flex;align-items:center;gap:10px}
+.avatar-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.avatar-option{display:grid;grid-template-columns:28px minmax(0,1fr) 12px;gap:8px;min-width:0;min-height:58px;padding:10px 8px;text-align:left;font-size:12px}
+.avatar-option .avatar{width:28px;height:28px;font-size:14px}
+.avatar-option-label{overflow-wrap:anywhere}
+.avatar-option[aria-pressed=true]{border-color:var(--accent);background:var(--selection)}
+.avatar-check{visibility:hidden;color:var(--accent)}
+.avatar-option[aria-pressed=true] .avatar-check{visibility:visible}
+.avatar-upload{justify-self:start}
+@media(max-width:480px){dialog:has(.avatar-picker){padding:20px}}
 .check-list{max-height:230px;overflow:auto;background:var(--base);border:1px solid var(--line);border-radius:5px;padding:5px 12px;margin-top:10px}
 .check-list label{display:flex;align-items:center;gap:10px;margin:12px 0;font-weight:400}
 .secret-box{width:100%;font-family:monospace;font-size:11px;min-height:90px;overflow-wrap:anywhere}
