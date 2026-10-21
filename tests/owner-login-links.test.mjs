@@ -125,7 +125,7 @@ test('redeem requires a same-origin POST, mints an HttpOnly session and never an
   assert.equal(redeemed.status, 200); assert.equal(redeemed.data.principal.kind, 'owner'); assert.equal(redeemed.data.principal.id, ownerId);
   assert.equal(redeemed.data.access_key, undefined, 'redemption returns no access key');
   const setCookie = redeemed.response.headers.getSetCookie()[0];
-  assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /SameSite=Strict/); assert.match(setCookie, /Max-Age=7776000/);
+  assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /SameSite=Strict/); assert.match(setCookie, /Max-Age=34560000/);
   loginCookie = setCookie.split(';')[0];
   const me = await call('/me', { cookie: loginCookie });
   assert.equal(me.status, 200); assert.equal(me.data.principal.id, ownerId);
@@ -136,9 +136,9 @@ test('redeem requires a same-origin POST, mints an HttpOnly session and never an
   const secondCookie = second.response.headers.getSetCookie()[0].split(';')[0];
   assert.equal((await call(`/threads/${group.id}`, { cookie: secondCookie })).status, 200, 'the deep-linked thread opens after one-use login');
   assert.equal((await call(`/threads/${group.id}`, { key: outsider.key })).status, 404, 'non-members still cannot');
-  // Browser sessions are remembered for 90 days and stay bound to the grant that minted them.
+  // Browser sessions persist until withdrawal and stay bound to their original grant.
   const sessionRow = await db.prepare("SELECT * FROM tokens WHERE kind = 'session' AND owner_login_grant_id = ?").bind(targeted.id).first();
-  assert.ok(sessionRow.expires_at > new Date(Date.now() + 89 * 86400000).toISOString() && sessionRow.expires_at <= new Date(Date.now() + 91 * 86400000).toISOString());
+  assert.equal(sessionRow.expires_at, null);
   assert.ok(!JSON.stringify(sessionRow).includes(secondCookie.slice('ag_session='.length)), 'only the session hash is stored');
 });
 

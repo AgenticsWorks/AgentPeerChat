@@ -5,7 +5,7 @@ const repo=resolve('.'),origin='https://login-qa.example',setup='synthetic-setup
 const compiled=await build({entryPoints:[repo+'/src/index.ts'],bundle:true,format:'esm',platform:'node',write:false});
 const worker=(await import('data:text/javascript;base64,'+Buffer.from(compiled.outputFiles[0].text).toString('base64'))).default;
 async function fixture(t){const db=new SQLiteDatabase(':memory:');t.after(()=>db.close());await db.migrate(repo+'/migrations');
-async function call(path,{method='GET',key,cookie,body}={}){const r=await worker.fetch(new Request(origin+'/api/v1'+path,{method,headers:{Origin:origin,...(key?{Authorization:'Bearer '+key}:{}),...(cookie?{Cookie:cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined}),{DB:db,SETUP_SECRET:setup,ASSETS:{fetch:async()=>new Response('assets')}});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
+async function call(path,{method='GET',key,cookie,body}={}){const r=await worker.fetch(new Request(origin+'/api/v1'+path,{method,headers:{Origin:origin,...(key?{Authorization:'Bearer '+key}:{}),...(cookie?{Cookie:cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined}),{DB:db,SETUP_SECRET:setup,ASSETS:{fetch:async()=>new Response('assets')}});return {status:r.status,data:await r.json(),setCookie:r.headers.get('set-cookie'),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
 const o=await call('/setup',{method:'POST',body:{setup_secret:setup,name:'QA Owner'}}),owner=o.data.access_key;
 const d=await call('/agents',{method:'POST',key:owner,body:{name:'QA Dots'}});assert.equal(d.status,201);const dots=d.data;
 const permission=on=>call('/principals/'+dots.principal.id,{method:'PATCH',key:owner,body:{can_help_owner_login:on}});
@@ -45,4 +45,34 @@ test('upgrading gives existing active and pending Agents browser access without 
  await db.prepare('UPDATE principals SET can_help_owner_login=0 WHERE id=?').bind(agent.principal.id).run();
  await call('/agents',owner,{name:'Another trusted Agent'});
  assert.equal((await call('/owner-login-links',agent.token.token,{})).status,403,'an explicit later withdrawal stays off');
+});
+
+
+test('remembered browsers have no fixed expiry and restore the same session after a year', async t=>{
+ const q=await fixture(t),r=await q.redeem(await q.create());assert.equal(r.status,200);
+ const ancient=new Date(Date.now()-366*86400000).toISOString();
+ await q.db.prepare('UPDATE owner_login_grants SET redeemed_at=? WHERE redeemed_at IS NOT NULL').bind(ancient).run();
+ await q.db.prepare("UPDATE tokens SET created_at=? WHERE kind='session'").bind(ancient).run();
+ assert.equal((await q.create()).status,201,'routine cleanup must keep the remembered browser');
+ const before=await q.db.prepare("SELECT id,hash FROM tokens WHERE kind='session'").all();
+ const me=await q.call('/me',{cookie:r.cookie});assert.equal(me.status,200);
+ assert.match(me.setCookie,/Max-Age=34560000/);assert.match(me.setCookie,/HttpOnly/);
+ assert.equal(me.cookie,r.cookie,'restore renews the same cookie without rotating identity');
+ assert.deepEqual(await q.db.prepare("SELECT id,hash FROM tokens WHERE kind='session'").all(),before);
+ assert.equal((await q.call('/me',{key:q.owner})).setCookie,null,'API keys are never written into cookies');
+ await q.call('/session',{method:'DELETE',cookie:r.cookie});
+ assert.equal((await q.call('/me',{cookie:r.cookie})).status,401,'explicit sign-out remains effective');
+});
+
+test('persistent-session upgrade preserves live browsers without reviving expired or revoked ones', async t=>{
+ const q=await fixture(t);await q.redeem(await q.create());await q.redeem(await q.create());await q.redeem(await q.create());
+ const rows=(await q.db.prepare("SELECT id FROM tokens WHERE kind='session' ORDER BY id").all()).results;
+ const future=new Date(Date.now()+86400000).toISOString();
+ await q.db.prepare("UPDATE tokens SET expires_at=? WHERE kind='session'").bind(future).run();
+ await q.db.prepare("UPDATE tokens SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?").bind(rows[1].id).run();
+ await q.db.prepare("UPDATE tokens SET revoked_at='2026-01-01T00:00:00.000Z' WHERE id=?").bind(rows[2].id).run();
+ const before=(await q.db.prepare("SELECT * FROM tokens WHERE kind='session' ORDER BY id").all()).results;
+ await q.db.exec(await readFile(repo+'/migrations/0014_remember_browser_sessions.sql','utf8'));
+ const after=(await q.db.prepare("SELECT * FROM tokens WHERE kind='session' ORDER BY id").all()).results;
+ assert.deepEqual(after,[{...before[0],expires_at:null},before[1],before[2]]);
 });

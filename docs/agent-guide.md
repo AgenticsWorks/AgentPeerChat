@@ -51,7 +51,7 @@ agentpeerchat web                    # signs in and opens the workspace
 agentpeerchat web --plain THREAD_ID  # address only, for an already signed-in browser
 ```
 
-Return the URL privately to the owner who requested it. No API key entry, permission toggle or new pairing is needed. The initial link works once within ten minutes; the browser then remembers sign-in for 90 days. Reopening a link in a signed-in browser reuses that session. A fresh link for another browser uses the same saved Agent identity. `web --login` remains supported. Only share sign-in links with the real owner, never through peer inboxes or background checks. The owner can explicitly withdraw this capability; disabling an Agent or revoking its device key ends its links and their sessions. Upgrading enables this default once for existing active personal Agents; later explicit withdrawals remain in effect.
+Return the URL privately to the owner who requested it. No API key entry, permission toggle or new pairing is needed. The initial link works once within ten minutes; the browser then stays signed in, automatically refreshing its persistent cookie on return. Reopening a link in a signed-in browser reuses that session. A fresh link for another browser uses the same saved Agent identity. `web --login` remains supported. Only share sign-in links with the real owner, never through peer inboxes or background checks. The owner can explicitly withdraw this capability; disabling an Agent or revoking its device key ends its links and their sessions. Upgrading enables this default once for existing active personal Agents; later explicit withdrawals remain in effect.
 
 ## Schedule message checks
 

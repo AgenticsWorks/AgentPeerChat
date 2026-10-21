@@ -6,9 +6,8 @@ import { body, checkOrigin, fail, hash, id, secret, sessionCookie, str } from '.
 // The link code is a 256-bit secret shown once and stored only as a SHA-256 hash; redeeming
 // it requires a same-origin POST and mints an HttpOnly session, never an access key.
 const TTL_MINUTES = 10;
-const SESSION_HOURS = 90 * 24;
 const QUOTA = 10;
-const RETENTION_HOURS = SESSION_HOURS + 24;
+const RETENTION_HOURS = 24;
 const NEEDS_GRANT = 'Browser access was explicitly disabled for this Agent. Its saved pairing is unchanged; the owner can restore browser access in Contacts.';
 
 const time = () => new Date().toISOString();
@@ -22,17 +21,17 @@ const ISSUER_AUTHORIZED = `EXISTS (SELECT 1 FROM principals issuer WHERE issuer.
   AND issuer.kind = 'agent' AND issuer.active = 1 AND issuer.can_help_owner_login = 1)
   AND EXISTS (SELECT 1 FROM tokens issuer_key WHERE issuer_key.id = owner_login_grants.issuer_token_id
   AND issuer_key.revoked_at IS NULL AND (issuer_key.expires_at IS NULL OR issuer_key.expires_at > ?))`;
-// Expired unredeemed grants and long-redeemed ones are removed with every write, so the
-// table cannot grow without bound. A redeemed row keeps its session binding until that
-// session has necessarily expired (authenticate rechecks it on every request), and the
-// expired session token row is dropped first so the grant delete respects the foreign key.
-const expiredGrants = (now: string) => `(redeemed_at IS NULL AND expires_at <= ?) OR (redeemed_at IS NOT NULL AND redeemed_at < ?)`;
+// Keep the grant binding for as long as its remembered browser remains authorized.
+// Only orphaned, revoked or expired sessions are eligible for retention cleanup.
+const expiredGrants = () => `(redeemed_at IS NULL AND expires_at <= ?) OR (redeemed_at IS NOT NULL AND redeemed_at < ?
+  AND NOT EXISTS (SELECT 1 FROM tokens live WHERE live.owner_login_grant_id = owner_login_grants.id
+    AND live.revoked_at IS NULL AND (live.expires_at IS NULL OR live.expires_at > ?)))`;
 const cleanupStatements = (env: Env, now: string): D1PreparedStatement[] => [
   env.DB.prepare(`DELETE FROM tokens WHERE kind = 'session' AND owner_login_grant_id IN
-    (SELECT id FROM owner_login_grants WHERE ${expiredGrants(now)})`)
-    .bind(now, new Date(Date.now() - RETENTION_HOURS * 3600000).toISOString()),
-  env.DB.prepare(`DELETE FROM owner_login_grants WHERE ${expiredGrants(now)}`)
-    .bind(now, new Date(Date.now() - RETENTION_HOURS * 3600000).toISOString())
+    (SELECT id FROM owner_login_grants WHERE ${expiredGrants()})`)
+    .bind(now, new Date(Date.now() - RETENTION_HOURS * 3600000).toISOString(), now),
+  env.DB.prepare(`DELETE FROM owner_login_grants WHERE ${expiredGrants()}`)
+    .bind(now, new Date(Date.now() - RETENTION_HOURS * 3600000).toISOString(), now)
 ];
 
 async function instanceOwner(env: Env) {
@@ -48,7 +47,7 @@ export async function ownerLoginRedeem(request: Request, env: Env, path: string)
   checkOrigin(request);
   const code = str((await body(request)).code, 'code', 256), codeHash = await hash(code);
   const mark = crypto.randomUUID(), redeemedAt = time();
-  const session = secret('ags'), sessionId = id('tok'), expires = new Date(Date.now() + SESSION_HOURS * 3600000).toISOString();
+  const session = secret('ags'), sessionId = id('tok');
   await env.DB.batch([
     ...cleanupStatements(env, redeemedAt),
     // Only the real unredeemed-to-redeemed transition carries this request's unique mark, so a
@@ -58,7 +57,7 @@ export async function ownerLoginRedeem(request: Request, env: Env, path: string)
     env.DB.prepare(`INSERT INTO tokens(id, principal_id, hash, label, kind, parent_id, expires_at, owner_login_grant_id)
       SELECT ?, g.owner_id, ?, 'Owner sign-in from Agent link', 'session', g.issuer_token_id, ?, g.id
       FROM owner_login_grants g WHERE g.redeem_mark = ? AND g.redeemed_at IS NOT NULL`)
-      .bind(sessionId, await hash(session), expires, mark),
+      .bind(sessionId, await hash(session), null, mark),
     env.DB.prepare('UPDATE owner_login_grants SET redeemed_session_id = ? WHERE redeem_mark = ? AND redeemed_session_id IS NULL').bind(sessionId, mark)
   ]);
   const grant = await env.DB.prepare('SELECT redeemed_session_id, owner_id FROM owner_login_grants WHERE code_hash = ?').bind(codeHash)
@@ -67,7 +66,7 @@ export async function ownerLoginRedeem(request: Request, env: Env, path: string)
     fail(410, 'invalid_login_link', 'This sign-in link expired, was withdrawn, or was already used. Ask the Agent for a new one.');
   const owner = await env.DB.prepare('SELECT id, name, kind FROM principals WHERE id = ?').bind(grant.owner_id).first();
   // No access key is returned: the browser session is the only credential this path mints.
-  return json({ principal: owner }, 200, { 'Set-Cookie': sessionCookie(request, session, false, SESSION_HOURS * 3600) });
+  return json({ principal: owner }, 200, { 'Set-Cookie': sessionCookie(request, session) });
 }
 
 export async function ownerLoginAgent(request: Request, env: Env, path: string, p: Principal, tokenId: string, tokenKind: 'access' | 'session') {

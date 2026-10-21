@@ -15,10 +15,15 @@ export async function hash(value: string) {
 }
 export async function equalsSecret(a: string, b: string) { return await hash(a) === await hash(b); }
 
+// Browsers renew this persistent cookie when they restore their saved session.
+// Server-side sessions remain valid until explicitly revoked.
+export const BROWSER_COOKIE_MAX_AGE = 400 * 86400;
+export const browserSessionToken = (request: Request) => request.headers.get('Cookie')?.split(';').map(s => s.trim()).find(s => s.startsWith('ag_session='))?.slice(11);
+
 export interface Identity { principal: Principal; tokenId: string; tokenKind: 'access' | 'session' }
 export async function authenticate(request: Request, env: Env): Promise<Identity> {
   const auth = request.headers.get('Authorization');
-  const cookie = request.headers.get('Cookie')?.split(';').map(s => s.trim()).find(s => s.startsWith('ag_session='))?.slice(11);
+  const cookie = browserSessionToken(request);
   const token = auth ? (/^Bearer (\S+)$/.exec(auth)?.[1] ?? '') : cookie;
   if (!token) fail(401, 'unauthorized', 'Sign in or provide a Bearer access key.');
   const row = await env.DB.prepare(`SELECT p.*, t.id AS token_id, t.kind AS token_kind FROM tokens t
@@ -84,11 +89,11 @@ export function pagination(url: URL) {
 export async function mintToken(env: Env, principal: string, label: string, kind: 'access' | 'session' = 'access', parent: string | null = null) {
   const token = secret(kind === 'session' ? 'ags' : 'agt');
   const tokenId = id('tok');
-  const expires = kind === 'session' ? new Date(Date.now() + 7 * 86400000).toISOString() : null;
+  const expires = null;
   await env.DB.prepare('INSERT INTO tokens(id, principal_id, hash, label, kind, parent_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(tokenId, principal, await hash(token), label, kind, parent, expires).run();
   return { id: tokenId, token, expires_at: expires };
 }
-export function sessionCookie(request: Request, token: string, clear = false, maxAge = 7 * 86400) {
+export function sessionCookie(request: Request, token: string, clear = false, maxAge = BROWSER_COOKIE_MAX_AGE) {
   return `ag_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear ? 0 : maxAge}${new URL(request.url).protocol === 'https:' ? '; Secure' : ''}`;
 }

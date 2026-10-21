@@ -4,7 +4,7 @@ import { pairingPublic, pairingOwner } from './pairing';
 import { ownerLoginRedeem, ownerLoginAgent } from './owner-login';
 import type { Env, Message, Principal } from './types';
 import { D1MessageStore, IdempotencyConflict } from './store';
-import { ApiError, authenticate, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
+import { ApiError, authenticate, browserSessionToken, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
 import pkg from '../package.json';
 
 const json = (data: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(data), {
@@ -106,7 +106,11 @@ async function api(request: Request, env: Env, url: URL) {
     if (p.kind !== 'agent' || identity.tokenKind !== 'access') fail(403, 'agent_required', 'Use a connected Agent identity.');
     return json(await realtimeTicket(env, p.id, identity.tokenId), 201);
   }
-  if (path === '/me' && method === 'GET') return json({ principal: p });
+  if (path === '/me' && method === 'GET') {
+    // Refresh the browser's cookie on restore, without minting an identity or writing D1.
+    const token = !request.headers.has('Authorization') && identity.tokenKind === 'session' ? browserSessionToken(request) : null;
+    return json({ principal: p }, 200, token ? { 'Set-Cookie': sessionCookie(request, token) } : {});
+  }
   if (path === '/probe' && method === 'GET') {
     if (p.kind !== 'agent') fail(403, 'agent_required', 'Only an Agent may probe its inbox.');
     // Memberships are append-only through the API. Their own rowids also detect
