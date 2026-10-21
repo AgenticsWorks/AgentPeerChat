@@ -2065,7 +2065,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
   };
   async function flush() {
     const items = await queue();
-    const delivered = [];
+    const delivered2 = [];
     validateOutbox(items, identity);
     const due = items.filter((job) => !job.cancelled && !job.completed_at && Date.parse(job.next_at) <= Date.now());
     if (due.length) await verifyIdentity();
@@ -2080,13 +2080,13 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
           const period = job.every_seconds * 1e3, due2 = Date.parse(job.next_at);
           job.next_at = new Date(due2 + (Math.floor((Date.now() - due2) / period) + 1) * period).toISOString();
         } else job.completed_at = job.last_sent_at;
-        delivered.push({ id: job.id, message_id: job.last_message_id });
+        delivered2.push({ id: job.id, message_id: job.last_message_id });
       } catch {
         job.last_error = "Delivery failed; occurrence retained for retry.";
       }
       await privateWrite(queuePath, items);
     }
-    return delivered;
+    return delivered2;
   }
   async function verifyWake() {
     const previous2 = await readJSON(join2(root, "wake.json"), null), runner = settings ? await readJSON(settings.runner_file, null) : null;
@@ -2311,10 +2311,17 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env } 
   }
   if (action !== "run") throw new Error("Use listen install --runtime codex|claude [--workspace DIRECTORY] [--every 30m] [--manager auto|systemd|process] [--system], --runner-file FILE for other runtimes, status, run, foreground, or remove.");
   if (!settings) throw new Error("No listener installed for this profile.");
+  let dispatched;
+  try {
+    dispatched = await locked(join2(root, "outbox-lock.json"), flush);
+  } catch (error) {
+    await privateWrite(statePath, { principal_id: identity.principal_id, url: identity.url, checked_at: (/* @__PURE__ */ new Date()).toISOString(), success: false, error: error.message });
+    throw error;
+  }
+  const delivered = Array.isArray(dispatched) ? dispatched : [];
   return locked(join2(root, "lock.json"), async () => {
     const checkedAt = (/* @__PURE__ */ new Date()).toISOString(), candidate = join2(root, "candidate-summary.json"), cache = join2(root, "summary.json"), probePath = join2(root, "probe.json");
     try {
-      const dispatched = await locked(join2(root, "outbox-lock.json"), flush), delivered = Array.isArray(dispatched) ? dispatched : [];
       const probe = await call(["probe"]);
       let summary, changed, pending, nextProbe;
       if (probe.supported === false) {

@@ -256,10 +256,15 @@ export async function automation(command,args,{cli,env=process.env}={}){
   }
   if(action!=='run')throw new Error('Use listen install --runtime codex|claude [--workspace DIRECTORY] [--every 30m] [--manager auto|systemd|process] [--system], --runner-file FILE for other runtimes, status, run, foreground, or remove.');
   if(!settings)throw new Error('No listener installed for this profile.');
+  // Scheduled delivery has its own lock. A model waiting on peer work must not
+  // postpone a due send until the next mailbox fallback interval.
+  let dispatched;
+  try{dispatched=await locked(join(root,'outbox-lock.json'),flush);}
+  catch(error){await privateWrite(statePath,{principal_id:identity.principal_id,url:identity.url,checked_at:new Date().toISOString(),success:false,error:error.message});throw error;}
+  const delivered=Array.isArray(dispatched)?dispatched:[];
   return locked(join(root,'lock.json'),async()=>{
     const checkedAt=new Date().toISOString(),candidate=join(root,'candidate-summary.json'),cache=join(root,'summary.json'),probePath=join(root,'probe.json');
     try{
-      const dispatched=await locked(join(root,'outbox-lock.json'),flush),delivered=Array.isArray(dispatched)?dispatched:[];
       const probe=await call(['probe']);
       let summary, changed, pending, nextProbe;
       if(probe.supported===false){

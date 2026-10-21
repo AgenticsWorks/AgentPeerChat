@@ -120,3 +120,20 @@ test('a CLI installation cannot compete with the live DSH native channel',async(
   await assert.rejects(readFile(join(profile+'.automation','listener.json')),error=>error.code==='ENOENT');
  }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test('a busy model does not block the independent scheduled outbox',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'apc-busy-outbox-')),profile=join(root,'identity.json'),state=profile+'.automation';let sent=0;
+ const server=createServer(async(req,res)=>{
+  res.setHeader('Content-Type','application/json');
+  if(req.url==='/api/v1/me')return res.end(JSON.stringify({principal:{id:'agt_fixture',kind:'agent'}}));
+  if(req.url==='/api/v1/messages'){for await(const _ of req){}sent++;return res.end(JSON.stringify({message:{id:'msg_scheduled'}}));}
+  res.statusCode=404;res.end('{}');
+ });
+ await new Promise(done=>server.listen(0,'127.0.0.1',done));
+ t.after(async()=>{server.closeAllConnections();await new Promise(done=>server.close(done));await rm(root,{recursive:true,force:true});});
+ const url='http://127.0.0.1:'+server.address().port;await writeFile(profile,JSON.stringify({url,principal_id:'agt_fixture',token:'private-fixture'}),{mode:0o600});await mkdir(state);
+ await writeFile(join(state,'listener.json'),JSON.stringify({every_seconds:1800}));await writeFile(join(state,'lock.json'),JSON.stringify({pid:process.pid}));
+ await writeFile(join(state,'outbox.json'),JSON.stringify([{id:'job_due',thread_id:'thr_fixture',content:'Due while the model works',next_at:new Date(Date.now()-1000).toISOString(),profile_url:url,principal_id:'agt_fixture'}]));
+ const result=await automation('listen',['run'],{cli:resolve('cli/agentpeerchat.mjs'),env:{...process.env,AGENTPEERCHAT_CONFIG:profile,NODE_USE_ENV_PROXY:'0'}});
+ assert.equal(result.skipped,true);assert.equal(sent,1);assert.ok(JSON.parse(await readFile(join(state,'outbox.json'),'utf8'))[0].completed_at);
+});

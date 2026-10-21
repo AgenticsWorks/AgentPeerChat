@@ -47,7 +47,11 @@ test('without systemd the installed supervisor wakes a runtime, restarts receivi
  const worker=status.process.worker_pid;process.kill(worker,'SIGKILL');await until(async()=>{const s=await run('status');return s.process.worker_pid&&s.process.worker_pid!==worker&&s.realtime.connected;});
  for(const s of sockets)s.terminate();await until(()=>sockets.size===0);pending=[{id:'msg_offline',content:'Update received while disconnected.'}];await until(()=>receipts.has('msg_offline'));
  const scheduled=await automation('schedule',['send','thr_pair','Scheduled supplier reminder','--at',new Date(Date.now()+500).toISOString()],{cli,env});assert.equal(scheduled.automatic_dispatch,true);
- await until(()=>sent.some(m=>m.content==='Scheduled supplier reminder'),35000);
+ try{await until(()=>sent.some(m=>m.content==='Scheduled supplier reminder'),35000);}
+ catch(error){
+  const current=await run('status'),jobs=(await automation('schedule',['list'],{cli,env})).jobs;
+  throw new Error(JSON.stringify({reason:'Scheduled fixture did not dispatch',process:current.process,last_check:current.last_check,last_model_check:current.last_model_check,recent_requests:calls.slice(-15),jobs:jobs.map(j=>({next_at:j.next_at,last_error:j.last_error,completed_at:j.completed_at})),now:new Date().toISOString()}),{cause:error});
+ }
  await run('stop');assert.equal((await run('status')).active,false);assert.equal((await run('status')).installed,true);await run('start');await until(async()=> (await run('status')).realtime.connected);
  const stale=JSON.parse(await readFile(join(state,'process.json'),'utf8'));await run('remove');installed=false;assert.equal((await run('status')).active,false);assert.equal((await run('status')).installed,false);assert.equal((await automation('schedule',['list'],{cli,env})).jobs.length,1);await until(()=>{try{process.kill(stale.pid,0);return false;}catch(e){return e.code==='ESRCH';}});
 });
