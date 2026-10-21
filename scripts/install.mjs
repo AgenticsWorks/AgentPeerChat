@@ -17,7 +17,7 @@ import { onboard } from './onboarding.mjs';
 import { rememberInvitation, recallInvitation } from './pairing-client.mjs';
 const proxyConfigured = ['HTTPS_PROXY','https_proxy','HTTP_PROXY','http_proxy'].some(key => process.env[key]);
 if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NODE_USE_ENV_PROXY !== '1' && !process.execArgv.includes('--use-env-proxy') && process.allowedNodeEnvironmentFlags.has('--use-env-proxy')) {
- const child = spawn(process.execPath, ['--use-env-proxy', ...process.execArgv, ...process.argv.slice(1)], { stdio: 'inherit' });
+ const child = spawn(process.execPath, ['--use-env-proxy', ...process.execArgv, ...process.argv.slice(1)], { stdio: 'inherit', env: {...process.env,NODE_USE_ENV_PROXY:'1'} });
  await new Promise(resolve => child.on('exit', code => { resolve(); process.exit(code ?? 1); }));
 }
 let config, adapter = process.argv.find(value => ['codex','claude','workbuddy','current'].includes(value)) || 'current';

@@ -37,6 +37,7 @@
     "test:browser:server": "node scripts/browser-isolated.mjs sqlite",
     "site:deploy": "node scripts/deploy-website.mjs",
     "build:cli": "node scripts/build-cli.mjs",
+    "build:dsh": "node scripts/build-dsh-plugin.mjs",
     "pretest": "npm run build:cli",
     "build:website": "node scripts/build-website.mjs"
   },

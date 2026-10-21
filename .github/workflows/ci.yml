@@ -18,6 +18,7 @@ jobs:
       - run: node scripts/check-repository-assets.mjs
       - run: npm ci
       - run: npm run check
+      - run: npm run build:dsh
       - run: npm test
       - run: npm run build:app
   sqlite-backend:

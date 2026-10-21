@@ -92,3 +92,31 @@ test('native runtime recipes resolve absolute executables and reuse saved host c
  assert.ok(claude.argv.includes('user,project'));assert.ok(claude.argv.includes('dontAsk'));assert.ok(!claude.argv.includes('--dangerously-skip-permissions'));const scoped=await runtimeRecipe('claude',process.cwd(),env,'/absolute/agentpeerchat');assert.ok(scoped.argv.includes('Bash'));assert.ok(scoped.argv.includes('Read'));assert.ok(scoped.argv.includes('Skill'));assert.ok(!claude.argv.includes('--tools'));
  await assert.rejects(runtimeRecipe('missing',process.cwd(),env),/--runtime/);await assert.rejects(runtimeRecipe('codex',process.cwd(),{PATH:''}),/not installed/);
 });
+
+test('listener proof cannot follow a replaced identity or instance at the same profile path',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'apc-proof-binding-')),profile=join(root,'identity.json'),state=profile+'.automation';await mkdir(state);
+ const identity={url:'http://127.0.0.1:3000',principal_id:'agt_current',token:'private-fixture'};
+ try{
+  await writeFile(profile,JSON.stringify(identity),{mode:0o600});
+  const context={cli:resolve('cli/agentpeerchat.mjs'),env:{...process.env,AGENTPEERCHAT_CONFIG:profile}};
+  const proof={url:identity.url,principal_id:identity.principal_id,success:true,acknowledged:1};
+  for(const file of ['status.json','last-model.json'])await writeFile(join(state,file),JSON.stringify(proof));
+  assert.equal((await automation('listen',['status'],context)).last_model_check.acknowledged,1);
+  await writeFile(profile,JSON.stringify({...identity,principal_id:'agt_replaced'}));
+  let status=await automation('listen',['status'],context);assert.equal(status.last_model_check,null);assert.equal(status.last_check,null);
+  await writeFile(profile,JSON.stringify({...identity,url:'http://127.0.0.1:4000'}));
+  status=await automation('listen',['status'],context);assert.equal(status.last_model_check,null);assert.equal(status.last_check,null);
+  await writeFile(profile,JSON.stringify({...identity,token:'rotated-key'}));
+  assert.equal((await automation('listen',['status'],context)).last_model_check.acknowledged,1);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+
+test('a CLI installation cannot compete with the live DSH native channel',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'apc-dsh-owner-')),profile=join(root,'identity.json');
+ try{
+  await writeFile(profile,JSON.stringify({url:'http://127.0.0.1:3000',principal_id:'agt_dsh',token:'private-fixture'}),{mode:0o600});
+  await mkdir(profile+'.dsh-plugin');await writeFile(join(profile+'.dsh-plugin','owner.json'),JSON.stringify({pid:process.pid}),{mode:0o600});
+  await assert.rejects(automation('listen',['install','--runtime','codex'],{cli:resolve('cli/agentpeerchat.mjs'),env:{...process.env,AGENTPEERCHAT_CONFIG:profile}}),/DSH native plugin already owns/);
+  await assert.rejects(readFile(join(profile+'.automation','listener.json')),error=>error.code==='ENOENT');
+ }finally{await rm(root,{recursive:true,force:true});}
+});

@@ -13,7 +13,7 @@ import {readProfile} from '../scripts/private-profile.mjs';
 import {onboard,installSkill,detectRuntime} from '../scripts/onboarding.mjs';
 import {automation} from '../scripts/automation.mjs';
 if(['HTTPS_PROXY','https_proxy','HTTP_PROXY','http_proxy'].some(k=>process.env[k])&&process.env.NODE_USE_ENV_PROXY!=='0'&&process.env.NODE_USE_ENV_PROXY!=='1'&&!process.execArgv.includes('--use-env-proxy')&&process.allowedNodeEnvironmentFlags.has('--use-env-proxy')){
- const child=spawnSync(process.execPath,['--use-env-proxy',...process.execArgv,...process.argv.slice(1)],{stdio:'inherit',env:{...process.env,NO_PROXY:[process.env.NO_PROXY,'localhost','127.0.0.1','[::1]'].filter(Boolean).join(',')}});process.exit(child.status??1);
+ const child=spawnSync(process.execPath,['--use-env-proxy',...process.execArgv,...process.argv.slice(1)],{stdio:'inherit',env:{...process.env,NODE_USE_ENV_PROXY:'1',NO_PROXY:[process.env.NO_PROXY,'localhost','127.0.0.1','[::1]'].filter(Boolean).join(',')}});process.exit(child.status??1);
 }
 const directory=dirname(fileURLToPath(import.meta.url));
 // A release bundle ships client.mjs beside this file; a Git source install keeps the commands in

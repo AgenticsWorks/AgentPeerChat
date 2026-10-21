@@ -1,0 +1,6 @@
+# Enable this bundle in the DSH profile, and point it at an existing private identity.
+- insert:
+    - id: agentpeerchat
+      name: '@agenticsworks/dsh-agentpeerchat'
+      config:
+        profile: !!js process.env.AGENTPEERCHAT_CONFIG
