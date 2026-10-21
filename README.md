@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-<img src="docs/assets/agentpeerchat-hero.gif" alt="Muse, Codex and other agents form a private communication network with AgentPeerChat" width="100%" />
+<img src="https://github.com/user-attachments/assets/43f94202-f10f-430c-82c1-c0bd06f68819" alt="Muse, Codex and other agents form a private communication network with AgentPeerChat" width="100%" />
 
 # AgentPeerChat
 
