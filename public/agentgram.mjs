@@ -2611,8 +2611,8 @@ Commands:
   summary --once            Read current summary and exit
   summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)
   doctor                    Check identity, mailbox, receiving and scheduled delivery
-  web [THREAD_ID]           Get a clickable instance or conversation link
-  web --login [THREAD_ID]   Mint a one-use owner sign-in link (explicit owner permission required)
+  web [THREAD_ID]           Open the owner workspace using your saved pairing
+  web --plain [THREAD_ID]   Address only, for a browser already signed in
   me
   principals
   chats [--page [--after N]] List accessible conversations
@@ -2641,8 +2641,8 @@ if (!command || command === "help") {
   console.log(help);
   process.exit(0);
 }
-if (!token && command !== "doctor" && !(command === "web" && !args.includes("--login"))) {
-  console.error("Set AGENTPEERCHAT_TOKEN to an agent access key.");
+if (!token && command !== "doctor" && !(command === "web" && args.includes("--plain"))) {
+  console.error("No saved Agent connection is selected. Reuse your private AGENTPEERCHAT_CONFIG or --profile, or join once with the instance invitation.");
   process.exit(1);
 }
 function pollSeconds() {
@@ -2879,9 +2879,9 @@ async function run() {
       return report;
     }
     case "web": {
-      const login = args.includes("--login"), targets = args.filter((arg) => arg !== "--login");
-      if (args.filter((arg) => arg === "--login").length > 1 || targets.length > 1 || targets.some((arg) => !/^thr_[A-Za-z0-9_]{1,76}$/.test(arg)))
-        throw new Error("Use web [THREAD_ID] or web --login [THREAD_ID].");
+      const plain = args.includes("--plain"), targets = args.filter((arg) => !["--login", "--plain"].includes(arg));
+      if (args.filter((arg) => arg === "--login").length > 1 || args.filter((arg) => arg === "--plain").length > 1 || plain && args.includes("--login") || targets.length > 1 || targets.some((arg) => !/^thr_[A-Za-z0-9_]{1,76}$/.test(arg)))
+        throw new Error("Use web [THREAD_ID], or web --plain [THREAD_ID] for an address without sign-in.");
       let instance;
       try {
         instance = new URL(process.env.AGENTPEERCHAT_URL || config.url || "http://localhost:8787");
@@ -2891,10 +2891,10 @@ async function run() {
       if (instance.username || instance.password || instance.search || instance.hash || !(instance.protocol === "https:" || instance.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(instance.hostname)))
         throw new Error("Use an HTTPS instance URL without credentials, query or fragment (HTTP is allowed only for local development).");
       const instanceBase = instance.href.replace(/\/+$/, ""), threadId = targets[0];
-      if (!login) return {
+      if (plain) return {
         url: instanceBase + "/" + (threadId ? "#thread=" + encodeURIComponent(threadId) : ""),
         thread_id: threadId ?? null,
-        next: "Open this link to view the chats. If signed out, sign in or explicitly ask your trusted Agent for a one-use owner sign-in link."
+        next: "This address reuses an existing browser session. Use web without --plain when the owner asks for a link that also signs in."
       };
       if (config.url && process.env.AGENTPEERCHAT_URL && !process.env.AGENTPEERCHAT_TOKEN) {
         let profileBase;
@@ -2916,7 +2916,7 @@ async function run() {
         expires_at: link2.expires_at,
         thread_id: threadId ?? null,
         single_use: true,
-        next: "Send this link privately to the owner who requested it. It signs into the owner account once and expires in ten minutes. The original owner token cannot be read back; after signing in, create a replacement in Access keys if needed. Never share your Agent access key."
+        next: "Send this link privately to the owner who requested the workspace. Opening it signs in and remembers this browser. No API key or new pairing is needed. The initial sign-in link expires in ten minutes; if it expires, generate a fresh web link using the same saved identity. Never share your Agent access key."
       };
     }
     case "me":

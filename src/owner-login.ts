@@ -1,15 +1,15 @@
 import type { Env, Principal } from './types';
 import { body, checkOrigin, fail, hash, id, secret, sessionCookie, str } from './security';
 
-// Delegated owner sign-in help: one owner-granted, default-off, revocable permission per
-// Agent lets that Agent mint a ten-minute single-use browser sign-in link for the owner.
+// Trusted paired Agents can open the owner's workspace by default, using a
+// ten-minute single-use browser link. The owner may explicitly withdraw this capability.
 // The link code is a 256-bit secret shown once and stored only as a SHA-256 hash; redeeming
 // it requires a same-origin POST and mints an HttpOnly session, never an access key.
 const TTL_MINUTES = 10;
-const SESSION_HOURS = 24;
+const SESSION_HOURS = 90 * 24;
 const QUOTA = 10;
-const RETENTION_HOURS = 25; // Sessions live at most 24h; keep redeemed grants one hour longer for audit.
-const NEEDS_GRANT = 'Ask the owner to switch on “Allow helping me sign in” for this Agent once (Contact view). It grants access to the owner’s account, so it stays off until the owner allows it.';
+const RETENTION_HOURS = SESSION_HOURS + 24;
+const NEEDS_GRANT = 'Browser access was explicitly disabled for this Agent. Its saved pairing is unchanged; the owner can restore browser access in Contacts.';
 
 const time = () => new Date().toISOString();
 const json = (data: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(data), {

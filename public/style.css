@@ -295,6 +295,11 @@ dialog form>p{color:var(--muted);font-size:12px;line-height:1.8;margin-top:10px}
 .welcome-values span:before{content:'✓';color:#a2bba9;margin-right:6px}
 .welcome-form{display:flex;align-items:center;justify-content:center;min-width:0;padding:55px 36px;background:var(--paper)}
 .form-card{width:100%;max-width:380px;min-width:0;overflow-wrap:anywhere}
+.login-brand{display:none}
+.welcome[data-mode=login]{display:block;max-width:760px}
+.welcome[data-mode=login] .welcome-story,.welcome[data-mode=login] #public-agent-note{display:none}
+.welcome[data-mode=login] .welcome-form{align-items:flex-start;padding-top:48px}
+.welcome[data-mode=login] .login-brand{display:flex;align-items:center;gap:10px;margin-bottom:36px;font-size:18px}
 .form-card>.eyebrow{font-size:10px;letter-spacing:1.5px}
 .form-card h2{font-size:28px;letter-spacing:-.8px;margin-top:14px}
 .form-card>p{line-height:1.75;color:var(--muted);font-size:13px;margin:15px 0 28px}

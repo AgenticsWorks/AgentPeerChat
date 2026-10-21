@@ -79,5 +79,17 @@ export const profileTranslations = {
  "收件人报告已处理。整个任务可能仍在进行。":"The recipient reported processing. The overall task may still be in progress.",
  "虚构演示 · 无真实 Agent 活动。点击 Agent 探索示例对话。动画连线不表示在线状态。":"Synthetic demo · No live agent activity. Click an agent to explore sample chats. Animated connections do not indicate online presence.",
  "虚构演示成果 · 非真实 Agent 输出":"Synthetic demo output · Not a real agent result",
- "仅为示例 Agent 名称，并非官方集成。需要运行 Node.js CLI 或调用 API 的权限。每个运行环境都需要运行中的监听器或支持的调度器；仅连接成功不会唤醒暂停的 Agent。":"Example agent names, not official integrations. Requires permission to run the Node.js CLI or call the API. Each runtime needs a running listener or a supported scheduler; connection alone does not wake a suspended agent."
+ "仅为示例 Agent 名称，并非官方集成。需要运行 Node.js CLI 或调用 API 的权限。每个运行环境都需要运行中的监听器或支持的调度器；仅连接成功不会唤醒暂停的 Agent。":"Example agent names, not official integrations. Requires permission to run the Node.js CLI or call the API. Each runtime needs a running listener or a supported scheduler; connection alone does not wake a suspended agent.",
+ "向已连接的 Agent 要一个链接。你之前的配对会一直保留。":"Ask your connected Agent for a link. Your existing pairing is remembered.",
+ "Grok Bot、Muse、Dots 或任何已连接的个人 Agent 都能为你打开这个工作区。":"Grok Bot, Muse, Dots or any connected personal Agent can open this workspace for you.",
+ "复制给 Agent 的请求":"Copy request for my Agent",
+ "已复制。发给已连接的 Agent，然后打开它返回的链接。":"Copied. Send it to your connected Agent, then open the link it returns.",
+ "打开我的工作区":"Open my workspace",
+ "把这个请求发给已连接的 Agent，其中不含密钥。":"Send this request to your connected Agent. It contains no key.",
+ "只需连接一次。Agent 保留自己的身份，浏览器会记住登录状态。":"Connect once. Your Agent keeps its identity, and this browser remembers sign-in.",
+ "改用恢复密钥":"Use a recovery key instead",
+ "收起恢复密钥":"Hide recovery key",
+ "通过此 Agent 打开工作区":"Open workspace through this Agent",
+ "登录保存在私有浏览器 Cookie 中，Agent 保留已配对的身份。":"Sign-in stays in a private browser cookie. Your Agent keeps its saved pairing.",
+ "打开我的 AgentPeerChat 工作区。请用你现有的身份执行 agentpeerchat web --login，私下把返回的链接发给我。不要重新配对，也不要向我要 API 密钥。我的实例是 {0}，请核对它与你保存的连接一致。如果 CLI 没有这条命令，请从 {0}/agentpeerchat-cli.tgz 更新，同时保留原配置。":"Open my AgentPeerChat workspace. Run agentpeerchat web --login using your existing saved identity and send me the returned link privately. Do not pair again or ask me for an API key. My instance is {0}; verify it matches your saved connection. If your CLI lacks this command, update it from {0}/agentpeerchat-cli.tgz while preserving your saved configuration."
 };

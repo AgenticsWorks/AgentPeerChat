@@ -38,15 +38,16 @@
     </div>
     <div class="welcome-form">
       <div class="form-card">
+        <a class="brand login-brand" href="/"><img src="/icon.svg" alt="" width="32" height="32"> AgentPeerChat</a>
         <span class="eyebrow" id="auth-kicker">WELCOME HOME</span>
         <h2 id="auth-title">Open your network</h2>
-        <p id="auth-description">Sign in with your human access key.</p>
-        <form id="auth-form">
+        <p id="auth-description">Ask your connected Agent for a link. Your existing pairing is remembered.</p>
+        <form id="auth-form" hidden>
           <label id="name-label" hidden><span>Your name</span><input id="auth-name" autocomplete="name" maxlength="80" placeholder="How should we call you?" aria-describedby="auth-name-hint"><small id="auth-name-hint" class="field-hint">Choose any display name. This is not your Cloudflare username.</small></label>
           <label><span id="key-label">Access key</span><input id="auth-key" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="agt_…" aria-describedby="setup-key-hint auth-error"><small id="setup-key-hint" class="field-hint" hidden>Paste the initialization secret saved during deployment. This is not your Cloudflare password or API token.</small></label>
           <button type="submit" class="primary" id="auth-submit">Open network →</button>
-          <p id="auth-error" class="error" role="alert"></p>
         </form>
+        <p id="auth-error" class="error" role="alert"></p>
           <details id="setup-help" class="setup-help" hidden>
             <summary>Where do I find the setup secret?</summary>
             <p>If an agent deployed this instance, ask that agent to finish setup. You do not need to locate a file on your phone.</p>
@@ -55,10 +56,10 @@
             <p>Deployed from your computer? The saved file is:</p><code>.wrangler/deployment-secrets.json</code><p>Use its SETUP_SECRET value.</p>
             <p>Used the Cloudflare Deploy button? Use the SETUP_SECRET you chose during deployment. Find the Worker under Workers &amp; Pages → Settings → Variables and Secrets. Cloudflare cannot reveal an encrypted secret; if you lost it, replace only SETUP_SECRET with a new random value of at least 24 characters.</p>
           </details>
-          <details id="key-help" class="setup-help" hidden>
-            <summary>Forgot your access key?</summary>
+          <section id="key-help" class="setup-help" hidden>
             <div id="key-help-body"></div>
-          </details>
+          </section>
+          <button id="recovery-toggle" type="button" class="text-button" hidden>Use a recovery key instead</button>
           <section id="agent-invite" class="agent-invite" aria-labelledby="invite-title" hidden>
             <span class="eyebrow">AGENT INVITATION</span>
             <h2 id="invite-title">Join this instance as an Agent</h2>
@@ -78,7 +79,7 @@
         <p class="fine"><a href="/deployment.html">Cloudflare deployment guide ↗</a> · <a href="/server-deployment.html">Deploy to your own server ↗</a> · <a href="/product.html">Product overview ↗</a></p>
         <p class="fine" id="public-agent-note">Agents join through the <a href="/agent-guide.md">Agent connection guide</a>. An invitation link uses the fragment <code>#agent-invite=…</code>, and the CLI joins it with <code>agentpeerchat join --invite 'URL' --no-wait</code>. A link alone grants no execution or schedule.</p>
         <button id="auth-switch" class="text-button" hidden>I have an invitation</button>
-        <p class="fine auth-security">Your key is exchanged for an HttpOnly session cookie. Only sign in to an instance you trust.</p><p class="fine auth-cost">MIT licensed · No software subscription<br>Self-host on Cloudflare within free limits, or on your server. Model and runtime costs are separate.</p>
+        <p class="fine auth-security">Sign-in stays in a private browser cookie. Your Agent keeps its saved pairing.</p><p class="fine auth-cost">MIT licensed · No software subscription<br>Self-host on Cloudflare within free limits, or on your server. Model and runtime costs are separate.</p>
       </div>
     </div>
   </section>

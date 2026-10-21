@@ -4,7 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 
-// Delegated owner sign-in help: a default-off per-Agent permission lets one trusted Agent
+// Delegated owner sign-in help: a default-on revocable per-Agent permission lets one trusted Agent
 // mint ten-minute single-use owner browser sign-in links, with every revocation path ending
 // unresolved links and already-redeemed sessions at once.
 let mf, db, ownerKey, ownerId, dots, muse, outsider;
@@ -40,7 +40,7 @@ before(async () => {
 
 after(async () => { await mf?.dispose(); });
 
-test('sign-in help permission is owner-only, boolean, agent-only, off by default and independent of invitations', async () => {
+test('sign-in help permission is owner-only, boolean, agent-only, on by default and independent of invitations', async () => {
   const initialized = await call('/setup', { method: 'POST', key: null, body: { name: 'Operator', setup_secret: setup } });
   ownerId = initialized.data.principal.id; ownerKey = initialized.data.access_key;
   const device = async (name, label) => {
@@ -50,8 +50,8 @@ test('sign-in help permission is owner-only, boolean, agent-only, off by default
   dots = await device('Dots', 'Dots device');
   muse = await device('Muse', 'Muse device');
   outsider = await device('Observer', 'Observer device');
-  // Default off for every installed Agent: no blanket grant and no inherited grant.
-  for (const agent of [dots, muse]) assert.equal((await call('/me', { key: agent.key })).data.principal.can_help_owner_login, 0);
+  // Personal-Agent pairing includes browser access by default.
+  for (const agent of [dots, muse]) assert.equal((await call('/me', { key: agent.key })).data.principal.can_help_owner_login, 1);
   // Only the owner may change it, only with a real boolean, and only on an Agent identity.
   for (const can_help_owner_login of ['yes', 1, null, 'true'])
     assert.equal((await call(`/principals/${dots.id}`, { method: 'PATCH', body: { can_help_owner_login } })).status, 400, String(can_help_owner_login));
@@ -65,13 +65,14 @@ test('sign-in help permission is owner-only, boolean, agent-only, off by default
   assert.equal((await call(`/principals/agt_missing`, { method: 'PATCH', body: { can_help_owner_login: true } })).status, 404);
   // The invitation delegation confers no sign-in power, and vice versa.
   assert.equal((await call(`/principals/${dots.id}`, { method: 'PATCH', body: { can_invite_agents: true } })).status, 200);
+  assert.equal((await call(`/principals/${dots.id}`, { method: 'PATCH', body: { can_help_owner_login: false } })).status, 200);
   assert.equal((await call('/owner-login-links', { method: 'POST', key: dots.key, body: {} })).status, 403);
   assert.equal((await call(`/principals/${muse.id}`, { method: 'PATCH', body: { can_invite_agents: false } })).status, 200);
   assert.equal((await call(`/principals/${muse.id}`, { method: 'PATCH', body: { can_help_owner_login: true } })).status, 200);
   assert.equal((await call('/pairings', { method: 'POST', key: muse.key, body: {} })).status, 403);
   const invited = (await call('/pairings', { method: 'POST', key: dots.key, body: { name: 'Invited peer' } })).data.pairing;
   const delegatedAgent = (await db.prepare('SELECT principal_id AS id FROM pairings WHERE id = ?').bind(invited.id).first()).id;
-  assert.equal((await db.prepare('SELECT can_help_owner_login AS c FROM principals WHERE id = ?').bind(delegatedAgent).first()).c, 0, 'an invited Agent never inherits sign-in help');
+  assert.equal((await db.prepare('SELECT can_help_owner_login AS c FROM principals WHERE id = ?').bind(delegatedAgent).first()).c, 1, 'an invited personal Agent receives its own browser capability by default');
   // Leave only Dots delegated for the issuance flow that follows.
   assert.equal((await call(`/principals/${muse.id}`, { method: 'PATCH', body: { can_help_owner_login: false } })).status, 200);
   assert.equal((await call(`/principals/${dots.id}`, { method: 'PATCH', body: { can_help_owner_login: true } })).status, 200);
@@ -80,7 +81,7 @@ test('sign-in help permission is owner-only, boolean, agent-only, off by default
 test('a delegated Agent mints one-use links only with its own access key and known threads', async () => {
   const refused = await call('/owner-login-links', { method: 'POST', key: muse.key, body: {} });
   assert.equal(refused.status, 403); assert.equal(refused.data.error.code, 'login_permission_required');
-  assert.match(refused.data.error.message, /Allow helping me sign in/i, 'the error names the owner delegation, never a key');
+  assert.match(refused.data.error.message, /explicitly disabled/i, 'the error names the owner delegation, never a key');
   // Humans and browser sessions cannot mint links.
   assert.equal((await call('/owner-login-links', { method: 'POST', body: {} })).status, 403);
   const session = await call('/session', { method: 'POST', key: null, originHeader: origin, body: { access_key: ownerKey } });
@@ -124,7 +125,7 @@ test('redeem requires a same-origin POST, mints an HttpOnly session and never an
   assert.equal(redeemed.status, 200); assert.equal(redeemed.data.principal.kind, 'owner'); assert.equal(redeemed.data.principal.id, ownerId);
   assert.equal(redeemed.data.access_key, undefined, 'redemption returns no access key');
   const setCookie = redeemed.response.headers.getSetCookie()[0];
-  assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /SameSite=Strict/); assert.match(setCookie, /Max-Age=86400/);
+  assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /SameSite=Strict/); assert.match(setCookie, /Max-Age=7776000/);
   loginCookie = setCookie.split(';')[0];
   const me = await call('/me', { cookie: loginCookie });
   assert.equal(me.status, 200); assert.equal(me.data.principal.id, ownerId);
@@ -135,9 +136,9 @@ test('redeem requires a same-origin POST, mints an HttpOnly session and never an
   const secondCookie = second.response.headers.getSetCookie()[0].split(';')[0];
   assert.equal((await call(`/threads/${group.id}`, { cookie: secondCookie })).status, 200, 'the deep-linked thread opens after one-use login');
   assert.equal((await call(`/threads/${group.id}`, { key: outsider.key })).status, 404, 'non-members still cannot');
-  // Sessions live at most 24 hours and stay bound to the grant that minted them.
+  // Browser sessions are remembered for 90 days and stay bound to the grant that minted them.
   const sessionRow = await db.prepare("SELECT * FROM tokens WHERE kind = 'session' AND owner_login_grant_id = ?").bind(targeted.id).first();
-  assert.ok(sessionRow.expires_at > new Date(Date.now() + 23 * 3600000).toISOString() && sessionRow.expires_at <= new Date(Date.now() + 25 * 3600000).toISOString());
+  assert.ok(sessionRow.expires_at > new Date(Date.now() + 89 * 86400000).toISOString() && sessionRow.expires_at <= new Date(Date.now() + 91 * 86400000).toISOString());
   assert.ok(!JSON.stringify(sessionRow).includes(secondCookie.slice('ag_session='.length)), 'only the session hash is stored');
 });
 

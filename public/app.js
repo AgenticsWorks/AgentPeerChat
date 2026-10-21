@@ -45,23 +45,27 @@ function authMode(mode) {
   $('#key-help').hidden = mode !== 'login'; renderKeyHelp();
   $('#auth-kicker').textContent = setup ? t("MAKE IT YOURS") : invite ? t("YOU’RE INVITED") : t("WELCOME HOME");
   $('#auth-title').textContent = setup ? t("Create your private network") : invite ? t("Join the conversation") : t("Open your network");
-  $('#auth-description').textContent = setup ? t("Use the setup secret from your deployment to create the owner.") : invite ? t("Redeem a one-time invitation to join as a human.") : t("Sign in with your human access key.");
+  $('#auth-description').textContent = setup ? t("Use the setup secret from your deployment to create the owner.") : invite ? t("Redeem a one-time invitation to join as a human.") : t("Ask your connected Agent for a link. Your existing pairing is remembered.");
+  $('#auth-form').hidden = mode === 'login'; $('#recovery-toggle').hidden = mode !== 'login';
+  $('#recovery-toggle').textContent = t("Use a recovery key instead");
   $('#name-label').hidden = !(setup || invite); $('#auth-name').required = setup || invite;
   $('#key-label').textContent = setup ? t("Setup secret") : invite ? t("Invitation code") : t("Access key");
   $('#auth-key').placeholder = setup ? t("Your deployment setup secret") : invite ? 'agi_…' : 'agt_…';
   $('#auth-submit').textContent = setup ? t("Create network →") : invite ? t("Accept invitation →") : t("Open network →");
   $('#auth-switch').hidden = setup; $('#auth-switch').textContent = invite ? t("I already have an access key") : t("I have an invitation");
 }
-// Honest recovery help on the login page: a trusted Agent can mint a one-time link only when
-// the owner granted that permission; otherwise a previously saved key is the only path.
+// The paired Agent is the normal entry point. Manual key recovery is secondary.
 function renderKeyHelp() {
   const body = $('#key-help-body'); if (!body) return;
   body.replaceChildren();
-  body.append(el('p', '', t("Ask a trusted connected Agent for a one-time sign-in link. It can only do this if you switched on “Allow helping me sign in” for it in the Contact view — off by default, because it grants access to your owner account.")));
-  const say = el('p'); say.append(t("Say: "), el('em', '', t("I forgot my AgentPeerChat token. Please run agentpeerchat web --login and send me the one-time sign-in link."))); body.append(say);
-  body.append(el('p', '', t("The link works once and expires in ten minutes. Your old key cannot be read back; after signing in you can create and save a replacement under Settings → Access keys.")));
-  body.append(el('p', '', t("No permission granted? Use a key you saved earlier, for example in a password manager. Without a saved key or a granted Agent, this account cannot be recovered automatically.")));
+  const request=t("Open my AgentPeerChat workspace. Run agentpeerchat web --login using your existing saved identity and send me the returned link privately. Do not pair again or ask me for an API key. My instance is {0}; verify it matches your saved connection. If your CLI lacks this command, update it from {0}/agentpeerchat-cli.tgz while preserving your saved configuration.", location.origin+appBase);
+  body.append(el('p', '', t("Grok Bot, Muse, Dots or any connected personal Agent can open this workspace for you.")));
+  const copy=el('button','primary',t("Copy request for my Agent"));copy.type='button';copy.id='copy-login-request';
+  const status=el('p','fine');status.id='login-copy-status';status.setAttribute('role','status');
+  copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(request);status.textContent=t("Copied. Send it to your connected Agent, then open the link it returns.");}catch{await showSecret(t("Open my workspace"),t("Send this request to your connected Agent. It contains no key."),request);}});
+  body.append(copy,status,el('p','fine',t("Connect once. Your Agent keeps its identity, and this browser remembers sign-in.")));
 }
+$('#recovery-toggle').addEventListener('click',()=>{const form=$('#auth-form');form.hidden=!form.hidden;$('#recovery-toggle').textContent=form.hidden?t("Use a recovery key instead"):t("Hide recovery key");if(!form.hidden)$('#auth-key').focus();});
 $('#auth-switch').addEventListener('click', () => authMode(state.authMode === 'invite' ? 'login' : 'invite'));
 $('#copy-setup-help').addEventListener('click', async () => {
   const request = t("Find the initialization secret for my instance at {0}. Verify this URL matches the instance you deployed. Read the SETUP_SECRET value from that deployment's .wrangler/deployment-secrets.json, or use the initialization secret you configured. I authorize you to send only this initialization secret to me privately so I can paste it into the setup page on my phone. Finding the file path alone is not enough. Keep Cloudflare API tokens and other credentials private. If you cannot access the saved secret, tell me before changing it.", location.origin + appBase);
@@ -463,15 +467,13 @@ function renderPrincipals() {
       footer.append(permission);
     }
     if (state.me.kind === 'owner' && p.kind === 'agent') {
-      // Separate, higher-privilege switch: this Agent may mint one-time owner sign-in links.
-      // Confirm before enabling; withdrawing needs no extra ceremony and ends everything at once.
+      // Personal-Agent pairing includes browser access; the owner can still withdraw it.
       const loginPermission = el('label', 'invite-permission');
       const loginToggle = el('input'); loginToggle.type = 'checkbox'; loginToggle.checked = p.can_help_owner_login === 1;
       loginToggle.setAttribute('aria-label', t("Allow helping me sign in"));
       loginToggle.addEventListener('change', async () => {
         const next = loginToggle.checked; loginToggle.disabled = true;
         try {
-          if (next && !confirm(t("Allow {0} to help you sign in? This grants access to your owner account: until you withdraw the permission, it can create one-time sign-in links for you. Enable it only for an Agent you trust.", p.name))) { loginToggle.checked = false; return; }
           await api(`/principals/${p.id}`, { method: 'PATCH', data: { can_help_owner_login: next } });
           await refresh();
           toast(next ? t("{0} can now create one-time sign-in links for you. Withdrawing the permission ends them immediately.", p.name)
@@ -479,7 +481,7 @@ function renderPrincipals() {
         } catch (error) { loginToggle.checked = !next; toast(error.message); }
         finally { loginToggle.disabled = false; }
       });
-      loginPermission.append(loginToggle, el('span', '', t("Allow helping me sign in")));
+      loginPermission.append(loginToggle, el('span', '', t("Open workspace through this Agent")));
       footer.append(loginPermission);
     }
     if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
@@ -585,16 +587,13 @@ async function boot() {
   } catch (error) { authMode('login'); $('#auth-error').textContent = error.message; }
   finally { $('#boot-state').hidden = true; }
 }
-// A one-time owner sign-in link from a trusted Agent. Opening it never signs anyone in by
-// itself: the app POSTs the code same-origin, and an already signed-in owner must confirm
-// before a fresh session replaces anything, so no session is leaked silently.
+// Keep an existing owner session, even when reopening an already-used or expired link.
+// A new browser exchanges the short-lived fragment through a same-origin POST.
 async function redeemOwnerLogin(code, target) {
-  if (state.me) {
-    const confirmed = confirm(t("You are already signed in. Redeem this one-time sign-in link and start a fresh session?"));
-    if (!confirmed) { try { await enter(); } catch {} toast(t("Sign-in link discarded. Your current session is unchanged.")); return; }
-  }
   try {
-    await api('/owner-login/redeem', { method: 'POST', data: { code } });
+    let signedIn=false;
+    try{signedIn=(await api('/me')).principal.kind==='owner';}catch(error){if(error.status!==401)throw error;}
+    if(!signedIn)await api('/owner-login/redeem', { method: 'POST', data: { code } });
     await enter();
     toast(t("Signed in with a one-time link from your Agent."));
     if (target) { state.pendingThread = target; await consumePendingThread(); }

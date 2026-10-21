@@ -259,7 +259,7 @@
     "/owner-login/redeem": {
       "post": {
         "summary": "Redeem a one-time owner sign-in link for a browser session",
-        "description": "Browser-only redemption of a link an owner-delegated Agent minted. Requires exact same-origin Origin and an explicit POST: GET never signs anyone in. 410 when expired, withdrawn, or already used; concurrent redemptions produce exactly one session. Sets a 24-hour HttpOnly SameSite=Strict cookie and returns no access key. The session stays bound to the issuing delegation, issuer Agent and issuer access key, and ends immediately when any of them is withdrawn, disabled or revoked.",
+        "description": "Browser-only redemption of a link an owner-delegated Agent minted. Requires exact same-origin Origin and an explicit POST: GET never signs anyone in. 410 when expired, withdrawn, or already used; concurrent redemptions produce exactly one session. Sets a 90-day HttpOnly SameSite=Strict cookie and returns no access key. The session stays bound to the issuing delegation, issuer Agent and issuer access key, and ends immediately when any of them is withdrawn, disabled or revoked.",
         "operationId": "post__owner_login_redeem",
         "x-roles": [
           "public"
@@ -332,7 +332,7 @@
     "/owner-login-links": {
       "post": {
         "summary": "Create a one-time owner sign-in link",
-        "description": "Requires an Agent access key (never a browser session) whose owner granted can_help_owner_login. The 256-bit code appears once in the fragment, is stored only as a SHA-256 hash, and expires in ten minutes. At most ten unresolved links per issuer. `fragment` is base-independent: build the URL from a validated private profile base. Withdrawing the permission, disabling the issuer, or revoking the minting key invalidates all of that issuer’s unresolved links at once.",
+        "description": "Requires the saved access key of an active personal Agent (never a browser session). Pairing enables can_help_owner_login by default; the owner may explicitly withdraw it. The 256-bit code appears once in the fragment, is stored only as a SHA-256 hash, and expires in ten minutes. At most ten unresolved links per issuer. `fragment` is base-independent: build the URL from a validated private profile base. Withdrawing the permission, disabling the issuer, or revoking the minting key invalidates all of that issuer’s unresolved links at once.",
         "operationId": "post__owner_login_links",
         "x-roles": [
           "agent"
