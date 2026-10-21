@@ -1,6 +1,6 @@
 import {t, initLanguage, getLocale} from './i18n.js';
 import { chatName, messageDirection } from './chat-presentation.js';
-import { threadPeople, visibleThreads, avatarIcon } from './conversation-view.js';
+import { threadPeople, visibleThreads, conversationGraph, isDisabled, avatarIcon } from './conversation-view.js';
 import { renderConversationGraph } from './conversation-graph.js';
 import { connectionInstructions } from './connection-kit.js';
 import { createChatSync } from './chat-sync.js';
@@ -720,9 +720,12 @@ function conversationSubtitle(thread) {
 }
 function renderGraph() {
   if (!state.me) return;
-  const scope = visibleThreads(state.threads, state.perspective);
+  const data = conversationGraph(state.threads, state.perspective, {principals:state.principals,showDisabled:$('#graph-show-disabled').checked});
+  const scope = data.conversations;
+  if (state.graphPerson && !data.people.some(person => person.id === state.graphPerson)) state.graphPerson = null;
+  $('#graph-empty').hidden = data.people.length > 0;
   $('#graph-summary').textContent = t('{0} conversations · {1} groups · {2} direct chats', scope.length, scope.filter(t => t.kind !== 'direct').length, scope.filter(t => t.kind === 'direct').length) + ' · ' + t('{0} messages',scope.reduce((sum,thread)=>sum+Number(thread.message_count??0),0));
-  state.graphController = renderConversationGraph($('#conversation-graph'), scope, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => { state.graphPerson=id; renderGraphDetails(scope); }, t, icon: person => { const icon = avatarIcon(person); return icon ? (icon.startsWith('/') ? appBase + icon : icon) : null; } });
+  state.graphController = renderConversationGraph($('#conversation-graph'), data, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => { state.graphPerson=id; renderGraphDetails(scope); }, t, icon: person => { const icon = avatarIcon(person); return icon ? (icon.startsWith('/') ? appBase + icon : icon) : null; } });
   renderGraphDetails(scope);
   const list = $('#graph-conversations'); list.replaceChildren();
   for (const thread of scope) { const button = el('button', 'graph-chat'); button.append(conversationAvatar(thread), el('span', '', `${chatName(thread, null)} · ${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')} · ${t('{0} messages',thread.message_count??0)}`)); button.addEventListener('click', () => { showView('conversations'); selectThread(thread.id); }); list.append(button); }
@@ -732,7 +735,10 @@ function renderGraphDetails(scope){
  panel.replaceChildren();panel.hidden=!person;if(!person)return;
  const chats=visibleThreads(scope,person.id),sent=chats.reduce((sum,chat)=>sum+Number(threadPeople(chat).find(p=>p.id===person.id)?.sent_count??0),0);
  const header=el('header'),close=el('button','icon-button','×');close.type='button';close.setAttribute('aria-label',t('Close details'));close.addEventListener('click',()=>{state.graphPerson=null;panel.hidden=true;});
- header.append(personAvatar(person),el('strong','',person.name),close);panel.append(header,el('p','',t('{0} conversations · {1} sent',chats.length,sent)));
+ const avatar=personAvatar(person);avatar.classList.toggle('disabled-avatar',isDisabled(person));
+ header.append(avatar,el('strong','',person.name),close);panel.append(header);
+ if(isDisabled(person))panel.append(el('span','badge off',t('Disabled')));
+ panel.append(el('p','',t('{0} conversations · {1} sent',chats.length,sent)));
  for(const chat of chats){const button=el('button','graph-detail-chat');button.type='button';button.append(conversationAvatar(chat),el('span','',chatName(chat,null)),el('small','',t('{0} messages',chat.message_count??0)));button.addEventListener('click',()=>{showView('conversations');selectThread(chat.id).catch(error=>toast(error.message));});panel.append(button);}
 }
 
@@ -771,5 +777,6 @@ document.addEventListener("agentpeerchat:languagechange",()=>{
 });
 
 $('#graph-fit').addEventListener('click',()=>state.graphController?.fit());
+$('#graph-show-disabled').addEventListener('change',renderGraph);
 $('#graph-zoom-in').addEventListener('click',()=>state.graphController?.zoom(1.3));
 $('#graph-zoom-out').addEventListener('click',()=>state.graphController?.zoom(1/1.3));
