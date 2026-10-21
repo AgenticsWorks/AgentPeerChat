@@ -440,6 +440,56 @@ test('maximum legal UTF-8 messages continue across byte-bounded inbox and histor
   }
 });
 
+test('owner receiving status observes inbox checks, backlog and ACK without consuming deliveries', async () => {
+  assert.equal((await call('/agents/receiving', { key: null })).status, 401);
+  const created = (await call('/agents', { method: 'POST', body: { name: 'Receiving diagnostics' } })).data;
+  const key = created.token.token, principal = created.principal.id;
+  assert.equal((await call('/agents/receiving', { key })).status, 403);
+  const find = async () => {
+    const response = await call('/agents/receiving');
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.data.check_resolution_seconds, 30);
+    assert.ok(response.data.observed_at);
+    return response.data.items.find(p => p.id === principal);
+  };
+  let status = await find();
+  assert.equal(status.notification.state, 'unsupported');
+  assert.equal(status.last_checked_at, null);
+  assert.equal(status.receiving_mode, null);
+  assert.equal(status.fallback_interval_seconds, null);
+  const sent = (await call('/messages', { method: 'POST', idempotency: 'receiving-status-fixture', body: { to: [principal], type: 'text', content: 'Diagnostic test' } })).data.message;
+  status = await find();
+  assert.equal(status.pending_count, 1);
+  assert.equal(status.oldest_pending.id, sent.id);
+  assert.equal(status.oldest_pending.thread_id, sent.thread_id);
+  assert.equal(status.oldest_pending.content, undefined, 'dashboard does not expose message bodies');
+  assert.equal((await find()).pending_count, 1, 'observation must not ACK');
+  assert.equal((await call('/inbox?include_acked=invalid', { key })).status, 400);
+  assert.equal((await find()).last_checked_at, null, 'invalid checks are not recorded');
+  await call('/probe', { key });
+  const checked = (await find()).last_checked_at;
+  assert.ok(checked);
+  await call('/inbox', { key });
+  assert.equal((await find()).last_checked_at, checked, 'writes are coalesced within 30 seconds');
+  await db.prepare("UPDATE agent_receiving_activity SET last_checked_at='2000-01-01T00:00:00.000Z' WHERE principal_id=?").bind(principal).run();
+  await call('/inbox', { key });
+  assert.notEqual((await find()).last_checked_at, '2000-01-01T00:00:00.000Z');
+  const reply = await call('/messages', { method: 'POST', key, idempotency: 'receiving-status-reply', body: { thread_id: sent.thread_id, content: 'Handled', type: 'text', reply_to: sent.id } });
+  assert.equal(reply.status, 201);
+  const ack = await call(`/messages/${sent.id}/ack`, { method: 'POST', key });
+  status = await find();
+  assert.equal(status.pending_count, 0);
+  assert.equal(status.oldest_pending, null);
+  assert.equal(status.last_ack_at, ack.data.acked_at);
+  assert.equal(status.last_sent_at, reply.data.message.created_at);
+  assert.doesNotMatch(JSON.stringify(status), /token|access_key|secret/);
+  await call(`/principals/${principal}`, { method: 'PATCH', body: { active: false } });
+  status = await find();
+  assert.equal(status.notification.state, 'disabled');
+  assert.equal(status.last_ack_at, ack.data.acked_at, 'disabling preserves historical processing evidence');
+});
+
 test('principal cap is enforced atomically, so the directory never silently truncates new identities', async () => {
   const count = (await db.prepare('SELECT COUNT(*) AS n FROM principals').first()).n;
   const statements = Array.from({ length: 199 - count }, (_, n) => db.prepare("INSERT INTO principals(id, name, kind) VALUES (?, ?, 'agent')").bind(`cap_${n}`, `Capacity ${n}`));

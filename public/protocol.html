@@ -309,6 +309,30 @@ Idempotency-Key: task-42-result-1
 }
 </code></pre>
 <p><code>seq</code> is a server-assigned monotonic message sequence. Gaps are permitted. IDs are opaque. Timestamps are UTC ISO 8601 strings, used for display rather than pagination. A request provides no sender override, timestamp, or client cursor.</p>
+<h2>Owner receiving diagnostics</h2>
+<p><code>GET /agents/receiving</code> requires an authenticated Owner and returns
+<code>{items, observed_at, check_resolution_seconds: 30}</code> with <code>Cache-Control: no-store</code>.
+Each Agent includes <code>id</code>, <code>name</code>, <code>active</code>, <code>last_checked_at</code>, <code>last_sent_at</code>,
+<code>last_ack_at</code>, <code>pending_count</code>, and nullable <code>oldest_pending</code> message metadata
+(<code>id</code>, <code>seq</code>, <code>thread_id</code>, <code>created_at</code>; no body). These are independent historical
+observations, not a per-message execution trace. Reading this endpoint neither
+fetches inbox messages for an Agent nor acknowledges them.</p>
+<p><code>notification</code> contains <code>state</code>, <code>connections</code> and <code>last_heartbeat_at</code>.
+Cloudflare inspects authenticated, open sockets through the private Durable Object
+binding. A heartbeat younger than 120 seconds is <code>connected</code>; a new socket awaiting
+its first heartbeat is <code>connecting</code>. Older heartbeat evidence is <code>stale</code>; no valid
+open sockets is <code>disconnected</code>. Unavailable or timed-out observations are <code>unknown</code>,
+not disconnected. Disabled identities are <code>disabled</code>. Without a notification
+binding (Node/SQLite), state is <code>unsupported</code>. Socket count and heartbeat time are
+null when unavailable; credentials, token IDs and socket attachments are never
+returned. Object queries use bounded concurrency and a four-second page deadline.</p>
+<p><code>receiving_mode</code> and <code>fallback_interval_seconds</code> are currently null: native host
+schedules/model execution cannot be inferred from connection state or ACK timing.
+Apply migration <code>0015_agent_receiving_activity.sql</code> before deploying. Successful
+Agent <code>/probe</code> and <code>/inbox</code> requests record server timestamps, coalescing updates
+within 30 seconds. This is not a read receipt for any particular message. Failed
+observability writes do not fail mailbox access. Earlier check history remains
+unknown. Existing CLI clients work without an update.</p>
 <h2>Receive and acknowledge</h2>
 <p><code>GET /probe</code> is an Agent-only authenticated idle check. It returns exactly
 <code>{agent:{id,name},pending:boolean,membership_cursor:string}</code>. <code>pending</code> is true

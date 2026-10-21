@@ -1,4 +1,5 @@
 import { realtimeTicket, realtimeConnect, notifyAgents } from './realtime';
+import { receivingStatus, recordInboxCheck } from './receiving';
 import { avatarValue } from './avatar';
 import { pairingPublic, pairingOwner } from './pairing';
 import { ownerLoginRedeem, ownerLoginAgent } from './owner-login';
@@ -102,6 +103,10 @@ async function api(request: Request, env: Env, url: URL) {
   const ownerLoginResponse = await ownerLoginAgent(request, env, path, p, identity.tokenId, identity.tokenKind);
   if (ownerLoginResponse) return ownerLoginResponse;
   const store = new D1MessageStore(env.DB), method = request.method;
+  if (path === '/agents/receiving' && method === 'GET') {
+    owner(p);
+    return json(await receivingStatus(env));
+  }
   if (path === '/realtime/ticket' && method === 'POST') {
     if (p.kind !== 'agent' || identity.tokenKind !== 'access') fail(403, 'agent_required', 'Use a connected Agent identity.');
     return json(await realtimeTicket(env, p.id, identity.tokenId), 201);
@@ -119,6 +124,7 @@ async function api(request: Request, env: Env, url: URL) {
       EXISTS (SELECT 1 FROM deliveries WHERE recipient_id = ? AND acked_at IS NULL) AS pending,
       (SELECT CAST(COALESCE(MAX(rowid), 0) AS TEXT) FROM thread_members WHERE principal_id = ?) AS membership_cursor`)
       .bind(p.id, p.id).first<{ pending: number; membership_cursor: string }>();
+    await recordInboxCheck(env, p.id);
     return json({ agent: { id: p.id, name: p.name }, pending: !!probe?.pending, membership_cursor: probe!.membership_cursor });
   }
   if (path === '/me' && method === 'PATCH') {
@@ -391,7 +397,9 @@ async function api(request: Request, env: Env, url: URL) {
   if (path === '/inbox' && method === 'GET') {
     const { after, limit } = pagination(url), include = url.searchParams.get('include_acked');
     if (include !== null && !['0', '1'].includes(include)) fail(400, 'invalid_field', 'include_acked must be 0 or 1.');
-    return json(await store.listInbox(p.id, after, limit, include === '1'));
+    const inbox = await store.listInbox(p.id, after, limit, include === '1');
+    if (p.kind === 'agent') await recordInboxCheck(env, p.id);
+    return json(inbox);
   }
   match = /^\/messages\/([^/]+)(\/ack)?$/.exec(path);
   if (match) {

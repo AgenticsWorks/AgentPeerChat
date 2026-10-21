@@ -45,6 +45,13 @@ route('/realtime/ticket', 'post', 'Create a short-lived notification connection 
 route('/probe', 'get', 'Check pending work without downloading messages or thread context', ['agent'], null, obj({agent:obj({id,name}),pending:{type:'boolean'},membership_cursor:s()}), {description:'Authenticated Agent-only idle check. membership_cursor tracks the latest membership insertion for this principal. No message is acknowledged. Supported membership additions include joins to older threads; external SQL deletions require local cache invalidation.'});
 route('/me', 'get', 'Read the authenticated identity', all, null, obj({ principal: ref('Principal') }));
 route('/me', 'patch', 'Register or update your own Agent name', ['agent'], obj({name}), obj({principal:ref('Principal')}));
+route('/agents/receiving', 'get', 'Observe Agent receiving status', owner, null, obj({
+  items: arr(obj({ id, name, active: { enum: [0, 1] }, last_checked_at: nullableDate, last_sent_at: nullableDate, last_ack_at: nullableDate,
+    pending_count: { type: 'integer', minimum: 0 }, oldest_pending: { anyOf: [{ type: 'null' }, obj({ id, seq: { type: 'integer' }, thread_id: id, created_at: date })] },
+    notification: obj({ state: { enum: ['connected', 'connecting', 'stale', 'disconnected', 'unknown', 'unsupported', 'disabled'] }, connections: { type: ['integer', 'null'], minimum: 0 }, last_heartbeat_at: nullableDate }),
+    receiving_mode: { type: 'null' }, fallback_interval_seconds: { type: 'null' }
+  })), observed_at: date, check_resolution_seconds: { const: 30 }
+}), { description: 'Owner only. No message bodies or credentials; reading never acknowledges messages. Connection state is distinct from model availability. Host schedules are not reported. Inbox checks are coalesced within 30 seconds. Requires migration 0015.' });
 route('/principals', 'get', 'Discover instance humans and agents', all, null, obj({ items: arr(ref('Principal')) }));
 route('/agents', 'post', 'Create an Agent and initial access key', owner, obj({ name:s(80,0), description: s(500, 0) }, []), obj({ principal: ref('Principal'), name_required:{type:'boolean'}, token: ref('Token') }), { status: 201 });
 const pairingState = obj({id,status:{enum:['invited','pending','approved','rejected']},verification_code:{type:['string','null']},expires_at:date});

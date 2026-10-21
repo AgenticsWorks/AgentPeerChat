@@ -4,6 +4,7 @@ import { threadPeople, visibleThreads, conversationGraph, isDisabled, avatarIcon
 import { renderConversationGraph } from './conversation-graph.js';
 import { connectionInstructions } from './connection-kit.js';
 import { createChatSync } from './chat-sync.js';
+import { createReceivingPage } from './receiving-status.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
@@ -37,6 +38,7 @@ async function allPages(path, initial = '0') {
 }
 function authMode(mode) {
   chatSync.stop();
+  receivingPage.reset();
   state.authMode = mode;
   $('.skip-link').href = '#onboarding'; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
@@ -137,7 +139,9 @@ async function enter() {
   $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? t("拥有者") : t("联系人");
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
+  if (state.view === 'receiving' && state.me.kind !== 'owner') showView('conversations');
   await chatSync.start();
+  if (state.view === 'receiving' && state.me.kind === 'owner') receivingPage.start();
   await consumePendingThread();
 }
 // A deep link (#thread=…) survives manual sign-in: the target is held until a session exists.
@@ -170,19 +174,33 @@ const chatSync = createChatSync({
   refresh: refreshData, onState: renderSyncState,
   onUnauthorized: () => { state.me = null; authMode('login'); toast(t("Session ended. Sign in again.")); }
 });
+const receivingPage = createReceivingPage({ root: $('#receiving'), api, t, locale: getLocale,
+  avatar: p => personAvatar(state.principals.find(person => person.id === p.id) ?? p),
+  onUnauthorized: () => { state.me = null; authMode('login'); toast(t('Session ended. Sign in again.')); },
+  openConversation: async p => {
+    const id = p.oldest_pending?.thread_id ?? state.threads.find(thread => thread.kind === 'direct' && threadPeople(thread).some(person => person.id === p.id) && threadPeople(thread).some(person => person.id === state.me.id))?.id;
+    if (!id) { toast(t('No direct conversation with this Agent yet.')); return; }
+    showView('conversations'); await selectThread(id);
+  }
+});
 function refresh() { return chatSync.refresh(); }
 document.addEventListener('visibilitychange', chatSync.availabilityChanged);
+document.addEventListener('visibilitychange', receivingPage.availabilityChanged);
+window.addEventListener('online', receivingPage.availabilityChanged);
+window.addEventListener('offline', receivingPage.availabilityChanged);
 window.addEventListener('online', chatSync.availabilityChanged);
 window.addEventListener('offline', chatSync.availabilityChanged);
 $('#logout').addEventListener('click', async () => {
   try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 function showView(view) {
+  if (view === 'receiving' && state.me?.kind !== 'owner') return;
   state.view = view; $('.skip-link').href = `#${view}`; toggleMenu(false);
-  for (const name of ['conversations', 'network', 'access', 'graph']) $(`#${name}`).hidden = name !== view;
+  for (const name of ['conversations', 'network', 'access', 'graph', 'receiving']) $(`#${name}`).hidden = name !== view;
   document.querySelectorAll('[data-view]').forEach(button => { const active = button.dataset.view === view; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); });
   if (view === 'graph') renderGraph();
   if (view === 'access') loadAccess().catch(error => toast(error.message));
+  if (view === 'receiving') receivingPage.start(); else receivingPage.stop();
 }
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 $('#thread-search').addEventListener('input', renderThreads);
@@ -768,6 +786,7 @@ document.addEventListener("agentpeerchat:languagechange",()=>{
  if(state.inviteCode){void showAgentInvitation(state.inviteCode);return;}
  if(!state.me){authMode(state.authMode);return;}
  renderSyncState(chatSync.snapshot());
+ receivingPage.render();
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
  renderPerspective();renderThreads();renderPrincipals();renderMembers();renderMessages();renderGraph();
  if(state.perspective!=="all")$("#observe-actions span").textContent=t("Viewing as {0} · Read only",humanName(state.perspective));
