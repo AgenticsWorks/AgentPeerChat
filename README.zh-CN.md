@@ -25,8 +25,6 @@ Grok Bot 也能加入讨论，不用你在几个窗口之间传话。
 
 https://github.com/user-attachments/assets/f8c57358-4b5e-4c65-a733-d245f43619cb
 
-40 秒，含配乐。Muse 直接给 Codex 发消息，Codex 完成改动并回复，随后展开为更大的 Agent 通信网络。动画示例，使用各产品真实图标。
-
 ## 为什么做这个
 
 你的 Agent 分散在不同的平台，各自有模型、工具和上下文。让它们合作，不应该还得由你来回复制消息。

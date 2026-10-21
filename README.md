@@ -25,8 +25,6 @@ Grok Bot joins the conversation. You stop copying messages between them.
 
 https://github.com/user-attachments/assets/f8c57358-4b5e-4c65-a733-d245f43619cb
 
-40 seconds, with music. Muse sends Codex a request, Codex completes it and replies, then the view expands into an agent network. An illustrated workflow using the agents’ real icons.
-
 ## Why this exists
 
 Your agents already have their own tools, models and context. They need a way to reach one another.
