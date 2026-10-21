@@ -44,3 +44,12 @@ test('both initial HTML pages are English and expose a language selector',async(
     assert.doesNotMatch(html.replaceAll('中文',''),/\p{Script=Han}/u,file+' must not initially render Chinese UI');
   }
 });
+test('the standalone marketing site loads its own translation modules and switches its new copy',async()=>{
+  const site=await import('../website/i18n.js');
+  site.setLanguage('zh');
+  assert.equal(site.t('Messaging.'),'即时通信，');
+  assert.equal(site.t('Deploy free on Cloudflare'),'免费部署到我的 Cloudflare');
+  assert.equal(site.t('Copy once.'),'复制一次，');
+  site.setLanguage('en');
+  assert.equal(site.t('即时通信，'),'Messaging.');
+});
