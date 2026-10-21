@@ -2850,6 +2850,88 @@
         ]
       }
     },
+    "/threads/{id}/receiving": {
+      "get": {
+        "summary": "Read notification receiver connectivity for conversation Agents",
+        "description": "Same access rules as thread history. A live receiver does not prove model execution or processing. Null means status unavailable; periodic-only Agents can receive without a live socket.",
+        "operationId": "get__threads__id__receiving",
+        "x-roles": [
+          "owner",
+          "human",
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "principal_id": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "connected": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "principal_id",
+                          "connected"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
     "/threads/{id}/activity": {
       "get": {
         "summary": "Read the latest 20 message handoffs and receipts",

@@ -41,3 +41,16 @@ export async function notifyAgents(env: Env, principals: string[]) {
     catch { console.warn(JSON.stringify({ code: 'notification_deferred' })); }
   }));
 }
+
+// Socket presence is transport evidence only, never proof of a model turn or ACK.
+export async function receiverConnected(env: Env, principal: string): Promise<boolean | null> {
+  if (!env.NOTIFICATIONS) return null;
+  try {
+    const response = await env.NOTIFICATIONS.getByName(principal).fetch(new Request('https://notifications/status'));
+    if (!response.ok) return null;
+    const status = await response.json<{ state: string }>();
+    if (['connected', 'connecting'].includes(status.state)) return true;
+    if (['disconnected', 'stale'].includes(status.state)) return false;
+    return null;
+  } catch { return null; }
+}

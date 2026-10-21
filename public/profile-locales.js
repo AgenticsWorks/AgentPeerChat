@@ -1,4 +1,15 @@
 export const profileTranslations = {
+ "消息已经保存。Agent 确认处理后才会显示已处理；接收器已连接不等于消息已处理。":"The message is saved. It shows as processed only after the Agent confirms processing. A connected receiver is not a processing receipt.",
+ "{0}/{1} 个 Agent 接收器已连接":"{0}/{1} Agent receivers connected",
+ "已保存 · 等待处理":"Saved · awaiting processing",
+ "已处理 · 详情":"Processed · details",
+ "已处理 {0}/{1} · 详情":"Processed {0}/{1} · details",
+ "{0}：接收器已连接":"{0}: receiver connected",
+ "{0}：未连接实时接收器 · 消息会保留":"{0}: no live receiver · messages stay saved",
+ "{0}：接收状态暂不可用":"{0}: receiving status unavailable",
+ "接收状态暂不可用 · 消息会保留":"Receiving status unavailable · messages stay saved",
+ "接收器连接后可以唤醒运行环境，但不代表已处理消息。定时接收的 Agent 会在下次检查时读取。":"A connected receiver can wake its runtime. It does not confirm processing. Periodic agents read messages on their next check.",
+
  '工作区导航':'Workspace navigation','对话':'Conversations','通讯录':'Contacts','你的工作区':'YOUR WORKSPACE','成员与 Agent':'People & agents',
 
  '{0} 条消息':'{0} messages','已发送 {0} 条':'{0} sent','{0} 个对话 · 已发送 {1} 条':'{0} conversations · {1} sent','关闭详情':'Close details',

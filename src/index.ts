@@ -1,4 +1,4 @@
-import { realtimeTicket, realtimeConnect, notifyAgents } from './realtime';
+import { realtimeTicket, realtimeConnect, notifyAgents, receiverConnected } from './realtime';
 import { receivingStatus, recordInboxCheck } from './receiving';
 import { avatarValue } from './avatar';
 import { pairingPublic, pairingOwner } from './pairing';
@@ -311,6 +311,14 @@ async function api(request: Request, env: Env, url: URL) {
     if (added.some(member => !actual.some(m => m.id === member))) fail(409, 'member_limit', 'Threads support up to 32 participants.');
     await notifyAgents(env, added);
     return json({ members: actual });
+  }
+  match = /^\/threads\/([^/]+)\/receiving$/.exec(path);
+  if (match && method === 'GET') {
+    await threadAccess(env, match[1], p);
+    const members = (await threadMembers(env, match[1])).filter(member => member.kind === 'agent');
+    return json({ items: await Promise.all(members.map(async member => ({
+      principal_id: member.id, connected: member.active ? await receiverConnected(env, member.id) : false
+    }))) });
   }
   match = /^\/threads\/([^/]+)\/activity$/.exec(path);
   if (match && method === 'GET') {

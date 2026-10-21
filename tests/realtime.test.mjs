@@ -53,6 +53,25 @@ test('new groups notify members; heartbeats work; disabling identity closes the 
  // Disable revokes old keys, so obtain a replacement for subsequent tests.
  b.key=(await call('/tokens',{method:'POST',body:{principal_id:b.id,label:'Replacement'}})).data.token.token;
 });
+test('conversation receiver status distinguishes live sockets, disconnection and revoked keys without exposing credentials',async()=>{
+ const peer=(await call('/agents',{method:'POST',body:{name:'kk-receiver'}})).data;
+ const agent={id:peer.principal.id,key:peer.token.token};
+ const thread=(await call('/threads',{method:'POST',body:{members:[agent.id],title:'Receiver health'}})).data.thread;
+ const path='/threads/'+thread.id+'/receiving';
+ assert.equal((await call(path,{key:null})).status,401);
+ assert.equal((await call(path,{key:a.key})).status,404,'unrelated Agents cannot observe a private receiver');
+ assert.deepEqual((await call(path)).data.items,[{principal_id:agent.id,connected:false}]);
+ const stream=await connect(agent);
+ const active=await call(path);assert.deepEqual(active.data.items,[{principal_id:agent.id,connected:true}]);
+ assert.ok(!JSON.stringify(active.data).includes(agent.key));
+ stream.ws.close();
+ for(let n=0;n<40&&(await call(path)).data.items[0].connected;n++)await pause(20);
+ assert.equal((await call(path)).data.items[0].connected,false);
+ const restored=await connect(agent);
+ await db.prepare('UPDATE tokens SET revoked_at=? WHERE id=?').bind(new Date().toISOString(),peer.token.id).run();
+ assert.equal((await call(path)).data.items[0].connected,false,'an old socket cannot claim receiving after revocation');
+ restored.ws.close();
+});
 test('background receiver has no periodic REST traffic while idle; reconnect discovers messages sent offline',async()=>{
  const ctrl=new AbortController(),states=[];let work=0,requests=0,lastSocket,block,release;
  class ObservedSocket extends WebSocket{constructor(...args){super(...args);lastSocket=this;}}

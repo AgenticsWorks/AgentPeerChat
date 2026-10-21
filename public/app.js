@@ -8,7 +8,7 @@ import { createReceivingPage } from './receiving-status.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: window.matchMedia('(min-width: 1280px)').matches, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: window.matchMedia('(min-width: 1280px)').matches, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null, receiptCounts: new Map(), receivingCheckedAt: 0 };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#a45767', '#547767', '#526c9c', '#7861a0', '#916c43', '#477e85'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -226,7 +226,7 @@ function renderThreads() {
 }
 async function selectThread(threadId) {
   $('#conversations').classList.add('chat-open');
-  state.selected = threadId; state.currentThread = null; state.messages = []; state.cursor = '0';
+  state.selected = threadId; state.currentThread = null; state.messages = []; state.cursor = '0'; state.receiptCounts.clear(); state.receivingCheckedAt = 0; $('#chat-receiving').textContent = '';
   $('#observe-actions').hidden = true; $('#message-text').disabled = true; $('#send-button').disabled = true;
   $('#compose-error').textContent = ''; $('#message-text').value = ''; $('#compose-form').dataset.pendingKey = ''; $('#compose-form').dataset.pendingSignature = '';
   $('#chat-empty').hidden = true; $('#chat-active').hidden = false; $('#chat-title').textContent = t('Loading conversation…'); $('#chat-members').textContent = ''; renderThreads(); $('#message-list').replaceChildren(el('p', 'empty-list', t('Loading messages…'))); $('#message-list').setAttribute('aria-busy', 'true');
@@ -254,7 +254,7 @@ async function loadMessages(forceScroll = false) {
     state.messages.push(...result.items); state.cursor = result.next_cursor;
     renderMessages(forceScroll);
   }
-  await loadActivity(threadId);
+  await Promise.all([loadActivity(threadId), loadReceiving(threadId)]);
 }
 $('#join-discussion').addEventListener('click', async () => {
   const source = state.currentThread;
@@ -285,10 +285,17 @@ function renderMembers() {
 async function toggleInspector() { state.inspector = !state.inspector; renderMembers(); if (state.inspector && state.selected) try { await loadActivity(state.selected); } catch (error) { toast(error.message); } }
 $('#toggle-activity').addEventListener('click', toggleInspector); $('#group-info').addEventListener('click', toggleInspector); $('#close-inspector').addEventListener('click', () => { state.inspector = false; renderMembers(); });
 async function loadActivity(threadId) {
-  if (!state.inspector) return;
   const me = state.me;
   const activity = (await api(`/threads/${threadId}/activity`)).items;
   if (state.me !== me || state.selected !== threadId) return;
+  for (const item of activity) {
+    const agents = item.recipients.filter(r => state.principals.find(p => p.id === r.recipient_id)?.kind === 'agent');
+    const recipients = agents.length ? agents : item.recipients;
+    state.receiptCounts.set(item.message_id, { total: recipients.length, processed: recipients.filter(r => r.acked_at).length });
+    const button = document.querySelector(`[data-message-id="${item.message_id}"] .receipt-button`);
+    if (button) button.textContent = receiptLabel(item.message_id);
+  }
+  if (!state.inspector) return;
   $('#activity-list').replaceChildren();
   if (!activity.length) $('#activity-list').append(el('p', 'fine', t("还没有消息。")));
   for (const item of activity) {
@@ -310,6 +317,29 @@ $('#add-members').addEventListener('click', () => {
   for (const p of choices) { const label = el('label'), input = el('input'); input.type = 'checkbox'; input.name = 'members'; input.value = p.id; label.append(input, document.createTextNode(`${p.name} · ${p.kind}`)); wrapper.append(label); }
   $('#modal-fields').append(wrapper); $('#modal-submit').textContent = t("Add participants");
 });
+function receiptLabel(messageId) {
+  const counts = state.receiptCounts.get(messageId);
+  if (!counts?.total) return t('Saved · details');
+  if (!counts.processed) return t('Saved · awaiting processing');
+  if (counts.processed === counts.total) return t('Processed · details');
+  return t('Processed {0}/{1} · details', counts.processed, counts.total);
+}
+async function loadReceiving(threadId) {
+  if (Date.now() - state.receivingCheckedAt < 30000) return;
+  state.receivingCheckedAt = Date.now();
+  const me = state.me;
+  try {
+    const result = await api(`/threads/${threadId}/receiving`);
+    if (state.me !== me || state.selected !== threadId) return;
+    $('#chat-receiving').textContent = result.items.length > 1 ? t('{0}/{1} Agent receivers connected', result.items.filter(item => item.connected === true).length, result.items.length) : result.items.map(item => t(item.connected === true
+      ? '{0}: receiver connected' : item.connected === false
+      ? '{0}: no live receiver · messages stay saved' : '{0}: receiving status unavailable', humanName(item.principal_id))).join(' · ');
+    $('#chat-receiving').classList.toggle('receiver-warning', result.items.some(item => item.connected === false));
+    $('#chat-receiving').title = t('A connected receiver can wake its runtime. It does not confirm processing. Periodic agents read messages on their next check.');
+  } catch {
+    if (state.me === me && state.selected === threadId) $('#chat-receiving').textContent = t('Receiving status unavailable · messages stay saved');
+  }
+}
 function renderMessages(forceScroll = false) {
   const list = $('#message-list'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 100;
   list.replaceChildren();
@@ -347,12 +377,12 @@ function renderMessages(forceScroll = false) {
     }
     meta.append(timestamp);
     const footer = el('div', 'message-id');
-    const receipts = el('button', 'receipt-button', t('Saved · details')); receipts.type = 'button'; receipts.title = t("消息状态"); receipts.setAttribute('aria-label', t("消息状态"));
+    const receipts = el('button', 'receipt-button', receiptLabel(message.id)); receipts.type = 'button'; receipts.title = t("消息状态"); receipts.setAttribute('aria-label', t("消息状态"));
     receipts.addEventListener('click', async () => {
       try {
         const result = await api(`/messages/${message.id}`);
         const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? t("Acknowledged ") + time(r.acked_at) : t("Pending acknowledgment")}`).join('\n');
-        openModal(t("消息状态"), t("Saved by this instance. An acknowledgment confirms processing, not completion of the overall task. Pending does not mean offline. This service does not wake hosted agents."), async () => { $('#modal').close(); });
+        openModal(t("消息状态"), t("The message is saved. It shows as processed only after the Agent confirms processing. A connected receiver is not a processing receipt."), async () => { $('#modal').close(); });
         $('#modal-fields').append(el('p', 'key-hint', summary || t("没有收件人。")));
         const mine = result.receipts.find(r => r.recipient_id === state.me.id);
         if (mine && !mine.acked_at) {

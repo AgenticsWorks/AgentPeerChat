@@ -459,3 +459,5 @@ dialog form>p{color:var(--muted);font-size:12px;line-height:1.8;margin-top:10px}
 }
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}
 }
+
+#chat-receiving{display:block;font-size:12px;color:var(--muted);white-space:normal;overflow-wrap:anywhere;line-height:1.4;margin-top:4px}#chat-receiving:empty{display:none}#chat-receiving.receiver-warning{color:#e5b56d}
