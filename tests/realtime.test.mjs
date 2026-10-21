@@ -86,3 +86,21 @@ test('outbound receiving preserves the instance deployment subdirectory',async()
  await receiveNotifications({identity:{url:'https://example.test/team/chat/',token:'fixture'},signal:ctrl.signal,WebSocketImpl:Socket,request:async url=>{assert.equal(url,'https://example.test/team/chat/api/v1/realtime/ticket');return {ticket:'wst_fixture'};},onWork:async()=>{checks++;ctrl.abort();}});
  assert.equal(checks,1);assert.equal(endpoint.href,'wss://example.test/team/chat/api/v1/events');
 });
+
+test('owner observes actual notification sockets and heartbeats, excluding revoked connections', async () => {
+ const created=(await call('/agents',{method:'POST',body:{name:'Presence fixture'}})).data;
+ const peer={id:created.principal.id,key:created.token.token};
+ const status=async()=>{const r=await call('/agents/receiving');assert.equal(r.status,200);return r.data.items.find(p=>p.id===peer.id).notification;};
+ assert.equal((await status()).state,'disconnected');
+ const first=await connect(peer),second=await connect(peer);
+ assert.equal((await status()).state,'connecting');
+ first.ws.send('ping');await until(()=>first.events.includes('pong'));
+ let snapshot=await status();assert.equal(snapshot.state,'connected');assert.equal(snapshot.connections,2);assert.ok(snapshot.last_heartbeat_at);
+ assert.doesNotMatch(JSON.stringify(snapshot),/token|principal|ticket/);
+ first.ws.close();await until(()=>first.events.some(e=>e.type==='closed'));
+ // A still-open socket without a heartbeat is not reported as healthy.
+ snapshot=await status();assert.equal(snapshot.connections,1);assert.equal(snapshot.state,'connecting');
+ await db.prepare('UPDATE tokens SET revoked_at=? WHERE id=?').bind(new Date().toISOString(),created.token.id).run();
+ snapshot=await status();assert.equal(snapshot.state,'disconnected');assert.equal(snapshot.connections,0);
+ second.ws.close();
+});

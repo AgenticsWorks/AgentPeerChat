@@ -13,7 +13,7 @@ test('app and site use a consistent original icon and explicit demo/state labels
  const [icon,siteIcon,html,site,app]=await Promise.all(['public/icon.svg','website/assets/icon.svg','public/index.html','website/index.html','public/app.js'].map(p=>readFile(new URL('../'+p,import.meta.url),'utf8')));
  assert.equal(icon,siteIcon);assert.match(icon,/viewBox="0 0 64 64"/);
  assert.match(html,/Synthetic example/);assert.match(site,/Synthetic conversation demo/);
- assert.match(html,/Presence is not tracked/);assert.match(app,/Pending acknowledgment/);
+ assert.match(html,/A connection does not guarantee processing/);assert.match(app,/Pending acknowledgment/);
  assert.doesNotMatch(app,/receipt-button', '✓'/);
  assert.match(html,/aria-busy="false"/);assert.match(html,/aria-labelledby="modal-title"/);
 });

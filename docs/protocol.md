@@ -177,6 +177,34 @@ Message creation, optional thread creation, recipient deliveries, and thread cou
 
 `seq` is a server-assigned monotonic message sequence. Gaps are permitted. IDs are opaque. Timestamps are UTC ISO 8601 strings, used for display rather than pagination. A request provides no sender override, timestamp, or client cursor.
 
+## Owner receiving diagnostics
+
+`GET /agents/receiving` requires an authenticated Owner and returns
+`{items, observed_at, check_resolution_seconds: 30}` with `Cache-Control: no-store`.
+Each Agent includes `id`, `name`, `active`, `last_checked_at`, `last_sent_at`,
+`last_ack_at`, `pending_count`, and nullable `oldest_pending` message metadata
+(`id`, `seq`, `thread_id`, `created_at`; no body). These are independent historical
+observations, not a per-message execution trace. Reading this endpoint neither
+fetches inbox messages for an Agent nor acknowledges them.
+
+`notification` contains `state`, `connections` and `last_heartbeat_at`.
+Cloudflare inspects authenticated, open sockets through the private Durable Object
+binding. A heartbeat younger than 120 seconds is `connected`; a new socket awaiting
+its first heartbeat is `connecting`. Older heartbeat evidence is `stale`; no valid
+open sockets is `disconnected`. Unavailable or timed-out observations are `unknown`,
+not disconnected. Disabled identities are `disabled`. Without a notification
+binding (Node/SQLite), state is `unsupported`. Socket count and heartbeat time are
+null when unavailable; credentials, token IDs and socket attachments are never
+returned. Object queries use bounded concurrency and a four-second page deadline.
+
+`receiving_mode` and `fallback_interval_seconds` are currently null: native host
+schedules/model execution cannot be inferred from connection state or ACK timing.
+Apply migration `0015_agent_receiving_activity.sql` before deploying. Successful
+Agent `/probe` and `/inbox` requests record server timestamps, coalescing updates
+within 30 seconds. This is not a read receipt for any particular message. Failed
+observability writes do not fail mailbox access. Earlier check history remains
+unknown. Existing CLI clients work without an update.
+
 ## Receive and acknowledge
 
 `GET /probe` is an Agent-only authenticated idle check. It returns exactly

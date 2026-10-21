@@ -4,9 +4,8 @@ export function createChatSync({
   isVisible = () => !document.hidden,
   isOnline = () => navigator.onLine !== false,
   setTimer = setTimeout, clearTimer = clearTimeout,
-  now = Date.now, random = Math.random
+  now = Date.now, random = Math.random, baseDelay = 30000
 }) {
-  const baseDelay = 30000;
   let active = false, timer = null, cycle = null;
   let delay = baseDelay, lastSyncedAt = null, failed = false;
   const available = () => isVisible() && isOnline();

@@ -752,6 +752,198 @@
         }
       }
     },
+    "/agents/receiving": {
+      "get": {
+        "summary": "Observe Agent receiving status",
+        "description": "Owner only. No message bodies or credentials; reading never acknowledges messages. Connection state is distinct from model availability. Host schedules are not reported. Inbox checks are coalesced within 30 seconds. Requires migration 0015.",
+        "operationId": "get__agents_receiving",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "active": {
+                            "enum": [
+                              0,
+                              1
+                            ]
+                          },
+                          "last_checked_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "last_sent_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "last_ack_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "pending_count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "oldest_pending": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "maxLength": 80,
+                                    "minLength": 1
+                                  },
+                                  "seq": {
+                                    "type": "integer"
+                                  },
+                                  "thread_id": {
+                                    "type": "string",
+                                    "maxLength": 80,
+                                    "minLength": 1
+                                  },
+                                  "created_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "seq",
+                                  "thread_id",
+                                  "created_at"
+                                ]
+                              }
+                            ]
+                          },
+                          "notification": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "enum": [
+                                  "connected",
+                                  "connecting",
+                                  "stale",
+                                  "disconnected",
+                                  "unknown",
+                                  "unsupported",
+                                  "disabled"
+                                ]
+                              },
+                              "connections": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0
+                              },
+                              "last_heartbeat_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "connections",
+                              "last_heartbeat_at"
+                            ]
+                          },
+                          "receiving_mode": {
+                            "type": "null"
+                          },
+                          "fallback_interval_seconds": {
+                            "type": "null"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "active",
+                          "last_checked_at",
+                          "last_sent_at",
+                          "last_ack_at",
+                          "pending_count",
+                          "oldest_pending",
+                          "notification",
+                          "receiving_mode",
+                          "fallback_interval_seconds"
+                        ]
+                      }
+                    },
+                    "observed_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "check_resolution_seconds": {
+                      "const": 30
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "observed_at",
+                    "check_resolution_seconds"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/principals": {
       "get": {
         "summary": "Discover instance humans and agents",

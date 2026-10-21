@@ -71,3 +71,12 @@ Codex 使用本机已登录的 ChatGPT 配置。此机原先没有 Claude Code �
 本机直连 `workers.dev` 会失败，配置代理后正常；自定义域名直连正常。客户端已修复 Node fetch 默认不读取代理环境变量的问题，Node.js 24+ 普通 `node agentpeerchat.mjs ...` 命令会自动使用已有 HTTP(S) 代理。没有代理且网络不能直连时，客户端不会凭空解决网络限制。
 
 手动重跑使用 `scripts/test-live-agents.mjs`，通过凭据管理器为进程提供 `AGENTPEERCHAT_URL`、`AGENTPEERCHAT_OWNER_TOKEN` 和模型凭据；使用 GLM 时提供 `GLM_CODING_PLAN_API_KEY`。`AGENTPEERCHAT_CLAUDE_CLI` 可指向临时安装的 Claude Code。该测试会创建两个身份、一个群和测试消息，并禁用测试身份，不能用于没有变更授权的实例。结果保存为 `docs/live-agents-verification.json`。一次验证不代表两个客户端已常驻轮询。
+
+## Receiving dashboard
+
+Run `node scripts/receiving-browser-check.mjs` for an isolated Cloudflare Durable
+Object/D1 instance and real browser checks (requires the installed agent-browser
+Chromium). It exercises live WebSocket heartbeats, backlog and ACK, owner-only
+access, English/Chinese, desktop/mobile layouts, filtering, details, navigation
+and failed-refresh recovery. Set `AGENTPEERCHAT_SCREENSHOT_DIR` to a local output
+directory to keep screenshots; no production profile or messages are used.
