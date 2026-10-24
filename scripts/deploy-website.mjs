@@ -1,6 +1,7 @@
 // Publish only the independent introduction site. Credentials arrive through the process environment.
 import './prepare-promo-video.mjs';
 import './build-website.mjs';
+import {websiteFiles} from './website-files.mjs';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 const token=process.env.VERCEL_TOKEN;
 if(!token)throw new Error('Provide VERCEL_TOKEN through your secret manager.');
@@ -22,7 +23,7 @@ try{
  if(project.name!=='agentpeerchat-intro')project=await api('/v9/projects/'+project.id,'PATCH',{name:'agentpeerchat-intro'});
  await mkdir('.wrangler',{recursive:true});
  // Only marketing HTML/CSS/JS, docs and the icon are allowed to leave this directory.
- const allowed=['assets/agentpeerchat-promo-v9.mp4','assets/agentpeerchat-promo-v9.jpg','index.html','style.css','app.js','i18n.js','locales.js','profile-locales.js','receiving-locales.js','network.js','assets/network-licenses.txt','vercel.json','deployment.html','deployment.zh-CN.html','install-agent.md','server-deployment.html','server-deployment.zh-CN.html','protocol.html','product.html','product.zh-CN.html','assets/icon.svg','assets/icon-180.png','assets/dots.svg','assets/grok.svg','assets/muse.svg','llms.txt','robots.txt','sitemap.xml'];
+ const allowed=websiteFiles;
  const privateRecording=JSON.parse(await readFile('docs/research-conversation.json','utf8'));
  const privateOrigin=privateRecording.url?new URL(privateRecording.url).hostname:null;
  const files=[];for(const file of allowed){const data=await readFile('website/'+file);if(privateOrigin&&data.includes(Buffer.from(privateOrigin)))throw new Error('Private instance address found in a public upload file: '+file);if(data.includes(Buffer.from(token)))throw new Error('Credential found in an upload file.');files.push({file,data:data.toString('base64'),encoding:'base64'});}
@@ -31,10 +32,11 @@ try{
  let ready=deployment;
  while(!['READY','ERROR','CANCELED'].includes(ready.readyState||ready.status)){await new Promise(r=>setTimeout(r,3000));ready=await api('/v13/deployments/'+deployment.id);}
  if((ready.readyState||ready.status)!=='READY')throw new Error('Deployment did not become ready: '+(ready.readyState||ready.status));
- const canonicalAlias='agentpeerchat-intro.vercel.app';
+ const canonicalAlias='agentpeerchat.vercel.app';
+ await api('/v2/deployments/'+deployment.id+'/aliases','POST',{alias:'agentpeerchat-intro.vercel.app'});
  await api('/v2/deployments/'+deployment.id+'/aliases','POST',{alias:canonicalAlias});
  for(const alias of previous?.aliases||[]){if(alias==='agentpenpal-intro.vercel.app'||alias==='agentgram-intro.vercel.app')await api('/v2/deployments/'+deployment.id+'/aliases','POST',{alias});}
- const aliases=[...new Set([...(previous?.aliases||[]),...(Array.isArray(ready.alias)?ready.alias:[]),canonicalAlias])];
+ const aliases=[...new Set(['agentpeerchat-intro.vercel.app',...(previous?.aliases||[]),...(Array.isArray(ready.alias)?ready.alias:[]),canonicalAlias])];
  const result={projectId:project.id,projectName:project.name,teamId,deploymentId:deployment.id,deploymentUrl:'https://'+ready.url,aliases,readyAt:new Date().toISOString(),uploadedFiles:allowed};
  await writeFile('.wrangler/vercel-intro-deployment.json',JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result,null,2));

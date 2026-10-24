@@ -1,0 +1,64 @@
+[
+  {
+    "file": "opencode.png",
+    "source_url": "https://opencode.ai/apple-touch-icon-v3.png",
+    "sha256": "2f2d5687a641f7fc1c3931072249a5984660375c091064fe8b374e4e43a8656c",
+    "treatment": "unchanged; contained in a white rounded tile"
+  },
+  {
+    "file": "openclaw.png",
+    "source_url": "https://openclaw.ai/apple-touch-icon.png",
+    "sha256": "e8c7ce0a3a6c52bd904cc55e31a5b3a8b6392dcd70ba9e220ecf0ef1d6bd8c16",
+    "treatment": "unchanged; contained in a white rounded tile"
+  },
+  {
+    "file": "codex.svg",
+    "source_url": "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/codex/default.svg",
+    "sha256": "627cd8b8108038310b98b0bd35f244ee7422b7c0a08355f6beeead1ad0cd457e",
+    "treatment": "unchanged; contained in a white rounded tile"
+  },
+  {
+    "file": "claude.png",
+    "source_url": "https://code.claude.com/docs/_mintlify/favicons/claude-code/pLsy-mRpNksna2sx/_generated/favicon/android-chrome-192x192.png",
+    "sha256": "d4e5e8e9990ac52f147a74ae80b9e69cdc612264b84a76cdb5c43b53b73a1707",
+    "treatment": "unchanged; contained in a white rounded tile"
+  },
+  {
+    "file": "gemini.png",
+    "source_url": "https://geminicli.com/icon.png",
+    "sha256": "351e9f5b1bf863d738cd7be4ed040a625a1419450ae7fc490143e4042b7c2438",
+    "treatment": "unchanged; contained in a white rounded tile"
+  },
+  {
+    "file": "cline.png",
+    "source_url": "https://raw.githubusercontent.com/cline/cline/HEAD/assets/icons/icon.png",
+    "sha256": "653b81c4eee035547205dbc4089ded35f92e9c1166915feb151811623570cfc6",
+    "treatment": "unchanged; contained in a white rounded tile"
+  },
+  {
+    "file": "goose.ico",
+    "source_url": "https://goose-docs.ai/img/favicon.ico",
+    "sha256": "902bebf8d1dddfaa1175e2c6a09dfe2c37c5c92f7b86b93ead83a789e43f09ff",
+    "treatment": "unchanged; contained in a white rounded tile",
+    "derived_file": "goose.png (lossless ICO decode)"
+  },
+  {
+    "file": "muse.png",
+    "source": "Preserved original AgentPeerChat demo asset from the earlier film",
+    "sha256": "14ff154d91ad397d73f09d628f08e799e5e1d80460bdeac3baab7efeb46d9c18",
+    "treatment": "unchanged; contained in white tile"
+  },
+  {
+    "file": "grok.png",
+    "source": "Preserved original AgentPeerChat demo asset from the earlier film",
+    "sha256": "70f0c7c7395e3542c42bed9b37c70b6ee9c317dd4a27746e90773741c3528c8c",
+    "treatment": "unchanged; contained in white tile"
+  },
+  {
+    "file": "agentpeerchat.svg",
+    "source_url": "https://raw.githubusercontent.com/AgenticsWorks/AgentPeerChat/main/website/assets/icon.svg",
+    "sha256": "ff97fe1c56fe5aae9e1f33978956da58559efb76da8e612ecc0d4b2643cae55e",
+    "treatment": "Original SVG, unchanged; shared by header, network center and closing card",
+    "cache_versioned_file": "agentpeerchat-ff97fe1c56fe.svg"
+  }
+]
