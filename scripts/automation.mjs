@@ -9,7 +9,12 @@ import {sessionRecipe,wakePrompt,wakeSession} from './session-wake.mjs';
 import {requestJSON} from './client-transport.mjs';
 import {receiveNotifications} from './realtime-client.mjs';
 import {systemdAvailable,processStatus,startProcess,stopProcess,supervise} from './listener-process.mjs';
+import {dshStatus} from './dsh-onboarding.mjs';
 import {validateRuntimeResult} from './runtime-result.mjs';
+import {NativeRuntime} from './native-runtime.mjs';
+import {drainNative} from './native-mailbox.mjs';
+import {forwardCheck,serveChecks} from './runtime-host.mjs';
+import {startDirect} from './direct-delivery.mjs';
 
 export function interval(value='30m') {
   const m=/^(\d+)(s|m|h)$/.exec(value), seconds=m?Number(m[1])*({s:1,m:60,h:3600}[m[2]]):NaN;
@@ -70,8 +75,7 @@ export async function runtimeRecipe(runtime,workspace,env=process.env,cli){
   let executable;for(const path of candidates)if(await access(path,constants.X_OK).then(()=>true,()=>false)){executable=resolve(path);break;}
   if(!executable)throw new Error('The selected model runtime is not installed. Install/sign in to it first.');
   // Reuse saved host authentication. Never put provider keys in arguments or the recipe.
-  const argv=runtime==='codex'?[executable,'exec','--ephemeral','--skip-git-repo-check','--sandbox','workspace-write','-c','sandbox_workspace_write.network_access=true','-c','approval_policy="never"','-c','shell_environment_policy.inherit="all"','--json','-']:[executable,'-p','--no-session-persistence','--permission-mode','dontAsk','--allowedTools','Bash','Read','Write','Edit','Glob','Grep','Skill','WebSearch','WebFetch','--setting-sources','user,project','--verbose','--output-format','stream-json'];
-  return {argv,cwd,timeout_seconds:300,result_protocol:runtime};
+  return {argv:[executable],cwd,timeout_seconds:300,result_protocol:runtime,mode:'native'};
 }
 function quoteUnit(value){if(/[\n\r\0]/.test(value))throw new Error('Invalid unit path.');return '"'+value.replaceAll('\\','\\\\').replaceAll('"','\\"').replaceAll('%','%%').replaceAll('$','$$')+'"';}
 function controlSystemd(env,system,...args){const r=spawnSync('systemctl',[...(system?[]:['--user']),...args],{env,encoding:'utf8'});if(r.status!==0)throw new Error('systemd '+args[0]+' failed. Use your host scheduler if no systemd session is available.');return r.stdout.trim();}
@@ -92,7 +96,7 @@ function validateOutbox(items,identity){
   }
 }
 
-export async function automation(command,args,{cli,env=process.env}={}){
+export async function automation(command,args,{cli,env=process.env,nativeEngine}={}){
   if(!env.AGENTPEERCHAT_CONFIG)throw new Error('Automation requires a saved private profile. Use --profile AGENT_ID or AGENTPEERCHAT_CONFIG.');
   const profile=resolve(env.AGENTPEERCHAT_CONFIG),identity=await readJSON(profile,null);
   if(!identity||['principal_id','url','token'].some(key=>typeof identity[key]!=='string'||!identity[key]))throw new Error('Invalid private connection profile.');
@@ -162,7 +166,7 @@ export async function automation(command,args,{cli,env=process.env}={}){
     let active=managed?.active||false,enabled=active;if(settings&&!managed&&process.platform==='linux'){try{active=systemctl(settings.system,'is-active',unit+'.timer')==='active';enabled=systemctl(settings.system,'is-enabled',unit+'.timer')==='enabled';}catch{}}
     const stream=await readJSON(realtimeStatePath,null);
     let streamActive=managed?.watch_active||false;if(settings?.realtime&&!managed)try{streamActive=systemctl(settings.system,'is-active',unit+'-realtime.service')==='active';}catch{}
-    return {manager:settings?.manager||'systemd',persistence:settings?.manager==='process'?'host_lifetime':'service_manager',process:managed,receiving_transport:settings?.realtime?'websocket_with_periodic_fallback':'periodic',realtime:{...stream,active:streamActive,connected:streamActive&&(!managed||stream?.process_id===managed.worker_pid)&&stream?.connected===true&&Date.now()-Date.parse(stream.last_heartbeat_at||stream.connected_at)<120000},delivery_mode:settings?.delivery_mode||'independent',last_wake_check:await lastWake(),installed:Boolean(settings),active,enabled,task_id:settings?(managed?unit+'.process':unit+'.timer'):null,interval_seconds:settings?.every_seconds||null,last_check:await identityState(statePath),last_model_check:await identityState(join(root,'last-model.json')),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
+    return {native:await dshStatus(profile),manager:settings?.manager||'systemd',persistence:settings?.manager==='process'?'host_lifetime':'service_manager',process:managed,receiving_transport:settings?.realtime?'websocket_with_periodic_fallback':'periodic',realtime:{...stream,active:streamActive,connected:streamActive&&(!managed||stream?.process_id===managed.worker_pid)&&stream?.connected===true&&Date.now()-Date.parse(stream.last_heartbeat_at||stream.connected_at)<120000},delivery_mode:settings?.delivery_mode||'independent',last_wake_check:await lastWake(),installed:Boolean(settings),active,enabled,task_id:settings?(managed?unit+'.process':unit+'.timer'):null,interval_seconds:settings?.every_seconds||null,last_check:await identityState(statePath),last_model_check:await identityState(join(root,'last-model.json')),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
   }
   if(['start','stop','restart'].includes(action)){
     if(!settings||settings.manager!=='process')throw Error('Use these controls with an installed process listener.');
@@ -210,20 +214,20 @@ export async function automation(command,args,{cli,env=process.env}={}){
     const launcher=join(bin,'agentpeerchat');await writeFile(launcher,'#!/bin/sh\nexec '+shellQuote(process.execPath)+' '+shellQuote(cli)+' "$@"\n',{mode:0o700});await chmod(launcher,0o700);
     if(manager==='process'){
       await stopProcess(root);
-      await privateWrite(settingsPath,{every_seconds:seconds,system:false,manager,runner_file:recipePath,realtime:true,delivery_mode:native?'session':'independent'});
+      await privateWrite(settingsPath,{every_seconds:seconds,system:false,manager,runner_file:recipePath,realtime:true,delivery_mode:native?'session':runner.mode==='native'?'native':'independent'});
       await rm(join(root,'wake.json'),{force:true});await rm(join(root,'last-wake.json'),{force:true});
       const processEnv={...env,PATH:bin+delimiter+dirname(cli)+delimiter+(env.PATH||'')};
       const managed=await startProcess({root,profile,cli,env:processEnv});
       return {installed:true,active:managed.active,manager,persistence:'host_lifetime',task_id:unit+'.process',interval_seconds:seconds,receiving_transport:'websocket_with_periodic_fallback',profile_id:identity.principal_id,next:'Use listen status and doctor to verify actual processing. A background process cannot survive host suspension or restart; use listen foreground under the host supervisor for reboot recovery.'};
     }
     const service=['[Unit]','Description=AgentPeerChat mailbox and scheduled messages','[Service]','Type=oneshot','ExecStart='+[process.execPath,cli,'listen','run'].map(quoteUnit).join(' '),'TimeoutStartSec='+(timeout+180)+'s','Environment='+quoteUnit('AGENTPEERCHAT_CONFIG='+profile),'Environment='+quoteUnit('HOME='+(env.HOME||homedir())),'Environment='+quoteUnit('PATH='+bin+delimiter+dirname(cli)+delimiter+(env.PATH||''))];
-    for(const key of ['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy','NO_PROXY','no_proxy','NODE_USE_ENV_PROXY','CODEX_HOME','CLAUDE_CONFIG_DIR'])if(env[key])service.push('Environment='+quoteUnit(key+'='+env[key]));
+    for(const key of ['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy','NO_PROXY','no_proxy','NODE_USE_ENV_PROXY','CODEX_HOME','CLAUDE_CONFIG_DIR','AGENTPEERCHAT_DIRECT_URL','AGENTPEERCHAT_DIRECT_PORT','AGENTPEERCHAT_DIRECT_BIND'])if(env[key])service.push('Environment='+quoteUnit(key+'='+env[key]));
     await writeFile(join(unitDirectory,unit+'.service'),service.join('\n')+'\n',{mode:0o644});
     const streamService=service.map(line=>line==='Type=oneshot'?'Type=simple':line.startsWith('ExecStart=')?'ExecStart='+[process.execPath,cli,'listen','watch'].map(quoteUnit).join(' '):line).filter(line=>!line.startsWith('TimeoutStartSec='));
     streamService.push('Restart=always','RestartSec=10s','[Install]','WantedBy='+(system?'multi-user.target':'default.target'));
     await writeFile(join(unitDirectory,unit+'-realtime.service'),streamService.join('\n')+'\n',{mode:0o644});
     await writeFile(join(unitDirectory,unit+'.timer'),'[Unit]\nDescription=AgentPeerChat recurring mailbox check\n[Timer]\nOnActiveSec=2s\nOnUnitInactiveSec='+seconds+'s\nAccuracySec=1s\nUnit='+unit+'.service\n[Install]\nWantedBy=timers.target\n',{mode:0o644});
-    await privateWrite(settingsPath,{every_seconds:seconds,system,manager,unit_directory:unitDirectory,runner_file:recipePath,realtime:true,delivery_mode:native?'session':'independent'});
+    await privateWrite(settingsPath,{every_seconds:seconds,system,manager,unit_directory:unitDirectory,runner_file:recipePath,realtime:true,delivery_mode:native?'session':runner.mode==='native'?'native':'independent'});
     await rm(join(root,'wake.json'),{force:true});await rm(join(root,'last-wake.json'),{force:true});
     systemctl(system,'daemon-reload');systemctl(system,'enable',unit+'.timer');systemctl(system,'restart',unit+'.timer');systemctl(system,'enable',unit+'-realtime.service');systemctl(system,'restart',unit+'-realtime.service');
     if(systemctl(system,'is-active',unit+'.timer')!=='active')throw new Error('Listener timer did not start.');
@@ -238,6 +242,16 @@ export async function automation(command,args,{cli,env=process.env}={}){
     if(!settings)throw new Error('No listener installed for this profile.');
     return locked(join(root,'realtime-lock.json'),async()=>{
       const controller=new AbortController(),stop=()=>controller.abort();process.once('SIGTERM',stop);process.once('SIGINT',stop);
+      const recipe=await readJSON(settings.runner_file,null);
+      const engine=recipe?.mode==='native'?new NativeRuntime({runner:recipe,root,identity,env:connectionEnv(),signal:controller.signal}):null;
+      let retry,retries=0;
+      const retryCheck=delay=>{if(!retry&&!controller.signal.aborted)retry=setTimeout(()=>{retry=null;void check().catch(()=>{});},delay);};
+      const check=async()=>{if(controller.signal.aborted)return {skipped:true,reason:'stopping'};try{const value=await automation('listen',['run'],{cli,env,nativeEngine:engine});if(value?.skipped)retryCheck(1000);else retries=0;return value;}catch(error){if(!/acceptance was interrupted|already exists without a completed result|Inspect.*session before retrying/.test(error.message))retryCheck(Math.min(60000,1000*2**Math.min(retries++,6)));throw error;}};
+      const stopHost=engine?await serveChecks(root,check):null;
+      let direct={available:false,close:async()=>{}};
+      try{direct=await startDirect({identity,root,env,onWork:check,request:requestJSON});}catch{/* Optional ingress must never disable outbound receiving. */}
+      // Local outbox checks do not poll the cloud or invoke models.
+      const scheduled=setInterval(()=>void locked(join(root,'outbox-lock.json'),flush).catch(()=>{}),1000);
       let stream={connected:false,process_id:process.pid},receiptTask;
       const checkReceipts=()=>{
         if(receiptTask)return;
@@ -248,10 +262,10 @@ export async function automation(command,args,{cli,env=process.env}={}){
         }})().catch(()=>{}).finally(()=>receiptTask=null);
       };
       try{await receiveNotifications({identity,signal:controller.signal,
-        onWork:async()=>{const value=await automation('listen',['run'],{cli,env});if(value?.awaiting_processing)checkReceipts();return value;},
-        onState:async patch=>{stream={...stream,...patch};await privateWrite(realtimeStatePath,stream);}
+        onWork:async()=>{const value=await check();if(value?.awaiting_processing)checkReceipts();return value;},
+        onState:async patch=>{stream={...stream,...patch,direct:{configured:Boolean(env.AGENTPEERCHAT_DIRECT_URL),available:direct.available}};await privateWrite(realtimeStatePath,stream);}
       });return {stopped:true};}
-      finally{controller.abort();await receiptTask;process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);await privateWrite(realtimeStatePath,{...stream,connected:false});}
+      finally{controller.abort();clearTimeout(retry);clearInterval(scheduled);await direct.close();await stopHost?.();await engine?.close();await receiptTask;process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);await privateWrite(realtimeStatePath,{...stream,connected:false});}
     });
   }
   if(action!=='run')throw new Error('Use listen install --runtime codex|claude [--workspace DIRECTORY] [--every 30m] [--manager auto|systemd|process] [--system], --runner-file FILE for other runtimes, status, run, foreground, or remove.');
@@ -262,6 +276,8 @@ export async function automation(command,args,{cli,env=process.env}={}){
   try{dispatched=await locked(join(root,'outbox-lock.json'),flush);}
   catch(error){await privateWrite(statePath,{principal_id:identity.principal_id,url:identity.url,checked_at:new Date().toISOString(),success:false,error:error.message});throw error;}
   const delivered=Array.isArray(dispatched)?dispatched:[];
+  const installedRunner=settings.runner_file?await readJSON(settings.runner_file,null):null;
+  if(installedRunner?.mode==='native'&&!nativeEngine){const forwarded=await forwardCheck(root);if(forwarded)return forwarded;}
   return locked(join(root,'lock.json'),async()=>{
     const checkedAt=new Date().toISOString(),candidate=join(root,'candidate-summary.json'),cache=join(root,'summary.json'),probePath=join(root,'probe.json');
     try{
@@ -285,6 +301,11 @@ export async function automation(command,args,{cli,env=process.env}={}){
       }
       const state={principal_id:identity.principal_id,url:identity.url,checked_at:checkedAt,pending_count:summary?.pending_count??(pending?1:0),pending_count_is_lower_bound:!summary&&pending,new_chats:summary?.new_chats.length??(changed?1:0),new_chats_is_lower_bound:!summary&&changed,membership_changed:changed,scheduled_deliveries:delivered.length,failed_deliveries:(await queue()).filter(j=>j.last_error&&!j.cancelled&&!j.completed_at).length,model_started:false,success:false};
       const runner=await readJSON(settings.runner_file,null);
+      if(runner?.mode==='native'){
+        if(pending){state.model_started=true;await privateWrite(statePath,state);const engine=nativeEngine||new NativeRuntime({runner,root,identity,env:connectionEnv()});try{Object.assign(state,await drainNative({identity,root,engine}));}finally{if(!nativeEngine)await engine.close();}}
+        if(nextProbe)await privateWrite(probePath,nextProbe);
+        state.success=true;if(state.model_started)await privateWrite(join(root,'last-model.json'),state);await privateWrite(statePath,state);return state;
+      }
       if(runner?.mode==='session'){
         const path=join(root,'wake.json'),previous=await readJSON(path,null);
         // Match both identity and endpoint: never transfer wake receipts across profile changes.

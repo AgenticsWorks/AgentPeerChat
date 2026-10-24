@@ -43,5 +43,5 @@ test('an ordinary Claude setup socket is not mistaken for a persistent receiving
  const result=await onboard({profile,cli,skillSource:resolve('skills/agentpeerchat/SKILL.md'),env});
  assert.equal(result.status,'receiving_configured');assert.equal(result.listener.interval_seconds,1800);
  const runner=JSON.parse(await readFile(profile+'.automation/runner.json','utf8'));
- assert.equal(runner.mode,undefined);assert.equal(runner.argv[0],runtime);
+ assert.equal(runner.mode,'native');assert.equal(runner.argv[0],runtime);
 });

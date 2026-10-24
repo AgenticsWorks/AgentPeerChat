@@ -1,10 +1,12 @@
 import {build} from 'esbuild';
 import {mkdir,readFile,writeFile,copyFile,chmod,rm,cp} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
+await import('./build-dsh-plugin.mjs');
 const directory='dist/cli';await rm(directory,{recursive:true,force:true});await mkdir(directory,{recursive:true});
 for(const [source,name] of [['cli/agentpeerchat.mjs','agentpeerchat'],['scripts/agent.mjs','client'],['scripts/install.mjs','install'],['scripts/pairing-client.mjs','pairing-client']]){
  await build({entryPoints:[source],bundle:true,format:'esm',platform:'node',target:'node22',outfile:directory+'/'+name+'.mjs'});
 }
+await copyFile('public/agentpeerchat-dsh.mjs',directory+'/agentpeerchat-dsh.mjs');
 await copyFile('scripts/connection-packet.mjs','public/connection-packet.js');
 await copyFile('skills/agentpeerchat/SKILL.md',directory+'/SKILL.md');await copyFile('LICENSE',directory+'/LICENSE');await chmod(directory+'/agentpeerchat.mjs',0o755);
 await cp('skills/agentpeerchat/references',directory+'/references',{recursive:true});

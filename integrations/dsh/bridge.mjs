@@ -4,6 +4,7 @@ import {dirname,isAbsolute,join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {requestJSON} from '../../scripts/client-transport.mjs';
 import {receiveNotifications} from '../../scripts/realtime-client.mjs';
+import {startDirect} from '../../scripts/direct-delivery.mjs';
 const digest=value=>createHash('sha256').update(value).digest('hex');
 export const NO_REPLY='[agentpeerchat:no-reply]';
 export async function savePrivate(path,value){
@@ -41,17 +42,26 @@ export class DshMailbox {
  constructor({identity,root,runTask,signal,request=requestJSON,notify=receiveNotifications,fallbackSeconds=1800,onStatus=()=>{},onError=()=>{}}){
   if(!Number.isInteger(fallbackSeconds)||fallbackSeconds<30||fallbackSeconds>86400)throw Error('Fallback must be 30..86400 seconds.');
   Object.assign(this,{identity,root,runTask,signal,request,notify,fallbackSeconds,onStatus,onError});this.current=null;this.dirty=false;this.retry=null;this.failures=0;
-  this.status={runtime:'dsh',session_id:dedicatedSessionId(identity),connected:false,processed:0};
+  this.status={runtime:'dsh',principal_id:identity.principal_id,url:identity.url,session_id:dedicatedSessionId(identity),connected:false,processed:0};
  }
  async update(patch){this.status={...this.status,...patch};await savePrivate(join(this.root,'status.json'),this.status);this.onStatus(this.status);}
- call(path,options={}){return this.request(this.identity.url+'/api/v1'+path,{token:this.identity.token,...options});}
+ call(path,options={}){return this.request(this.identity.url+'/api/v1'+path,{token:this.identity.token,...options,...(this.fence?{headers:{'X-AgentPeerChat-Receiver':this.fence}}:{})});}
  async drain(){
   // Validate before any model work, inside the retryable drain: an offline boot must recover.
   if(!this.verified){const me=await this.call('/me');if(me.principal?.id!==this.identity.principal_id||me.principal.kind!=='agent')throw Error('The instance did not confirm this Agent identity.');this.verified=true;}
+  const holder=randomUUID(),lease=await this.call('/receiver/lease',{method:'POST',body:{holder}});if(!lease.acquired)throw Error('Another receiver owns this identity.');
+  this.fence=lease.fence;let lost=false,renewal;
+  const timer=setInterval(()=>{if(!renewal)renewal=this.call('/receiver/lease',{method:'POST',body:{holder}}).then(value=>{if(!value.acquired||value.fence!==lease.fence)throw Error('Receiver lease lost.');}).catch(()=>{lost=true;this.onError(Error('DSH receiver lease lost.'));}).finally(()=>renewal=null);},30000);
+  try{await this.drainOwned(()=>{if(lost)throw Error('DSH receiver lease lost; mail remains pending.');});}
+  finally{clearInterval(timer);await renewal;this.fence=null;await this.call('/receiver/lease',{method:'DELETE',body:{holder,fence:lease.fence}}).catch(()=>{});}
+ }
+ async drainOwned(checkLease){
   // Start from pending deliveries after every restart. No notification or local cursor is authoritative.
   const page=await this.call('/inbox?after=0&limit=20');if(!Array.isArray(page.items))throw Error('Invalid inbox.');
   for(const message of page.items){
+   checkLease();
    if(this.signal.aborted)break;
+   checkLease();
    if(!/^msg_[A-Za-z0-9_]+$/.test(message.id||'')||!/^thr_[A-Za-z0-9_]+$/.test(message.thread_id||''))throw Error('Invalid message identity.');
    const path=join(this.root,'receipts',message.id+'.json');let result;
    try{result=JSON.parse(await readFile(path,'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
@@ -86,10 +96,11 @@ export class DshMailbox {
  }
  async start(){
   const timer=setInterval(()=>void this.trigger(),this.fallbackSeconds*1000);
+  let direct={close:async()=>{}};try{direct=await startDirect({identity:this.identity,root:this.root,onWork:()=>this.trigger(),request:this.request});}catch{/* Direct ingress is optional; keep outbound receiving. */}
   const stop=()=>{clearInterval(timer);clearTimeout(this.retry);this.retry=null;};this.signal.addEventListener('abort',stop,{once:true});
   try{
    await this.update({started_at:new Date().toISOString()});void this.trigger();
    await this.notify({identity:this.identity,signal:this.signal,onWork:()=>this.trigger(),onState:patch=>this.update(patch)});
-  }finally{stop();await this.current;this.signal.removeEventListener('abort',stop);await this.update({connected:false,working:false});}
+  }finally{stop();await this.current;await direct.close();this.signal.removeEventListener('abort',stop);await this.update({connected:false,working:false});}
  }
 }

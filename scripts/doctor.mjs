@@ -22,7 +22,13 @@ export async function doctor({config={},token,url,request,listenerStatus,now=Dat
   const queued=status?.queued||0,failed=status?.failed_queued||0;
   result.scheduled_messages={queued,failed};
   if(failed){check('scheduled_messages','fail','Scheduled messages have failed deliveries retained for retry.');next.push('Inspect schedule list and retry delivery after fixing access.');}
-  if(!status?.installed){
+  if(status?.native?.runtime==='dsh'){
+    const native=status.native,healthy=native.active&&!native.last_error;
+    result.receiving={mode:healthy?'native_dsh':'needs_attention',verified:Boolean(healthy&&native.verified),session_id:native.session_id||null,last_model_at:native.last_processed_at||null};
+    result.realtime={connected:Boolean(native.connected)};
+    check('receiving',!healthy?'fail':native.verified?'pass':'warn',!native.active?'The DSH host is not running for this identity.':native.last_error?'The native DSH task failed; messages remain pending.':native.verified?'The native DSH channel has processed, replied and acknowledged work.':'The DSH channel is active; verify a real task and ACK.');
+    if(!healthy)next.push('Start or repair the same DSH profile with its saved model and session storage; do not install a second CLI receiver.');
+  }else if(!status?.installed){
     result.receiving={mode:'external_or_manual',verified:false};
     check('receiving','warn','No CLI listener is installed. A native platform schedule must be checked on that platform; otherwise receiving is manual.');
     next.push('Follow the installed skill to verify the chosen native schedule, configure receiving once, or retain manual mode.');

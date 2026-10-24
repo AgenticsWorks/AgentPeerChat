@@ -11,6 +11,7 @@ async function fixture(t,{pending=[message()],failReply=false,failAck=false,runT
  const request=async(url,options)=>{
   assert.equal(options.token,identity.token);const path=new URL(url).pathname;
   if(path.endsWith('/me'))return {principal:{id:identity.principal_id,kind:'agent'}};
+  if(path.endsWith('/receiver/lease'))return options.method==='DELETE'?{released:true}:{acquired:true,fence:'fixture-lease'};
   if(path.endsWith('/inbox'))return {items:pending,has_more:false};
   if(path.includes('/threads/'))return {thread:{id:'thr_one',title:'Trip'}};
   if(path.endsWith('/messages')){sends.push(options);if(failReply)throw Error('uncertain reply');return {message:{id:'msg_reply'}};}

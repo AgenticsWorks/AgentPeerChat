@@ -1,15 +1,16 @@
 // Bounded retries are safe only for reads, acknowledgments and keyed message sends.
 // Keep the serialized body and idempotency key identical across every attempt.
 import {randomUUID} from 'node:crypto';
+import {deliverDirect} from './direct-delivery.mjs';
 const transient = new Set([408, 429, 500, 502, 503, 504]);
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-export async function requestJSON(url, {method = 'GET', token, body, send = false, idempotencyKey} = {}, {
+export async function requestJSON(url, {method = 'GET', token, body, send = false, idempotencyKey, headers: extraHeaders = {}} = {}, {
   fetchImpl = fetch, wait = sleep, now = Date.now, random = Math.random
 } = {}) {
   const encoded = body === undefined ? undefined : JSON.stringify(body);
   if (encoded !== undefined && Buffer.byteLength(encoded, 'utf8') > 65536) throw new Error('Serialized request must fit in 64 KiB.');
-  const headers = {Authorization: `Bearer ${token}`,
+  const headers = {...extraHeaders, Authorization: `Bearer ${token}`,
     ...(encoded === undefined ? {} : {'Content-Type': 'application/json'}),
     ...(send ? {'Idempotency-Key': idempotencyKey ?? randomUUID()} : {})};
   const retryable = method === 'GET' || send || (method === 'POST' && /\/messages\/[^/]+\/ack$/.test(new URL(url).pathname));
@@ -22,7 +23,7 @@ export async function requestJSON(url, {method = 'GET', token, body, send = fals
       response = await fetchImpl(url, {method, redirect: 'error', headers, body: encoded,
         signal: AbortSignal.timeout(Math.max(1, deadline - now()))});
       try { data = await response.json(); } catch { /* Proxies may return HTML, never echo it. */ }
-      if (response.ok && data !== undefined) return data;
+      if (response.ok && data !== undefined) {if(send&&data.direct)await deliverDirect(data.direct,{fetchImpl});return data;}
       lastError = new Error(response.ok ? 'Invalid JSON response.' : `${response.status}: ${typeof data?.error?.message === 'string' ? data.error.message : 'Request failed'}`);
       if (!response.ok && !transient.has(response.status)) throw lastError;
       retryAfter = response.headers.get('Retry-After');

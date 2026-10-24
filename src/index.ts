@@ -7,6 +7,7 @@ import type { Env, Message, Principal } from './types';
 import { D1MessageStore, IdempotencyConflict } from './store';
 import { ApiError, authenticate, browserSessionToken, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
 import pkg from '../package.json';
+import {receiverRoutes,checkReceiverFence,directHints} from './receiver';
 
 const json = (data: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(data), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }
@@ -103,6 +104,8 @@ async function api(request: Request, env: Env, url: URL) {
   const ownerLoginResponse = await ownerLoginAgent(request, env, path, p, identity.tokenId, identity.tokenKind);
   if (ownerLoginResponse) return ownerLoginResponse;
   const store = new D1MessageStore(env.DB), method = request.method;
+  const receiverResponse=await receiverRoutes(request,env,path,p);if(receiverResponse)return receiverResponse;
+  if(path==='/messages'&&method==='POST'||/^\/messages\/[^/]+\/ack$/.test(path)&&method==='POST')await checkReceiverFence(request,env,p);
   if (path === '/agents/receiving' && method === 'GET') {
     owner(p);
     return json(await receivingStatus(env));
@@ -371,7 +374,9 @@ async function api(request: Request, env: Env, url: URL) {
       .bind(p.id, key).first<{ id: string; request_hash: string }>();
     if (existing) {
       if (existing.request_hash !== requestHash) fail(409, 'idempotency_conflict', 'This key was already used for a different request.');
-      return json({ message: await store.get(existing.id), replayed: true });
+      const message=(await store.get(existing.id))!;
+      const recipients=(await env.DB.prepare('SELECT recipient_id FROM deliveries WHERE message_seq=? AND acked_at IS NULL').bind(message.seq).all<{recipient_id:string}>()).results.map(r=>r.recipient_id);
+      return json({ message, replayed: true, direct:await directHints(env,message,recipients) });
     }
     let threadId: string, recipients: string[], newThread: { title: string; members: string[]; kind?: 'group' | 'direct' } | undefined;
     if (typeof destination === 'string') {
@@ -400,7 +405,8 @@ async function api(request: Request, env: Env, url: URL) {
     const result = await store.put({ id: id('msg'), thread_id: threadId, sender_id: p.id, type, content,
       idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread, reply_to: replyTo });
     if (!result.replayed) await notifyAgents(env, recipients);
-    return json(result, result.replayed ? 200 : 201);
+    const direct=await directHints(env,result.message,recipients);
+    return json({...result,...(direct.length?{direct}:{})}, result.replayed ? 200 : 201);
   }
   if (path === '/inbox' && method === 'GET') {
     const { after, limit } = pagination(url), include = url.searchParams.get('include_acked');

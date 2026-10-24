@@ -20,7 +20,7 @@ if (proxyConfigured && process.env.NODE_USE_ENV_PROXY !== '0' && process.env.NOD
  const child = spawn(process.execPath, ['--use-env-proxy', ...process.execArgv, ...process.argv.slice(1)], { stdio: 'inherit', env: {...process.env,NODE_USE_ENV_PROXY:'1'} });
  await new Promise(resolve => child.on('exit', code => { resolve(); process.exit(code ?? 1); }));
 }
-let config, adapter = process.argv.find(value => ['codex','claude','workbuddy','current'].includes(value)) || 'current';
+let config, adapter = process.argv.find(value => ['codex','claude','dsh','workbuddy','current'].includes(value)) || 'current';
 const noWait = process.argv.includes('--no-wait');
 const explicitProfile=process.env.AGENTPEERCHAT_CONFIG?resolve(process.env.AGENTPEERCHAT_CONFIG):null;
 // A short invitation link carries no access key: it is resolved into the public pairing
@@ -98,13 +98,14 @@ const profile=explicitProfile||join(directory,'config.json');
 // Never move a saved identity back into the replaceable HOME during reinstall.
 const existingProfile=await assertProfileTarget(profile,config);
 const pairingDirectory=explicitProfile?join(dirname(profile),'.agentpeerchat-join',config.principal_id):directory;
-for(const name of ['agentpeerchat.mjs',...(['codex','claude'].includes(adapter)?['agentpeerchat-runtime.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
+for(const name of ['agentpeerchat.mjs',...(!process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY&&(adapter==='dsh'||process.env.DSH_SHELL==='1')?['agentpeerchat-dsh.mjs']:[]),...(config.pairing?['pairing-client.mjs']:[])]) {
  if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
   if(name==='agentpeerchat.mjs'){
    // Git-source clients need their local helpers; release clients already bundle them.
-   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','runtime-result.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs','connection-packet.mjs','private-profile.mjs']) {
+   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','runtime-result.mjs','native-runtime.mjs','native-mailbox.mjs','runtime-host.mjs','direct-delivery.mjs','dsh-onboarding.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs','connection-packet.mjs','private-profile.mjs']) {
     try{await writeFile(join(directory,helper),await readFile(join(dirname(sourceName),helper)),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
    }
+   for(const pluginPath of [join(dirname(sourceName),'agentpeerchat-dsh.mjs'),join(dirname(sourceName),'../public/agentpeerchat-dsh.mjs')]){try{await writeFile(join(directory,'agentpeerchat-dsh.mjs'),await readFile(pluginPath),{mode:0o600});break;}catch(error){if(error.code!=='ENOENT')throw error;}}
   }
   continue;}
  const r=await fetch(config.url.replace(/\/$/,'')+'/'+name,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error("Could not download the connection client.");const text=await r.text();if(text.length>1000000)throw new Error("Downloaded file is too large.");await writeFile(join(directory,name),text,{mode:0o600});

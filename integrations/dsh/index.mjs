@@ -25,6 +25,7 @@ export async function nativeTask(ctx,session,task,{root}={}){
  if(saved){
   if(saved.session_id!==agent.id||!Number.isSafeInteger(saved.first_seq)||saved.first_seq<0||saved.first_seq>Number(agent.session.seq))throw Error('Invalid DSH task checkpoint.');
   const recovered=readResult(saved.first_seq);if(recovered){await ctx.get('sessions').flush(agent.session);return recovered;}
+  throw Error('The saved native task has no confirmed completion. Inspect its DSH session before retrying side effects.');
  }
  const first=Number(agent.session.seq);
  if(checkpoint)await savePrivate(checkpoint,{session_id:agent.id,first_seq:first});
