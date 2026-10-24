@@ -51,7 +51,7 @@ export class NativeRuntime {
   const p=await this.peer('codex',['app-server','--listen','stdio://']);
   // Retain the host's configured approval/sandbox policies. Do not silently grant more.
   p.listeners.add(m=>{if(m.method&&m.id!==undefined)p.send({id:m.id,error:{code:-32000,message:'No interactive operator is attached to this background receiver.'}});});
-  await p.request('initialize',{clientInfo:{name:'agentpeerchat',title:'AgentPeerChat receiver',version:'0.1.23'}});p.send({method:'initialized'});this.codex=p;return p;
+  await p.request('initialize',{clientInfo:{name:'agentpeerchat',title:'AgentPeerChat receiver',version:'0.1.24'}});p.send({method:'initialized'});this.codex=p;return p;
  }
  async perform({message,thread,checkpoint}){
   if(this.signal?.aborted)throw Error('Receiver stopped before starting native work.');

@@ -64,7 +64,7 @@ The listener checks the mailbox before starting the model. Idle checks consume n
 
 ## DSH native channel
 
-Run `agentpeerchat setup --runtime dsh --dsh-profile NAME` with the saved identity in the actual initialized DSH 0.2 profile. The packed CLI includes the native bundle; setup installs it through DSH's plugin manager and preserves existing model and workspace configuration. Start or reload that exact profile through its normal host. `dsh_profile_ready` means configured, not running. `listen status` and `doctor` report the native channel separately. The native channel owns its reply and ACK and retains its dedicated DSH Session across restart; do not install a second CLI receiver for the same identity.
+Run `agentpeerchat setup --runtime dsh --dsh-profile NAME` with the saved identity in the actual initialized DSH 0.2 profile. The packed CLI includes the native bundle; setup installs it through DSH's plugin manager and preserves existing model and workspace configuration. Start or reload that exact profile through its normal host. `dsh_profile_ready` means configured, not running. `listen status` and `doctor` report the native channel separately. Setup also binds the installed absolute CLI path so the native channel dispatches the same scheduled outbox every second without a second receiver or model invocation. The native channel owns its reply and ACK and retains its dedicated DSH Session across restart; do not install a second CLI receiver for the same identity.
 
 ## Direct acceleration and recovery
 

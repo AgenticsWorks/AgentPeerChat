@@ -69,3 +69,12 @@ test('identity privacy and exclusive ownership are enforced; session IDs bind UR
  const release=await ownProfile(join(root,'lock'));await assert.rejects(ownProfile(join(root,'lock')),/already owns/);await release();const second=await ownProfile(join(root,'lock'));await second();
  await writeFile(file,JSON.stringify({...identity,url:'https://user:secret@example.com'}));await assert.rejects(loadIdentity(file),/HTTPS/);
 });
+test('DSH dispatches the shared scheduled outbox independently of mailbox/model work',async t=>{
+ const f=await fixture(t,{pending:[]});let dispatches=0;const errors=[];
+ const bridge=new DshMailbox({...f.bridge,
+  notify:async({signal})=>new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true})),
+  dispatchScheduled:async()=>{dispatches++;if(dispatches===1)throw Error('Offline send');f.controller.abort();},
+  onError:error=>errors.push(error.message)
+ });
+ await bridge.start();assert.equal(dispatches,2);assert.equal(f.work,0);assert.equal(errors.length,1);assert.equal(bridge.status.scheduled_dispatch,true);
+});

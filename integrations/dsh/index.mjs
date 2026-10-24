@@ -1,9 +1,10 @@
-import {resolve,join} from 'node:path';
+import {resolve,join,isAbsolute} from 'node:path';
 import {readFile,access} from 'node:fs/promises';
 import {createUserMessage} from '@deepseek-ai/dsh-llm';
 import {installModelSelection} from '@deepseek-ai/dsh-agent';
 import {SessionQueryError} from '@deepseek-ai/dsh-session-query';
 import {DshMailbox,loadIdentity,dedicatedSessionId,ownProfile,savePrivate,NO_REPLY} from './bridge.mjs';
+import {automation} from '../../scripts/automation.mjs';
 export const name='agentpeerchat';
 export const inject=['agents','sessions','sessionPersistence','sessionQuery','agentDefaultModel'];
 export function taskPrompt({message,thread}){
@@ -66,7 +67,9 @@ export async function mountChannel(ctx,config={}){
    if(process.env.AGENTPEERCHAT_PLUGIN_DEBUG==='1')console.error('AgentPeerChat DSH event: '+event.type);
    if(['agent/inbox/spliced','tool/result','turn/end'].includes(event.type))checkpoints=checkpoints.then(()=>ctx.get('sessions').flush(session)).catch(()=>{});
   });
-  const bridge=new DshMailbox({identity,root,signal:controller.signal,fallbackSeconds:config.fallbackSeconds??1800,runTask:input=>nativeTask(ctx,handle,input,{root}),onError:error=>{
+  const cli=config.cli||process.env.AGENTPEERCHAT_EXECUTABLE;
+  if(cli){if(!isAbsolute(cli))throw Error('The native scheduler requires the installed absolute CLI path.');await access(cli);}
+  const bridge=new DshMailbox({identity,root,signal:controller.signal,fallbackSeconds:config.fallbackSeconds??1800,dispatchScheduled:cli?()=>automation('schedule',['flush'],{cli,env:{...process.env,AGENTPEERCHAT_CONFIG:profile}}):undefined,runTask:input=>nativeTask(ctx,handle,input,{root}),onError:error=>{
    if(process.env.AGENTPEERCHAT_PLUGIN_DEBUG==='1'){
     console.error(error.name+'\n'+String(error.stack||'').split('\n').slice(1,5).join('\n'));
     const events=[];for(let n=Math.max(0,Number(handle.agent.session.seq)-12);n<Number(handle.agent.session.seq);n++){const e=handle.agent.session.eventAt(n);events.push({type:e?.type,reason:e?.type==='turn/end'?e.data.reason?.kind:undefined,code:e?.type==='turn/end'?e.data.reason?.error?.code:undefined});}

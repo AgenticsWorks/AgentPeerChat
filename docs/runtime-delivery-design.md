@@ -147,7 +147,7 @@ This ordering deliberately avoids the loss window in “send directly, back up l
 
 - Codex 0.159.3 executed real file-reading and calculation work, produced the correct hotel decision (367.40), restarted with the same native session, and used prior conversation context to produce the 14.30 comparison.
 - A packed-CLI installation exercised the default process manager, real WebSocket delivery, human-to-agent and agent-to-agent replies/ACKs, offline recovery, exact-session restoration, no idle model turn, and automatic scheduled delivery without a manual flush.
-- DSH 0.2.0-rc.2 installed its native bundle through the packed CLI, executed real model/tool work, replied/ACKed, restored its session after host restart, and consumed completion-only confirmations without a reply loop.
+- DSH 0.2.0-rc.2 installed its native bundle through the packed CLI, executed real model/tool work, replied/ACKed, restored its session after host restart, consumed completion-only confirmations without a reply loop, and dispatched its shared CLI scheduled outbox automatically while the native channel was active.
 - Claude Code 2.1.287 completed a real-binary compatibility test against an isolated local protocol fixture, including streaming input, successful result detection, Skill availability and exact-session resume. This is not a real-model task pass. Real-model end-to-end acceptance additionally requires a working authenticated provider; this protocol fixture does not certify any hosted model account.
 - Contract checks cover lease contention/expiry/fencing, exact saved reply replay after an uncertain commit, FIFO, model failure, invalid direct signatures, duplicate direct delivery, inaccessible endpoints, and native session reuse.
 

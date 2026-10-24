@@ -146,7 +146,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
     if(acknowledged){await privateWrite(join(root,'last-wake.json'),{principal_id:identity.principal_id,url:identity.url,target,submitted_at:previous.submitted_at,processed_at:new Date().toISOString(),acknowledged,transport:previous.transport});previous.ids=unacknowledged;await privateWrite(join(root,'wake.json'),previous);}
     return {verified:acknowledged>0,pending:unacknowledged.length>0};
   }
-  async function active(){if(settings?.manager==='process')return (await processStatus(root)).active;if(!settings||process.platform!=='linux')return false;try{return systemctl(settings.system,'is-active',unit+'.timer')==='active';}catch{return false;}}
+  async function active(){if((await dshStatus(profile))?.scheduled_dispatch)return true;if(settings?.manager==='process')return (await processStatus(root)).active;if(!settings||process.platform!=='linux')return false;try{return systemctl(settings.system,'is-active',unit+'.timer')==='active';}catch{return false;}}
   if(command==='schedule')return locked(join(root,'outbox-lock.json'),async()=>{
     const items=await queue();
     if(action==='list')return {jobs:items,listener_configured:Boolean(settings),automatic_dispatch:await active()};

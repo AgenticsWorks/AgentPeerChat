@@ -188,7 +188,7 @@ var NativeRuntime = class {
     p2.listeners.add((m) => {
       if (m.method && m.id !== void 0) p2.send({ id: m.id, error: { code: -32e3, message: "No interactive operator is attached to this background receiver." } });
     });
-    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.23" } });
+    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.24" } });
     p2.send({ method: "initialized" });
     this.codex = p2;
     return p2;
@@ -2508,7 +2508,7 @@ async function dshStatus(profile) {
   const session = "session-" + [expected.slice(0, 8), expected.slice(8, 12), expected.slice(12, 16), expected.slice(16, 20), expected.slice(20)].join("-");
   if (state2?.session_id !== session || state2?.principal_id && state2.principal_id !== identity.principal_id || state2?.url && state2.url !== identity.url.replace(/\/$/, "")) return { runtime: "dsh", active: false, connected: false, verified: false };
   const recent = Date.now() - Date.parse(state2.last_heartbeat_at || state2.connected_at || "") < 12e4;
-  return { runtime: "dsh", active: Boolean(active), connected: Boolean(active && state2.connected && recent), session_id: session, processed: state2.processed || 0, last_processed_at: state2.last_processed_at || null, last_error: state2.last_error || null, verified: Boolean(active && state2.processed > 0 && Number.isFinite(Date.parse(state2.last_processed_at || "")) && !state2.last_error) };
+  return { runtime: "dsh", active: Boolean(active), scheduled_dispatch: Boolean(active && state2.scheduled_dispatch), connected: Boolean(active && state2.connected && recent), session_id: session, processed: state2.processed || 0, last_processed_at: state2.last_processed_at || null, last_error: state2.last_error || null, verified: Boolean(active && state2.processed > 0 && Number.isFinite(Date.parse(state2.last_processed_at || "")) && !state2.last_error) };
 }
 
 // scripts/runtime-result.mjs
@@ -2885,6 +2885,7 @@ async function automation(command2, args2, { cli, env = process.env, nativeEngin
     return { verified: acknowledged > 0, pending: unacknowledged.length > 0 };
   }
   async function active() {
+    if ((await dshStatus(profile))?.scheduled_dispatch) return true;
     if (settings?.manager === "process") return (await processStatus(root)).active;
     if (!settings || process.platform !== "linux") return false;
     try {

@@ -303,7 +303,7 @@ var NativeRuntime = class {
     p2.listeners.add((m) => {
       if (m.method && m.id !== void 0) p2.send({ id: m.id, error: { code: -32e3, message: "No interactive operator is attached to this background receiver." } });
     });
-    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.23" } });
+    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.24" } });
     p2.send({ method: "initialized" });
     this.codex = p2;
     return p2;
@@ -2350,9 +2350,9 @@ async function write(p2, text) {
   }
 }
 function dshManifest() {
-  return { name: bundle, version: "0.1.1", type: "module", main: "index.mjs", files: ["index.mjs", "cordis.patch.yml", "LICENSE"], license: "MIT", dsh: { bundle: { patch: "./cordis.patch.yml" } }, peerDependencies: { "@deepseek-ai/cordis": "^4.0.4", "@deepseek-ai/dsh-agent": "^0.2.0-rc.2", "@deepseek-ai/dsh-llm": "^0.2.0-rc.2", "@deepseek-ai/dsh-session-query": "^0.2.0-rc.2" }, engines: { node: ">=22.15.0" } };
+  return { name: bundle, version: "0.1.2", type: "module", main: "index.mjs", files: ["index.mjs", "cordis.patch.yml", "LICENSE"], license: "MIT", dsh: { bundle: { patch: "./cordis.patch.yml" } }, peerDependencies: { "@deepseek-ai/cordis": "^4.0.4", "@deepseek-ai/dsh-agent": "^0.2.0-rc.2", "@deepseek-ai/dsh-llm": "^0.2.0-rc.2", "@deepseek-ai/dsh-session-query": "^0.2.0-rc.2" }, engines: { node: ">=22.15.0" } };
 }
-function dshPatch(text, { profile: profile2, seconds = 1800, enabled = true }) {
+function dshPatch(text, { profile: profile2, cli: cli2, seconds = 1800, enabled = true }) {
   const begin = "# AgentPeerChat managed channel: begin", end = "# AgentPeerChat managed channel: end";
   const first = text.indexOf(begin), last = text.indexOf(end);
   if (first < 0 !== last < 0 || first >= 0 && last < first) throw Error("Inspect the incomplete AgentPeerChat DSH patch before retrying.");
@@ -2361,7 +2361,7 @@ function dshPatch(text, { profile: profile2, seconds = 1800, enabled = true }) {
   disabled: ${!enabled}
   config:
     profile: ${JSON.stringify(resolve4(profile2))}
-    fallbackSeconds: ${seconds}
+${cli2 ? "    cli: " + JSON.stringify(resolve4(cli2)) + "\n" : ""}    fallbackSeconds: ${seconds}
 ${end}`;
   if (first >= 0) return text.slice(0, first) + block + text.slice(last + end.length);
   const meaningful = text.split("\n").filter((line) => line.trim() && !line.trim().startsWith("#")).join("\n").trim();
@@ -2405,7 +2405,7 @@ async function dshStatus(profile2) {
   const session = "session-" + [expected.slice(0, 8), expected.slice(8, 12), expected.slice(12, 16), expected.slice(16, 20), expected.slice(20)].join("-");
   if (state2?.session_id !== session || state2?.principal_id && state2.principal_id !== identity.principal_id || state2?.url && state2.url !== identity.url.replace(/\/$/, "")) return { runtime: "dsh", active: false, connected: false, verified: false };
   const recent = Date.now() - Date.parse(state2.last_heartbeat_at || state2.connected_at || "") < 12e4;
-  return { runtime: "dsh", active: Boolean(active), connected: Boolean(active && state2.connected && recent), session_id: session, processed: state2.processed || 0, last_processed_at: state2.last_processed_at || null, last_error: state2.last_error || null, verified: Boolean(active && state2.processed > 0 && Number.isFinite(Date.parse(state2.last_processed_at || "")) && !state2.last_error) };
+  return { runtime: "dsh", active: Boolean(active), scheduled_dispatch: Boolean(active && state2.scheduled_dispatch), connected: Boolean(active && state2.connected && recent), session_id: session, processed: state2.processed || 0, last_processed_at: state2.last_processed_at || null, last_error: state2.last_error || null, verified: Boolean(active && state2.processed > 0 && Number.isFinite(Date.parse(state2.last_processed_at || "")) && !state2.last_error) };
 }
 async function setupDsh({ profile: profile2, cli: cli2, env: env2 = process.env, seconds = 1800, enabled = true, execute = run } = {}) {
   const name = env2.AGENTPEERCHAT_DSH_PROFILE || env2.DSH_PROFILE;
@@ -2432,7 +2432,7 @@ async function setupDsh({ profile: profile2, cli: cli2, env: env2 = process.env,
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
-  const nextPatch = dshPatch(original, { profile: profile2, seconds, enabled });
+  const nextPatch = dshPatch(original, { profile: profile2, cli: cli2, seconds, enabled });
   if (!enabled) {
     await write(patchPath, nextPatch);
     return { profile: name, home, version, enabled: false, status: "manual" };
@@ -2858,6 +2858,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env, n
     return { verified: acknowledged > 0, pending: unacknowledged.length > 0 };
   }
   async function active() {
+    if ((await dshStatus(profile2))?.scheduled_dispatch) return true;
     if (settings?.manager === "process") return (await processStatus(root)).active;
     if (!settings || process.platform !== "linux") return false;
     try {

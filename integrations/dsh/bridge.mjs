@@ -39,10 +39,10 @@ export async function ownProfile(root){
  await file.writeFile(JSON.stringify({pid:process.pid}));return async()=>{await file.close();await rm(path,{force:true});};
 }
 export class DshMailbox {
- constructor({identity,root,runTask,signal,request=requestJSON,notify=receiveNotifications,fallbackSeconds=1800,onStatus=()=>{},onError=()=>{}}){
+ constructor({identity,root,runTask,signal,request=requestJSON,notify=receiveNotifications,fallbackSeconds=1800,onStatus=()=>{},onError=()=>{},dispatchScheduled}){
   if(!Number.isInteger(fallbackSeconds)||fallbackSeconds<30||fallbackSeconds>86400)throw Error('Fallback must be 30..86400 seconds.');
-  Object.assign(this,{identity,root,runTask,signal,request,notify,fallbackSeconds,onStatus,onError});this.current=null;this.dirty=false;this.retry=null;this.failures=0;
-  this.status={runtime:'dsh',principal_id:identity.principal_id,url:identity.url,session_id:dedicatedSessionId(identity),connected:false,processed:0};
+  Object.assign(this,{identity,root,runTask,signal,request,notify,fallbackSeconds,onStatus,onError,dispatchScheduled});this.current=null;this.dirty=false;this.retry=null;this.failures=0;
+  this.status={runtime:'dsh',principal_id:identity.principal_id,url:identity.url,session_id:dedicatedSessionId(identity),connected:false,processed:0,scheduled_dispatch:Boolean(dispatchScheduled)};
  }
  async update(patch){this.status={...this.status,...patch};await savePrivate(join(this.root,'status.json'),this.status);this.onStatus(this.status);}
  call(path,options={}){return this.request(this.identity.url+'/api/v1'+path,{token:this.identity.token,...options,...(this.fence?{headers:{'X-AgentPeerChat-Receiver':this.fence}}:{})});}
@@ -96,11 +96,13 @@ export class DshMailbox {
  }
  async start(){
   const timer=setInterval(()=>void this.trigger(),this.fallbackSeconds*1000);
+  let dispatch;
+  const scheduled=this.dispatchScheduled?setInterval(()=>{if(!dispatch&&!this.signal.aborted)dispatch=this.dispatchScheduled().catch(()=>this.onError(Error('Scheduled delivery failed; the outbox is retained.'))).finally(()=>dispatch=null);},1000):null;
   let direct={close:async()=>{}};try{direct=await startDirect({identity:this.identity,root:this.root,onWork:()=>this.trigger(),request:this.request});}catch{/* Direct ingress is optional; keep outbound receiving. */}
-  const stop=()=>{clearInterval(timer);clearTimeout(this.retry);this.retry=null;};this.signal.addEventListener('abort',stop,{once:true});
+  const stop=()=>{clearInterval(timer);clearInterval(scheduled);clearTimeout(this.retry);this.retry=null;};this.signal.addEventListener('abort',stop,{once:true});
   try{
    await this.update({started_at:new Date().toISOString()});void this.trigger();
    await this.notify({identity:this.identity,signal:this.signal,onWork:()=>this.trigger(),onState:patch=>this.update(patch)});
-  }finally{stop();await this.current;await direct.close();this.signal.removeEventListener('abort',stop);await this.update({connected:false,working:false});}
+  }finally{stop();await this.current;await dispatch;await direct.close();this.signal.removeEventListener('abort',stop);await this.update({connected:false,working:false});}
  }
 }
