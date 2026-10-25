@@ -21,6 +21,11 @@ export async function doctor({config={},token,url,request,listenerStatus,now=Dat
   try{status=await listenerStatus();}catch{check('receiving','fail','Local receiving status could not be read.');next.push('Inspect listen status and repair its private local state.');result.state='needs_attention';return result;}
   const queued=status?.queued||0,failed=status?.failed_queued||0;
   result.scheduled_messages={queued,failed};
+  const recovery=status?.native?.recovery??status?.recovery;
+  if(recovery){result.mailbox_recovery=recovery;
+    if(recovery.paused||recovery.needs_review||status?.last_check?.workspace_blocked||status?.native?.workspace_blocked){check('mailbox_recovery','fail','Some pending work is paused or needs native-session inspection.');next.push('Use mailbox status, repair access, then mailbox retry MESSAGE_ID; use mailbox reconcile MESSAGE_ID for uncertain execution.');}
+    else if(recovery.retrying)check('mailbox_recovery','warn','Failed deliveries remain in the mailbox and are waiting for their next retry.');
+  }
   if(failed){check('scheduled_messages','fail','Scheduled messages have failed deliveries retained for retry.');next.push('Inspect schedule list and retry delivery after fixing access.');}
   if(status?.native?.runtime==='dsh'){
     const native=status.native,healthy=native.active&&!native.last_error;
@@ -38,13 +43,13 @@ export async function doctor({config={},token,url,request,listenerStatus,now=Dat
       result.realtime=status.realtime;
     }
     const latest=status.last_check,model=status.last_model_check;
-    const time=Date.parse(latest?.model_finished_at||latest?.checked_at||'');
+    const time=Math.max(Date.parse(latest?.model_finished_at||'')||0,Date.parse(latest?.checked_at||'')||0)||NaN;
     const stale=Number.isFinite(time)&&now-time>Math.max(120,(status.interval_seconds||1800)*2+1980)*1000;
     const failedCheck=latest?.success===false&&Boolean(latest.error);
-    const running=latest?.model_started===true&&!latest.model_finished_at&&!latest.error;
+    const running=latest?.model_started===true&&!latest.model_finished_at&&!latest.processing_finished_at&&!latest.error;
     const active=Boolean(status.active&&status.enabled);
     const wake=status.last_wake_check,session=status.delivery_mode==='session';
-    const verified=session?Number.isFinite(Date.parse(wake?.processed_at||''))&&wake.acknowledged>0:model?.success===true&&model?.model_started===true&&model.acknowledged>0&&Number.isFinite(Date.parse(model.model_finished_at||''));
+    const verified=session?Number.isFinite(Date.parse(wake?.processed_at||''))&&wake.acknowledged>0:model?.success===true&&(model.model_started===true||model.reused_results>0)&&model.acknowledged>0&&Number.isFinite(Date.parse(model.model_finished_at||''));
     result.receiving={mode:!active||stale||failedCheck?'needs_attention':running?'checking':verified?'verified':'unverified',verified:active&&!stale&&!failedCheck&&verified,task_id:status.task_id,interval_seconds:status.interval_seconds,last_check_at:latest?.checked_at||null,last_model_at:session?wake?.processed_at||null:model?.model_finished_at||null,delivery_mode:status.delivery_mode||'independent',last_wake_submitted:latest?.wake_submitted||false};
     if(!active){check('receiving','fail','The configured CLI listener is stopped or disabled.');next.push('Restore the existing listener using the skill; reuse its task instead of creating duplicates.');}
     else if(stale){check('receiving','fail','The listener has not reported a recent check.');next.push('Inspect the existing process manager or service on the Agent host.');}

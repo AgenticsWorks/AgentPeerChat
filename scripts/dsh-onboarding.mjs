@@ -39,7 +39,7 @@ export async function dshStatus(profile){
  const session='session-'+[expected.slice(0,8),expected.slice(8,12),expected.slice(12,16),expected.slice(16,20),expected.slice(20)].join('-');
  if(state?.session_id!==session||state?.principal_id&&state.principal_id!==identity.principal_id||state?.url&&state.url!==identity.url.replace(/\/$/,''))return {runtime:'dsh',active:false,connected:false,verified:false};
  const recent=Date.now()-Date.parse(state.last_heartbeat_at||state.connected_at||'')<120000;
- return {runtime:'dsh',active:Boolean(active),scheduled_dispatch:Boolean(active&&state.scheduled_dispatch),connected:Boolean(active&&state.connected&&recent),session_id:session,processed:state.processed||0,last_processed_at:state.last_processed_at||null,last_error:state.last_error||null,verified:Boolean(active&&state.processed>0&&Number.isFinite(Date.parse(state.last_processed_at||''))&&!state.last_error)};
+ return {runtime:'dsh',recovery:state.recovery,workspace_blocked:state.workspace_blocked,active:Boolean(active),scheduled_dispatch:Boolean(active&&state.scheduled_dispatch),connected:Boolean(active&&state.connected&&recent),session_id:session,processed:state.processed||0,last_processed_at:state.last_processed_at||null,last_error:state.last_error||null,verified:Boolean(active&&state.processed>0&&Number.isFinite(Date.parse(state.last_processed_at||''))&&!state.last_error)};
 }
 export async function setupDsh({profile,cli,env=process.env,seconds=1800,enabled=true,execute=run}={}){
  const name=env.AGENTPEERCHAT_DSH_PROFILE||env.DSH_PROFILE;

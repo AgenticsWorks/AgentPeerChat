@@ -5,6 +5,9 @@ import {createHash,randomUUID} from 'node:crypto';
 import {requestJSON} from '../../scripts/client-transport.mjs';
 import {receiveNotifications} from '../../scripts/realtime-client.mjs';
 import {startDirect} from '../../scripts/direct-delivery.mjs';
+import {processMailbox} from '../../scripts/native-mailbox.mjs';
+import {markWorkspaceReview} from '../../scripts/native-runtime.mjs';
+import {serveChecks} from '../../scripts/runtime-host.mjs';
 const digest=value=>createHash('sha256').update(value).digest('hex');
 export const NO_REPLY='[agentpeerchat:no-reply]';
 export async function savePrivate(path,value){
@@ -39,9 +42,9 @@ export async function ownProfile(root){
  await file.writeFile(JSON.stringify({pid:process.pid}));return async()=>{await file.close();await rm(path,{force:true});};
 }
 export class DshMailbox {
- constructor({identity,root,runTask,signal,request=requestJSON,notify=receiveNotifications,fallbackSeconds=1800,onStatus=()=>{},onError=()=>{},dispatchScheduled}){
+ constructor({identity,root,runTask,signal,request=requestJSON,notify=receiveNotifications,fallbackSeconds=1800,onStatus=()=>{},onError=()=>{},dispatchScheduled,workspace,clock=Date.now}){
   if(!Number.isInteger(fallbackSeconds)||fallbackSeconds<30||fallbackSeconds>86400)throw Error('Fallback must be 30..86400 seconds.');
-  Object.assign(this,{identity,root,runTask,signal,request,notify,fallbackSeconds,onStatus,onError,dispatchScheduled});this.current=null;this.dirty=false;this.retry=null;this.failures=0;
+  Object.assign(this,{identity,root,runTask,signal,request,notify,fallbackSeconds,onStatus,onError,dispatchScheduled,workspace,clock});this.current=null;this.dirty=false;this.retry=null;this.failures=0;
   this.status={runtime:'dsh',principal_id:identity.principal_id,url:identity.url,session_id:dedicatedSessionId(identity),connected:false,processed:0,scheduled_dispatch:Boolean(dispatchScheduled)};
  }
  async update(patch){this.status={...this.status,...patch};await savePrivate(join(this.root,'status.json'),this.status);this.onStatus(this.status);}
@@ -56,32 +59,21 @@ export class DshMailbox {
   finally{clearInterval(timer);await renewal;this.fence=null;await this.call('/receiver/lease',{method:'DELETE',body:{holder,fence:lease.fence}}).catch(()=>{});}
  }
  async drainOwned(checkLease){
-  // Start from pending deliveries after every restart. No notification or local cursor is authoritative.
-  const page=await this.call('/inbox?after=0&limit=20');if(!Array.isArray(page.items))throw Error('Invalid inbox.');
-  for(const message of page.items){
-   checkLease();
-   if(this.signal.aborted)break;
-   checkLease();
-   if(!/^msg_[A-Za-z0-9_]+$/.test(message.id||'')||!/^thr_[A-Za-z0-9_]+$/.test(message.thread_id||''))throw Error('Invalid message identity.');
-   const path=join(this.root,'receipts',message.id+'.json');let result;
-   try{result=JSON.parse(await readFile(path,'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
-   if(result&&(result.principal_id!==this.identity.principal_id||result.url!==this.identity.url||result.message_id!==message.id))throw Error('The saved receipt belongs to another identity.');
-   if(!result){
-    await this.update({last_message_id:message.id,working:true,last_error:null});
-    const context=await this.call('/threads/'+message.thread_id+'?after=0&limit=10');
-    const text=await this.runTask({message,thread:context.thread,signal:this.signal});
-    if(typeof text!=='string'||!text.trim()||Buffer.byteLength(text)>16384)throw Error('DSH must produce a nonempty reply within the mailbox text limit.');
-    result={principal_id:this.identity.principal_id,url:this.identity.url,message_id:message.id,thread_id:message.thread_id,content:text.trim()===NO_REPLY?null:text};
-    // Save the exact result before send. A crash or uncertain reply retries this payload, not the task.
-    await savePrivate(path,result);
-   }
-   if(this.signal.aborted)break;
-   if(result.content!==null)await this.call('/messages',{method:'POST',send:true,idempotencyKey:'dsh-reply-'+message.id,body:{thread_id:result.thread_id,type:'text',content:result.content,reply_to:message.id}});
-   await this.call('/messages/'+message.id+'/ack',{method:'POST'});
-   await this.update({processed:this.status.processed+1,working:false,last_processed_at:new Date().toISOString(),last_error:null});
-  }
-  if(page.has_more&&!this.signal.aborted)this.dirty=true;
+  const execute=async task=>{
+   await this.update({last_message_id:task.message.id,working:true,last_error:null});
+   try{return await this.runTask({...task,signal:this.signal});}
+   catch(error){if(task.checkpoint?.phase==='running')await markWorkspaceReview(this.workspace,this.identity,task.message);throw error;}
+  };
+  const engine={workspace:this.workspace,signal:this.signal,run:execute,reconcile:task=>execute({...task,reconcileOnly:true})};
+  const result=await processMailbox({identity:this.identity,root:this.root,engine,call:(path,options)=>this.call(path,options),signal:this.signal,
+   checkLease,clock:this.clock,replyPrefix:'dsh-reply-',onProcessed:async()=>this.update({processed:this.status.processed+1,working:false,last_processed_at:new Date(this.clock()).toISOString()})});
+  const needsAttention=result.recovery.paused||result.recovery.needs_review||result.workspace_blocked;
+  await this.update({working:false,recovery:result.recovery,workspace_blocked:result.workspace_blocked,
+   last_error:needsAttention?'Mailbox recovery requires attention; pending mail is retained.':result.recovery.retrying?'Mailbox delivery is waiting for retry.':null});
+  if(result.scan_incomplete)this.dirty=true;
+  if(result.next_check_at&&!this.retry&&!this.signal.aborted)this.retry=setTimeout(()=>{this.retry=null;void this.trigger();},Math.max(1000,Date.parse(result.next_check_at)-this.clock()));
  }
+
  trigger(){
   if(this.signal.aborted)return Promise.resolve();this.dirty=true;if(this.current)return this.current;
   this.current=(async()=>{
@@ -95,6 +87,7 @@ export class DshMailbox {
   })();return this.current;
  }
  async start(){
+  const stopHost=await serveChecks(this.root,()=>this.trigger());
   const timer=setInterval(()=>void this.trigger(),this.fallbackSeconds*1000);
   let dispatch;
   const scheduled=this.dispatchScheduled?setInterval(()=>{if(!dispatch&&!this.signal.aborted)dispatch=this.dispatchScheduled().catch(()=>this.onError(Error('Scheduled delivery failed; the outbox is retained.'))).finally(()=>dispatch=null);},1000):null;
@@ -103,6 +96,6 @@ export class DshMailbox {
   try{
    await this.update({started_at:new Date().toISOString()});void this.trigger();
    await this.notify({identity:this.identity,signal:this.signal,onWork:()=>this.trigger(),onState:patch=>this.update(patch)});
-  }finally{stop();await this.current;await dispatch;await direct.close();this.signal.removeEventListener('abort',stop);await this.update({connected:false,working:false});}
+  }finally{stop();await stopHost();await this.current;await dispatch;await direct.close();this.signal.removeEventListener('abort',stop);await this.update({connected:false,working:false});}
  }
 }

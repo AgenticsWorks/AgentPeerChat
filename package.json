@@ -85,6 +85,7 @@
     "scripts/dsh-onboarding.mjs",
     "scripts/native-runtime.mjs",
     "scripts/native-mailbox.mjs",
+    "scripts/mailbox-recovery.mjs",
     "scripts/runtime-host.mjs",
     "scripts/direct-delivery.mjs",
     "public/agentpeerchat-dsh.mjs"

@@ -28,9 +28,11 @@ export async function nativeTask(ctx,session,task,{root}={}){
   const recovered=readResult(saved.first_seq);if(recovered){await ctx.get('sessions').flush(agent.session);return recovered;}
   throw Error('The saved native task has no confirmed completion. Inspect its DSH session before retrying side effects.');
  }
+ if(task.reconcileOnly)throw Error('No saved DSH completion to reconcile; no new turn was started.');
  const first=Number(agent.session.seq);
  if(checkpoint)await savePrivate(checkpoint,{session_id:agent.id,first_seq:first});
  if(task.signal.aborted)throw Error('Channel stopped.');
+ await task.checkpoint?.save({phase:'running'});
  const cancel=()=>agent.cancel({kind:'user'});task.signal.addEventListener('abort',cancel,{once:true});
  try{agent.followup(createUserMessage({content:[{type:'text',text:taskPrompt(task)}],source:{kind:'agentpeerchat',message_id:task.message.id}}));await agent.whenIdle();}
  finally{task.signal.removeEventListener('abort',cancel);}
@@ -69,7 +71,7 @@ export async function mountChannel(ctx,config={}){
   });
   const cli=config.cli||process.env.AGENTPEERCHAT_EXECUTABLE;
   if(cli){if(!isAbsolute(cli))throw Error('The native scheduler requires the installed absolute CLI path.');await access(cli);}
-  const bridge=new DshMailbox({identity,root,signal:controller.signal,fallbackSeconds:config.fallbackSeconds??1800,dispatchScheduled:cli?()=>automation('schedule',['flush'],{cli,env:{...process.env,AGENTPEERCHAT_CONFIG:profile}}):undefined,runTask:input=>nativeTask(ctx,handle,input,{root}),onError:error=>{
+  const bridge=new DshMailbox({identity,root,workspace:cwd,signal:controller.signal,fallbackSeconds:config.fallbackSeconds??1800,dispatchScheduled:cli?()=>automation('schedule',['flush'],{cli,env:{...process.env,AGENTPEERCHAT_CONFIG:profile}}):undefined,runTask:input=>nativeTask(ctx,handle,input,{root}),onError:error=>{
    if(process.env.AGENTPEERCHAT_PLUGIN_DEBUG==='1'){
     console.error(error.name+'\n'+String(error.stack||'').split('\n').slice(1,5).join('\n'));
     const events=[];for(let n=Math.max(0,Number(handle.agent.session.seq)-12);n<Number(handle.agent.session.seq);n++){const e=handle.agent.session.eventAt(n);events.push({type:e?.type,reason:e?.type==='turn/end'?e.data.reason?.kind:undefined,code:e?.type==='turn/end'?e.data.reason?.error?.code:undefined});}
