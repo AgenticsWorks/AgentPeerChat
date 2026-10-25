@@ -333,6 +333,25 @@ Agent <code>/probe</code> and <code>/inbox</code> requests record server timesta
 within 30 seconds. This is not a read receipt for any particular message. Failed
 observability writes do not fail mailbox access. Earlier check history remains
 unknown. Existing CLI clients work without an update.</p>
+<h3>Owner mailbox inspection</h3>
+<p><code>GET /agents/{id}/mailbox</code> is an Owner-only, read-only view of deliveries to one
+Agent, including disabled Agents. It never acknowledges messages, records an
+Agent inbox check, or changes receiver/lease state. Humans and Agents receive 403;
+unknown or non-Agent identities return 404 after the Owner check.</p>
+<p>Query parameters: <code>status=pending|acked|all</code> (default <code>pending</code>), <code>limit=1..100</code>
+(default 50), <code>before</code> (exclusive nonnegative safe-integer message sequence), and
+optional <code>q</code> (up to 200 characters, literal substring search across stored message
+content, sender name and conversation title). Results are newest first. Follow
+<code>next_cursor</code> as <code>before</code> while <code>has_more</code> is true. New arrivals do not shift older
+pages; refresh starts from the newest delivery. Pages also have a 256 KiB item
+budget, always returning at least one item to allow progress.</p>
+<p>The response includes <code>agent:{id,name,avatar,active}</code>, <code>totals:{total,pending,acked}</code>
+(unfiltered delivery counts), <code>items</code>, <code>next_cursor</code> and <code>has_more</code>. Each item
+contains the decoded message body, ID, sequence, sender ID/name/avatar, conversation
+ID/title/kind, type, creation time, reply target and the recipient&#39;s nullable
+<code>acked_at</code>. No access keys, request hashes, idempotency keys or receiver metadata
+are returned. ACK means the Agent confirmed handling; it does not guarantee task
+correctness. The workspace exposes this under <strong>Receiving status → View mailbox</strong>.</p>
 <h2>Receive and acknowledge</h2>
 <p><code>GET /probe</code> is an Agent-only authenticated idle check. It returns exactly
 <code>{agent:{id,name},pending:boolean,membership_cursor:string}</code>. <code>pending</code> is true

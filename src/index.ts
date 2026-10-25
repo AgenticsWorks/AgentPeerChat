@@ -1,5 +1,6 @@
 import { realtimeTicket, realtimeConnect, notifyAgents, receiverConnected } from './realtime';
 import { receivingStatus, recordInboxCheck } from './receiving';
+import { agentMailbox } from './mailbox';
 import { avatarValue } from './avatar';
 import { pairingPublic, pairingOwner } from './pairing';
 import { ownerLoginRedeem, ownerLoginAgent } from './owner-login';
@@ -109,6 +110,11 @@ async function api(request: Request, env: Env, url: URL) {
   if (path === '/agents/receiving' && method === 'GET') {
     owner(p);
     return json(await receivingStatus(env));
+  }
+  const mailboxMatch = /^\/agents\/([^/]+)\/mailbox$/.exec(path);
+  if (mailboxMatch && method === 'GET') {
+    owner(p);
+    return json(await agentMailbox(env, url, mailboxMatch[1]));
   }
   if (path === '/realtime/ticket' && method === 'POST') {
     if (p.kind !== 'agent' || identity.tokenKind !== 'access') fail(403, 'agent_required', 'Use a connected Agent identity.');

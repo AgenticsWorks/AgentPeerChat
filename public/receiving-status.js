@@ -1,4 +1,5 @@
 import { createChatSync } from './chat-sync.js';
+import { createAgentMailbox } from './agent-mailbox.js';
 
 export const notificationLabel = state => ({ connected: 'Connected', connecting: 'Awaiting heartbeat', stale: 'Heartbeat stale', disconnected: 'Not connected', unknown: 'Unknown', unsupported: 'Not supported', disabled: 'Disabled' })[state] ?? 'Unknown';
 export function receivingSummary(items) {
@@ -26,6 +27,10 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
   list.append(toolbar, scroll, empty, hint);
   const detail = el('aside', 'receiving-detail'); detail.hidden = true; detail.setAttribute('aria-label', t('Agent details'));
   layout.append(list, detail); root.append(header, error, stats, layout);
+  const mailboxRoot = el('section', 'agent-mailbox'); mailboxRoot.hidden = true; root.append(mailboxRoot);
+  const mailbox = createAgentMailbox({ root: mailboxRoot, api, t, locale, avatar, openConversation, onUnauthorized,
+    onBack: () => { header.hidden = stats.hidden = layout.hidden = false; render(); [...tbody.querySelectorAll('button')].find(b => b.dataset.receivingAgent === selected)?.focus(); } });
+  function openMailbox(p) { header.hidden = stats.hidden = layout.hidden = true; mailbox.open(p); mailboxRoot.querySelector('button')?.focus(); }
   const stale = () => uncertain;
   const items = () => (data?.items ?? []).map(p => stale() && p.active ? { ...p, notification: { state: 'unknown', last_heartbeat_at: null } } : p);
   function relative(value) {
@@ -59,7 +64,10 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
       const checked = el('td'); checked.append(stamp(p.last_checked_at));
       const pending = el('td'); pending.append(el('span', p.active && p.pending_count ? 'receiving-pending' : '', String(p.pending_count)));
       if (p.oldest_pending) pending.append(el('small', '', t('Oldest: {0}', relative(p.oldest_pending.created_at))));
-      const ack = el('td'); ack.append(stamp(p.last_ack_at)); row.append(name, transport, checked, pending, ack); tbody.append(row);
+      const ack = el('td'); ack.append(stamp(p.last_ack_at));
+      const action = el('td'); const view = button(t('View mailbox'), 'secondary receiving-mailbox-button', () => { selected = p.id; openMailbox(p); });
+      view.dataset.mailboxAgent = p.id; view.setAttribute('aria-label', t('View mailbox for {0}', p.name)); action.append(view);
+      row.append(name, transport, checked, pending, ack, action); tbody.append(row);
     }
     empty.hidden = visible.length > 0;
     empty.textContent = !data ? t('Loading receiving status…') : data.items.length ? t('No Agents match this filter.') : t('No Agents connected yet. Connect an Agent from Chats.');
@@ -87,6 +95,7 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
     detail.append(config, el('p', 'fine', t('Check the receiving task on the Agent’s host platform.')));
     const open = button(t(p.oldest_pending ? 'Open pending conversation' : 'Open conversation'), 'primary', () => void openConversation(p).catch(e => { error.textContent = e.message; error.hidden = false; }));
     open.dataset.receivingAction = 'open'; detail.append(open);
+    const viewMailbox = button(t('View mailbox'), 'secondary', () => openMailbox(p)); detail.append(viewMailbox);
     if (focusedAction) [...detail.querySelectorAll('button')].find(n => n.dataset.receivingAction === focusedAction)?.focus({ preventScroll: true });
   }
   function render() {
@@ -106,15 +115,15 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
       b.setAttribute('aria-pressed', String(filter === key)); filters.append(b);
     }
     if (focusedFilter) [...filters.children].find(b => b.dataset.receivingFilter === focusedFilter)?.focus({ preventScroll: true });
-    const headers = el('tr'); for (const text of ['Agent', 'Realtime notifications', 'Last inbox check', 'Pending messages', 'Last acknowledgment']) { const th = el('th', '', t(text)); th.scope = 'col'; headers.append(th); } thead.replaceChildren(headers);
+    const headers = el('tr'); for (const text of ['Agent', 'Realtime notifications', 'Last inbox check', 'Pending messages', 'Last acknowledgment', 'Mailbox']) { const th = el('th', '', t(text)); th.scope = 'col'; headers.append(th); } thead.replaceChildren(headers);
     hint.textContent = t('Not connected does not mean offline. ACK confirms handling, not task correctness. Inbox check times may lag by up to 30 seconds.');
-    detail.setAttribute('aria-label', t('Agent details')); renderRows(); renderDetail();
+    detail.setAttribute('aria-label', t('Agent details')); renderRows(); renderDetail(); mailbox.render();
   }
   const sync = createChatSync({ baseDelay: 15000, random: () => 0,
     refresh: async current => { const result = await api('/agents/receiving'); if (current()) { data = result; uncertain = false; } },
     onState: value => { syncState = value; if (['retrying', 'offline', 'paused'].includes(value.status) || value.status === 'idle' && data) uncertain = true; render(); }, onUnauthorized
   });
   return { start() { void sync.start().catch(() => {}); }, stop: sync.stop,
-    reset() { uncertain = false; data = null; selected = null; filter = 'all'; search.value = ''; sync.stop(); },
+    reset() { mailbox.reset(); header.hidden = stats.hidden = layout.hidden = false; uncertain = false; data = null; selected = null; filter = 'all'; search.value = ''; sync.stop(); },
     availabilityChanged: sync.availabilityChanged, render };
 }

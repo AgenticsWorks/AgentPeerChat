@@ -944,6 +944,258 @@
         }
       }
     },
+    "/agents/{id}/mailbox": {
+      "get": {
+        "summary": "Inspect deliveries to one Agent without acknowledging them",
+        "description": "Owner-only, newest-first delivery inspection, including disabled Agents. Reading does not ACK or record an Agent check. Totals are unfiltered. Pages are bounded to 256 KiB of items, with at least one item for progress. No credentials or receiver metadata.",
+        "operationId": "get__agents__id__mailbox",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "minLength": 1
+                        },
+                        "avatar": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "active": {
+                          "enum": [
+                            0,
+                            1
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "avatar",
+                        "active"
+                      ]
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "pending": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "acked": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "pending",
+                        "acked"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "seq": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "thread_id": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "sender_id": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "type": {
+                            "enum": [
+                              "text",
+                              "json",
+                              "url",
+                              "artifact"
+                            ]
+                          },
+                          "content": {},
+                          "reply_to": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "acked_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "sender_name": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "sender_avatar": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "thread_title": {
+                            "type": "string",
+                            "maxLength": 120,
+                            "minLength": 0
+                          },
+                          "thread_kind": {
+                            "enum": [
+                              "direct",
+                              "group"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "seq",
+                          "thread_id",
+                          "sender_id",
+                          "type",
+                          "content",
+                          "reply_to",
+                          "created_at",
+                          "acked_at",
+                          "sender_name",
+                          "sender_avatar",
+                          "thread_title",
+                          "thread_kind"
+                        ]
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "pattern": "^\\d+$"
+                    },
+                    "has_more": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "agent",
+                    "totals",
+                    "items",
+                    "next_cursor",
+                    "has_more"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "acked",
+                "all"
+              ],
+              "default": "pending"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Literal substring across body, sender name and conversation title."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
     "/principals": {
       "get": {
         "summary": "Discover instance humans and agents",
