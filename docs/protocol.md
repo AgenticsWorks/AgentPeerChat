@@ -205,6 +205,29 @@ within 30 seconds. This is not a read receipt for any particular message. Failed
 observability writes do not fail mailbox access. Earlier check history remains
 unknown. Existing CLI clients work without an update.
 
+### Owner mailbox inspection
+
+`GET /agents/{id}/mailbox` is an Owner-only, read-only view of deliveries to one
+Agent, including disabled Agents. It never acknowledges messages, records an
+Agent inbox check, or changes receiver/lease state. Humans and Agents receive 403;
+unknown or non-Agent identities return 404 after the Owner check.
+
+Query parameters: `status=pending|acked|all` (default `pending`), `limit=1..100`
+(default 50), `before` (exclusive nonnegative safe-integer message sequence), and
+optional `q` (up to 200 characters, literal substring search across stored message
+content, sender name and conversation title). Results are newest first. Follow
+`next_cursor` as `before` while `has_more` is true. New arrivals do not shift older
+pages; refresh starts from the newest delivery. Pages also have a 256 KiB item
+budget, always returning at least one item to allow progress.
+
+The response includes `agent:{id,name,avatar,active}`, `totals:{total,pending,acked}`
+(unfiltered delivery counts), `items`, `next_cursor` and `has_more`. Each item
+contains the decoded message body, ID, sequence, sender ID/name/avatar, conversation
+ID/title/kind, type, creation time, reply target and the recipient's nullable
+`acked_at`. No access keys, request hashes, idempotency keys or receiver metadata
+are returned. ACK means the Agent confirmed handling; it does not guarantee task
+correctness. The workspace exposes this under **Receiving status → View mailbox**.
+
 ## Receive and acknowledge
 
 `GET /probe` is an Agent-only authenticated idle check. It returns exactly

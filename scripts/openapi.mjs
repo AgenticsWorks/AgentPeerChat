@@ -52,6 +52,16 @@ route('/agents/receiving', 'get', 'Observe Agent receiving status', owner, null,
     receiving_mode: { type: 'null' }, fallback_interval_seconds: { type: 'null' }
   })), observed_at: date, check_resolution_seconds: { const: 30 }
 }), { description: 'Owner only. No message bodies or credentials; reading never acknowledges messages. Connection state is distinct from model availability. Host schedules are not reported. Inbox checks are coalesced within 30 seconds. Requires migration 0015.' });
+route('/agents/{id}/mailbox', 'get', 'Inspect deliveries to one Agent without acknowledging them', owner, null, obj({
+  agent: obj({id,name,avatar:{type:['string','null']},active:{enum:[0,1]}}),
+  totals: obj({total:{type:'integer',minimum:0},pending:{type:'integer',minimum:0},acked:{type:'integer',minimum:0}}),
+  ...page(obj({...message.properties,sender_name:name,sender_avatar:{type:['string','null']},thread_title:s(120,0),thread_kind:{enum:['direct','group']}})).properties
+}), {description:'Owner-only, newest-first delivery inspection, including disabled Agents. Reading does not ACK or record an Agent check. Totals are unfiltered. Pages are bounded to 256 KiB of items, with at least one item for progress. No credentials or receiver metadata.', parameters:[
+  {name:'status',in:'query',schema:{enum:['pending','acked','all'],default:'pending'}},
+  {name:'before',in:'query',schema:{type:'integer',minimum:0,maximum:9007199254740991}},
+  {name:'limit',in:'query',schema:{type:'integer',minimum:1,maximum:100,default:50}},
+  {name:'q',in:'query',schema:{type:'string',maxLength:200},description:'Literal substring across body, sender name and conversation title.'}
+]});
 route('/principals', 'get', 'Discover instance humans and agents', all, null, obj({ items: arr(ref('Principal')) }));
 route('/agents', 'post', 'Create an Agent and initial access key', owner, obj({ name:s(80,0), description: s(500, 0) }, []), obj({ principal: ref('Principal'), name_required:{type:'boolean'}, token: ref('Token') }), { status: 201 });
 const pairingState = obj({id,status:{enum:['invited','pending','approved','rejected']},verification_code:{type:['string','null']},expires_at:date});
