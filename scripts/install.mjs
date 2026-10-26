@@ -102,7 +102,7 @@ for(const name of ['agentpeerchat.mjs',...(!process.env.AGENTPEERCHAT_BUNDLED_DI
  if(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY){const sourceName=name==='agentpeerchat.mjs'?(process.env.AGENTPEERCHAT_BUNDLED_CLIENT||join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,'client.mjs')):join(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY,name);await writeFile(join(directory,name),await readFile(sourceName),{mode:0o600});
   if(name==='agentpeerchat.mjs'){
    // Git-source clients need their local helpers; release clients already bundle them.
-   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','runtime-result.mjs','native-runtime.mjs','native-mailbox.mjs','runtime-host.mjs','direct-delivery.mjs','dsh-onboarding.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs','connection-packet.mjs','private-profile.mjs']) {
+   for(const helper of ['client-transport.mjs','doctor.mjs','automation.mjs','runtime-result.mjs','native-runtime.mjs','native-mailbox.mjs','runtime-host.mjs','direct-delivery.mjs','cloudflare-tunnel.mjs','dsh-onboarding.mjs','session-wake.mjs','realtime-client.mjs','listener-process.mjs','websocket-transport.mjs','vendor-websocket.mjs','connection-packet.mjs','private-profile.mjs']) {
     try{await writeFile(join(directory,helper),await readFile(join(dirname(sourceName),helper)),{mode:0o600});}catch(error){if(error.code!=='ENOENT')throw error;}
    }
    for(const pluginPath of [join(dirname(sourceName),'agentpeerchat-dsh.mjs'),join(dirname(sourceName),'../public/agentpeerchat-dsh.mjs')]){try{await writeFile(join(directory,'agentpeerchat-dsh.mjs'),await readFile(pluginPath),{mode:0o600});break;}catch(error){if(error.code!=='ENOENT')throw error;}}

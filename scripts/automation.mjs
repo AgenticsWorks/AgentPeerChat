@@ -166,7 +166,9 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
     let active=managed?.active||false,enabled=active;if(settings&&!managed&&process.platform==='linux'){try{active=systemctl(settings.system,'is-active',unit+'.timer')==='active';enabled=systemctl(settings.system,'is-enabled',unit+'.timer')==='enabled';}catch{}}
     const stream=await readJSON(realtimeStatePath,null);
     let streamActive=managed?.watch_active||false;if(settings?.realtime&&!managed)try{streamActive=systemctl(settings.system,'is-active',unit+'-realtime.service')==='active';}catch{}
-    return {native:await dshStatus(profile),manager:settings?.manager||'systemd',persistence:settings?.manager==='process'?'host_lifetime':'service_manager',process:managed,receiving_transport:settings?.realtime?'websocket_with_periodic_fallback':'periodic',realtime:{...stream,active:streamActive,connected:streamActive&&(!managed||stream?.process_id===managed.worker_pid)&&stream?.connected===true&&Date.now()-Date.parse(stream.last_heartbeat_at||stream.connected_at)<120000},delivery_mode:settings?.delivery_mode||'independent',last_wake_check:await lastWake(),installed:Boolean(settings),active,enabled,task_id:settings?(managed?unit+'.process':unit+'.timer'):null,interval_seconds:settings?.every_seconds||null,last_check:await identityState(statePath),last_model_check:await identityState(join(root,'last-model.json')),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
+    const direct=await readJSON(join(root,'direct-state.json'),null);
+    if(direct&&!streamActive){direct.available=false;direct.state='stopped';direct.endpoint=null;}
+    return {native:await dshStatus(profile),manager:settings?.manager||'systemd',persistence:settings?.manager==='process'?'host_lifetime':'service_manager',process:managed,receiving_transport:settings?.realtime?'websocket_with_periodic_fallback':'periodic',realtime:{...stream,...(direct?{direct}:{}),active:streamActive,connected:streamActive&&(!managed||stream?.process_id===managed.worker_pid)&&stream?.connected===true&&Date.now()-Date.parse(stream.last_heartbeat_at||stream.connected_at)<120000},delivery_mode:settings?.delivery_mode||'independent',last_wake_check:await lastWake(),installed:Boolean(settings),active,enabled,task_id:settings?(managed?unit+'.process':unit+'.timer'):null,interval_seconds:settings?.every_seconds||null,last_check:await identityState(statePath),last_model_check:await identityState(join(root,'last-model.json')),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
   }
   if(['start','stop','restart'].includes(action)){
     if(!settings||settings.manager!=='process')throw Error('Use these controls with an installed process listener.');
@@ -221,7 +223,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
       return {installed:true,active:managed.active,manager,persistence:'host_lifetime',task_id:unit+'.process',interval_seconds:seconds,receiving_transport:'websocket_with_periodic_fallback',profile_id:identity.principal_id,next:'Use listen status and doctor to verify actual processing. A background process cannot survive host suspension or restart; use listen foreground under the host supervisor for reboot recovery.'};
     }
     const service=['[Unit]','Description=AgentPeerChat mailbox and scheduled messages','[Service]','Type=oneshot','ExecStart='+[process.execPath,cli,'listen','run'].map(quoteUnit).join(' '),'TimeoutStartSec='+(timeout+180)+'s','Environment='+quoteUnit('AGENTPEERCHAT_CONFIG='+profile),'Environment='+quoteUnit('HOME='+(env.HOME||homedir())),'Environment='+quoteUnit('PATH='+bin+delimiter+dirname(cli)+delimiter+(env.PATH||''))];
-    for(const key of ['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy','NO_PROXY','no_proxy','NODE_USE_ENV_PROXY','CODEX_HOME','CLAUDE_CONFIG_DIR','AGENTPEERCHAT_DIRECT_URL','AGENTPEERCHAT_DIRECT_PORT','AGENTPEERCHAT_DIRECT_BIND'])if(env[key])service.push('Environment='+quoteUnit(key+'='+env[key]));
+    for(const key of ['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy','NO_PROXY','no_proxy','NODE_USE_ENV_PROXY','CODEX_HOME','CLAUDE_CONFIG_DIR','AGENTPEERCHAT_DIRECT_URL','AGENTPEERCHAT_DIRECT_PORT','AGENTPEERCHAT_DIRECT_BIND','AGENTPEERCHAT_TUNNEL','AGENTPEERCHAT_CLOUDFLARED'])if(env[key])service.push('Environment='+quoteUnit(key+'='+env[key]));
     await writeFile(join(unitDirectory,unit+'.service'),service.join('\n')+'\n',{mode:0o644});
     const streamService=service.map(line=>line==='Type=oneshot'?'Type=simple':line.startsWith('ExecStart=')?'ExecStart='+[process.execPath,cli,'listen','watch'].map(quoteUnit).join(' '):line).filter(line=>!line.startsWith('TimeoutStartSec='));
     streamService.push('Restart=always','RestartSec=10s','[Install]','WantedBy='+(system?'multi-user.target':'default.target'));
@@ -249,7 +251,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
       const check=async()=>{if(controller.signal.aborted)return {skipped:true,reason:'stopping'};try{const value=await automation('listen',['run'],{cli,env,nativeEngine:engine});if(value?.skipped)retryCheck(1000);else retries=0;return value;}catch(error){if(!/acceptance was interrupted|already exists without a completed result|Inspect.*session before retrying/.test(error.message))retryCheck(Math.min(60000,1000*2**Math.min(retries++,6)));throw error;}};
       const stopHost=engine?await serveChecks(root,check):null;
       let direct={available:false,close:async()=>{}};
-      try{direct=await startDirect({identity,root,env,onWork:check,request:requestJSON});}catch{/* Optional ingress must never disable outbound receiving. */}
+      try{direct=await startDirect({identity,root,env,signal:controller.signal,onWork:check,request:requestJSON});}catch{/* Optional ingress must never disable outbound receiving. */}
       // Local outbox checks do not poll the cloud or invoke models.
       const scheduled=setInterval(()=>void locked(join(root,'outbox-lock.json'),flush).catch(()=>{}),1000);
       let stream={connected:false,process_id:process.pid},receiptTask;
@@ -263,7 +265,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
       };
       try{await receiveNotifications({identity,signal:controller.signal,
         onWork:async()=>{const value=await check();if(value?.awaiting_processing)checkReceipts();return value;},
-        onState:async patch=>{stream={...stream,...patch,direct:{configured:Boolean(env.AGENTPEERCHAT_DIRECT_URL),available:direct.available}};await privateWrite(realtimeStatePath,stream);}
+        onState:async patch=>{stream={...stream,...patch,direct:direct.status||{configured:direct.configured,available:direct.available}};await privateWrite(realtimeStatePath,stream);}
       });return {stopped:true};}
       finally{controller.abort();clearTimeout(retry);clearInterval(scheduled);await direct.close();await stopHost?.();await engine?.close();await receiptTask;process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);await privateWrite(realtimeStatePath,{...stream,connected:false});}
     });

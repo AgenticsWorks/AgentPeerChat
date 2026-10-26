@@ -98,7 +98,7 @@ export class DshMailbox {
   const timer=setInterval(()=>void this.trigger(),this.fallbackSeconds*1000);
   let dispatch;
   const scheduled=this.dispatchScheduled?setInterval(()=>{if(!dispatch&&!this.signal.aborted)dispatch=this.dispatchScheduled().catch(()=>this.onError(Error('Scheduled delivery failed; the outbox is retained.'))).finally(()=>dispatch=null);},1000):null;
-  let direct={close:async()=>{}};try{direct=await startDirect({identity:this.identity,root:this.root,onWork:()=>this.trigger(),request:this.request});}catch{/* Direct ingress is optional; keep outbound receiving. */}
+  let direct={close:async()=>{}};try{direct=await startDirect({identity:this.identity,root:this.root,signal:this.signal,onWork:()=>this.trigger(),request:this.request});}catch{/* Direct ingress is optional; keep outbound receiving. */}
   const stop=()=>{clearInterval(timer);clearInterval(scheduled);clearTimeout(this.retry);this.retry=null;};this.signal.addEventListener('abort',stop,{once:true});
   try{
    await this.update({started_at:new Date().toISOString()});void this.trigger();

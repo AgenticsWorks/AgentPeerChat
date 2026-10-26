@@ -7,7 +7,7 @@ import {randomUUID,createHash} from 'node:crypto';
 const bundle='@agenticsworks/dsh-agentpeerchat';
 const read=async p=>{try{return JSON.parse(await readFile(p,'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw e;}};
 async function write(p,text){await mkdir(dirname(p),{recursive:true,mode:0o700});const tmp=p+'.'+randomUUID()+'.tmp';try{await writeFile(tmp,text,{mode:0o600});await rename(tmp,p);}finally{await rm(tmp,{force:true});}}
-export function dshManifest(){return {name:bundle,version:'0.1.2',type:'module',main:'index.mjs',files:['index.mjs','cordis.patch.yml','LICENSE'],license:'MIT',dsh:{bundle:{patch:'./cordis.patch.yml'}},peerDependencies:{'@deepseek-ai/cordis':'^4.0.4','@deepseek-ai/dsh-agent':'^0.2.0-rc.2','@deepseek-ai/dsh-llm':'^0.2.0-rc.2','@deepseek-ai/dsh-session-query':'^0.2.0-rc.2'},engines:{node:'>=22.15.0'}};}
+export function dshManifest(){return {name:bundle,version:'0.1.3',type:'module',main:'index.mjs',files:['index.mjs','cordis.patch.yml','LICENSE'],license:'MIT',dsh:{bundle:{patch:'./cordis.patch.yml'}},peerDependencies:{'@deepseek-ai/cordis':'^4.0.4','@deepseek-ai/dsh-agent':'^0.2.0-rc.2','@deepseek-ai/dsh-llm':'^0.2.0-rc.2','@deepseek-ai/dsh-session-query':'^0.2.0-rc.2'},engines:{node:'>=22.15.0'}};}
 export function dshPatch(text,{profile,cli,seconds=1800,enabled=true}){
  const begin='# AgentPeerChat managed channel: begin',end='# AgentPeerChat managed channel: end';
  const first=text.indexOf(begin),last=text.indexOf(end);
@@ -38,8 +38,9 @@ export async function dshStatus(profile){
  const expected=createHash('sha256').update(identity.url.replace(/\/$/,'')+'\n'+identity.principal_id).digest('hex').slice(0,32);
  const session='session-'+[expected.slice(0,8),expected.slice(8,12),expected.slice(12,16),expected.slice(16,20),expected.slice(20)].join('-');
  if(state?.session_id!==session||state?.principal_id&&state.principal_id!==identity.principal_id||state?.url&&state.url!==identity.url.replace(/\/$/,''))return {runtime:'dsh',active:false,connected:false,verified:false};
+ const direct=await read(join(root,'direct-state.json'));if(direct&&!active){direct.available=false;direct.state='stopped';direct.endpoint=null;}
  const recent=Date.now()-Date.parse(state.last_heartbeat_at||state.connected_at||'')<120000;
- return {runtime:'dsh',active:Boolean(active),scheduled_dispatch:Boolean(active&&state.scheduled_dispatch),connected:Boolean(active&&state.connected&&recent),session_id:session,processed:state.processed||0,last_processed_at:state.last_processed_at||null,last_error:state.last_error||null,verified:Boolean(active&&state.processed>0&&Number.isFinite(Date.parse(state.last_processed_at||''))&&!state.last_error)};
+ return {runtime:'dsh',active:Boolean(active),direct,scheduled_dispatch:Boolean(active&&state.scheduled_dispatch),connected:Boolean(active&&state.connected&&recent),session_id:session,processed:state.processed||0,last_processed_at:state.last_processed_at||null,last_error:state.last_error||null,verified:Boolean(active&&state.processed>0&&Number.isFinite(Date.parse(state.last_processed_at||''))&&!state.last_error)};
 }
 export async function setupDsh({profile,cli,env=process.env,seconds=1800,enabled=true,execute=run}={}){
  const name=env.AGENTPEERCHAT_DSH_PROFILE||env.DSH_PROFILE;

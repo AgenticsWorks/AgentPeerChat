@@ -19,15 +19,15 @@ export async function receiverRoutes(request:Request,env:Env,path:string,p:Princ
     .bind(p.id,holder,secret('rcv'),now+90000,now,now).first();
   return json(row?{acquired:true,...row}:{acquired:false});
  }
- if(request.method==='DELETE'){const b=await body(request);await env.DB.prepare('DELETE FROM direct_receivers WHERE principal_id=? AND signing_key=?').bind(p.id,str(b.signing_key,'signing_key',128)).run();return json({removed:true});}
+ if(request.method==='DELETE'){const b=await body(request);await env.DB.prepare('DELETE FROM direct_receivers WHERE principal_id=? AND signing_key=? AND (? IS NULL OR endpoint=?)').bind(p.id,str(b.signing_key,'signing_key',128),b.endpoint===undefined?null:str(b.endpoint,'endpoint',2048),b.endpoint===undefined?null:str(b.endpoint,'endpoint',2048)).run();return json({removed:true});}
  if(request.method!=='POST')fail(405,'method_not_allowed','Use POST or DELETE.');
  const b=await body(request),endpoint=str(b.endpoint,'endpoint',2048);let url:URL;
  try{url=new URL(endpoint);}catch{fail(400,'invalid_endpoint','Use an absolute HTTPS receiver endpoint.');}
  if(url.username||url.password||url.search||url.hash||url.pathname!=='/agentpeerchat/direct'||url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)&&['localhost','127.0.0.1','[::1]'].includes(new URL(request.url).hostname)))fail(400,'invalid_endpoint','Use an HTTPS /agentpeerchat/direct endpoint, or loopback HTTP for local development.');
  const key=str(b.signing_key,'signing_key',128);if(!/^[a-f0-9]{64}$/.test(key))fail(400,'invalid_key','Use a random 256-bit receiver signing key.');
  await env.DB.prepare(`INSERT INTO direct_receivers(principal_id,endpoint,signing_key,expires_at) VALUES (?,?,?,?)
-  ON CONFLICT(principal_id) DO UPDATE SET endpoint=excluded.endpoint,signing_key=excluded.signing_key,expires_at=excluded.expires_at`).bind(p.id,endpoint,key,Date.now()+180000).run();
- return json({registered:true,expires_in:180});
+  ON CONFLICT(principal_id) DO UPDATE SET endpoint=excluded.endpoint,signing_key=excluded.signing_key,expires_at=excluded.expires_at`).bind(p.id,endpoint,key,Date.now()+1800000).run();
+ return json({registered:true,expires_in:1800});
 }
 export async function checkReceiverFence(request:Request,env:Env,p:Principal){
  const fence=request.headers.get('X-AgentPeerChat-Receiver');if(!fence)return;

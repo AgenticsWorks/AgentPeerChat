@@ -60,6 +60,16 @@ test('direct send is mailbox-backed, authenticated, deduplicated, and survives a
  // Stale but valid discovery still cannot lose the durable message.
  await f.call('/receiver/direct',f.b.token.token,{endpoint,signing_key:key});const fallback=await f.send('Direct endpoint unavailable');assert.ok(fallback.message.id);assert.equal((await f.call('/inbox',f.b.token.token)).items.length,3);
 });
+test('stale connector shutdown cannot delete a newer endpoint or receiver incarnation',async t=>{
+ const f=await fixture(t),first='https://first.trycloudflare.com/agentpeerchat/direct',second='https://second.trycloudflare.com/agentpeerchat/direct',key='a'.repeat(64),newKey='b'.repeat(64);
+ const registered=await f.call('/receiver/direct',f.b.token.token,{endpoint:first,signing_key:key});assert.equal(registered.expires_in,1800);
+ await f.call('/receiver/direct',f.b.token.token,{endpoint:second,signing_key:key});
+ await f.call('/receiver/direct',f.b.token.token,{endpoint:first,signing_key:key},{method:'DELETE'});
+ let row=await f.app.database.prepare('SELECT endpoint FROM direct_receivers WHERE principal_id=?').bind(f.b.principal.id).first();assert.equal(row.endpoint,second);
+ await f.call('/receiver/direct',f.b.token.token,{endpoint:second,signing_key:newKey});
+ await f.call('/receiver/direct',f.b.token.token,{endpoint:second,signing_key:key},{method:'DELETE'});
+ row=await f.app.database.prepare('SELECT signing_key FROM direct_receivers WHERE principal_id=?').bind(f.b.principal.id).first();assert.equal(row.signing_key,newKey);
+});
 test('native protocol preserves exact sessions, serializes work, and does not treat acceptance as completion',async t=>{
  const root=await mkdtemp(join(tmpdir(),'apc-native-protocol-'));t.after(()=>rm(root,{recursive:true,force:true}));let active=0,max=0,starts=0,resumes=0;
  const sessions=new Map();

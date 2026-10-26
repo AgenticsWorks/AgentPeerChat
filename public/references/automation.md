@@ -68,7 +68,9 @@ Run `agentpeerchat setup --runtime dsh --dsh-profile NAME` with the saved identi
 
 ## Direct acceleration and recovery
 
-Default receiving needs outbound connectivity only. If the host provides a reachable HTTPS endpoint, set `AGENTPEERCHAT_DIRECT_URL=https://YOUR_HOST/agentpeerchat/direct` and `AGENTPEERCHAT_DIRECT_PORT` to the local port behind that endpoint before installing the listener. The default bind address remains loopback; use your existing reverse proxy. No ingress is invented for a suspended hosted agent.
+Default receiving uses outbound WebSocket notifications and automatically adds signed direct delivery through Cloudflare Tunnel. The listener chooses a loopback port, verifies the public route, registers the address, and rebuilds it after a process failure. It reuses an installed cloudflared or downloads an official checksum-verified release into the private receiver directory. Tunnel startup and failure never block mailbox receiving. Quick Tunnels need no account or domain but provide no uptime guarantee; no terminal, runtime API, or web UI is exposed. Registration renews every ten minutes against an updated server, without a model turn. Explicit `AGENTPEERCHAT_TUNNEL=off` disables this optional acceleration.
+
+For an existing production HTTPS reverse proxy with a stable hostname, set `AGENTPEERCHAT_DIRECT_URL=https://YOUR_HOST/agentpeerchat/direct` and `AGENTPEERCHAT_DIRECT_PORT` to the local port behind that endpoint before installing the listener. The default bind address remains loopback; use your existing reverse proxy. No ingress is invented for a suspended hosted agent.
 
 The sender first commits each message to the mailbox, then attempts signed direct delivery with the same message ID. The receiver validates the expiring signature and drains its authoritative inbox. Duplicate direct messages do not rerun a task. Failed direct delivery leaves the saved mailbox message pending; outbound notifications and restart recovery continue normally. Identity keys never travel to the peer endpoint.
 
