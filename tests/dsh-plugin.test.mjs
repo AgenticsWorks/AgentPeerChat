@@ -5,22 +5,23 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {DshMailbox,loadIdentity,dedicatedSessionId,ownProfile,NO_REPLY} from '../integrations/dsh/bridge.mjs';
 const identity={url:'http://127.0.0.1:3000',principal_id:'agt_fixture',token:'fixture-private-key'};
-function message(id='msg_one'){return {id,thread_id:'thr_one',sender_id:'agt_peer',type:'text',content:'Analyze the quotes.'};}
+function message(id='msg_one'){return {id,seq:1,thread_id:'thr_one',sender_id:'agt_peer',type:'text',content:'Analyze the quotes.'};}
 async function fixture(t,{pending=[message()],failReply=false,failAck=false,runTask=async()=> 'Meadow costs 367.40; Harbor costs 381.70.'}={}){
- const root=await mkdtemp(join(tmpdir(),'apc-dsh-'));const controller=new AbortController();const sends=[],acks=[];let work=0;
+ const root=await mkdtemp(join(tmpdir(),'apc-dsh-'));const controller=new AbortController();const sends=[],acks=[];let work=0,now=0;
  const request=async(url,options)=>{
   assert.equal(options.token,identity.token);const path=new URL(url).pathname;
   if(path.endsWith('/me'))return {principal:{id:identity.principal_id,kind:'agent'}};
   if(path.endsWith('/receiver/lease'))return options.method==='DELETE'?{released:true}:{acquired:true,fence:'fixture-lease'};
   if(path.endsWith('/inbox'))return {items:pending,has_more:false};
+  if(/\/messages\/msg_/.test(path)&&options.method!=='POST')return {message:message(path.split('/').at(-1)),receipts:[{recipient_id:identity.principal_id,acked_at:pending.length?null:new Date().toISOString()}]};
   if(path.includes('/threads/'))return {thread:{id:'thr_one',title:'Trip'}};
   if(path.endsWith('/messages')){sends.push(options);if(failReply)throw Error('uncertain reply');return {message:{id:'msg_reply'}};}
   if(path.endsWith('/ack')){if(failAck)throw Error('uncertain ack');acks.push(path);pending=[];return {ok:true};}
   throw Error(path);
  };
- const bridge=new DshMailbox({identity,root,signal:controller.signal,request,runTask:async task=>{work++;return runTask(task);}});
+ const bridge=new DshMailbox({identity,root,signal:controller.signal,request,clock:()=>now,runTask:async task=>{work++;return runTask(task);}});
  t.after(async()=>{controller.abort();clearTimeout(bridge.retry);await bridge.current;await rm(root,{recursive:true,force:true});});
- return {root,controller,bridge,sends,acks,get work(){return work;},replyWorks(){failReply=false;},ackWorks(){failAck=false;}};
+ return {root,controller,bridge,sends,acks,get work(){return work;},replyWorks(){failReply=false;now+=600000;},ackWorks(){failAck=false;now+=600000;}};
 }
 test('DSH replies before ACK and persists the exact reply privately',async t=>{
  const f=await fixture(t);await f.bridge.trigger();assert.equal(f.work,1);assert.equal(f.sends.length,1);assert.equal(f.acks.length,1);

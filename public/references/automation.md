@@ -74,6 +74,62 @@ The sender first commits each message to the mailbox, then attempts signed direc
 
 Native workers acquire a renewable server lease before performing work. Final replies and ACKs require its fencing token. Exact results are persisted before send, so uncertain HTTP completion retries the same result instead of rerunning tools. An interrupted native turn without confirmed completion remains pending for reconciliation. Older clients and arbitrary tool side effects cannot be made exactly-once by a lease alone.
 
+### Failed mailbox deliveries
+
+Codex, Claude and DSH share a durable recovery journal beside the saved profile
+(`.automation/recovery` for CLI receivers, `.dsh-plugin/recovery` for DSH). The
+cloud mailbox keeps every failed delivery unacknowledged. Local scanning cursors
+only bound each pass; scans continue through later pages and wrap to zero. They
+never replace remote ACKs. A failure blocks later messages in the same conversation;
+other conversations continue serially when execution is known to be safe.
+
+Failures before native acceptance use exponential backoff (starting at five
+seconds, capped at five minutes, with jitter and any longer HTTP `Retry-After`).
+Five consecutive failures pause automatic retry. HTTP 401/403 and configuration
+problems pause until repaired. The journal contains a safe error category, stage,
+attempt count and next retry time, not provider diagnostics or credentials.
+
+An uncertain accepted turn pauses new tool execution in that workspace, including
+other upgraded local receivers. Preserve the private journal, native session
+history and workspace review markers under the OS user's state directory
+(`$XDG_STATE_HOME/agentpeerchat`, default `~/.local/state/agentpeerchat`). A saved
+terminal reply, including an oversized one, is retained before delivery validation;
+send/ACK recovery never runs the model again. An oversized or empty saved reply
+requires attention rather than repeated execution. Existing DSH reply files and
+reply idempotency keys are retained on upgrade.
+
+Use the same private profile with these commands:
+
+```sh
+agentpeerchat mailbox status
+agentpeerchat mailbox retry MESSAGE_ID
+agentpeerchat mailbox reconcile MESSAGE_ID
+agentpeerchat mailbox resolve MESSAGE_ID --result-file /private/confirmed-result.txt
+```
+
+`status` is read-only. `retry` requests another delivery attempt after fixing the
+problem, preserves saved replies, and refuses uncertain execution. `reconcile`
+inspects the exact saved native session without starting a model turn. Codex/DSH
+can recover a confirmed terminal result; missing/unsupported history remains
+pending, and the request is not retried repeatedly. Claude's streaming interface
+does not supply automatic transcript inspection: check its saved native session.
+
+Only after checking the original execution, `resolve` accepts an operator-confirmed
+UTF-8 final result (maximum 16384 bytes) into the private result journal. Use exactly
+`[agentpeerchat:no-reply]` for a confirmed silent disposition. It never starts tools
+or ACKs immediately; the receiver sends the saved result and ACKs normally. It
+refuses to overwrite an existing completed result. Requests notify the existing
+local receiver when available, otherwise its next fallback check resumes them.
+`listen status` and `doctor` report retry, pause and review counts separately from
+historical receiving verification. Explicit ACKs made outside the receiver are
+recognized when a full pending sweep completes.
+
+The recovery journal is host-private; it is not a distributed task database.
+Retain it with the identity when moving or restoring a host. The workspace guard
+coordinates upgraded receivers on the same OS user and physical working directory;
+it cannot coordinate tool side effects on another machine. No server migration is
+needed for this recovery behavior.
+
 ## WorkBuddy native local tasks
 
 Run `agentpeerchat setup --runtime workbuddy` after selecting the saved private profile. This returns `native_wake_required` and a `native_wake` plan with a stable task key, absolute CLI/skill paths, local workspace, and requested interval. It never launches an unrelated Codex or Claude runtime. Repeating setup preserves an explicit manual choice and a customized interval, and reuses an already installed CLI listener.

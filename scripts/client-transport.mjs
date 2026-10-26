@@ -25,6 +25,9 @@ export async function requestJSON(url, {method = 'GET', token, body, send = fals
       try { data = await response.json(); } catch { /* Proxies may return HTML, never echo it. */ }
       if (response.ok && data !== undefined) {if(send&&data.direct)await deliverDirect(data.direct,{fetchImpl});return data;}
       lastError = new Error(response.ok ? 'Invalid JSON response.' : `${response.status}: ${typeof data?.error?.message === 'string' ? data.error.message : 'Request failed'}`);
+      lastError.status=response.status;
+      const cooldown=response.headers.get('Retry-After');
+      if(cooldown){const ms=/^\d+(?:\.\d+)?$/.test(cooldown.trim())?Number(cooldown)*1000:Date.parse(cooldown)-now();if(Number.isFinite(ms))lastError.retry_after_ms=Math.max(0,ms);}
       if (!response.ok && !transient.has(response.status)) throw lastError;
       retryAfter = response.headers.get('Retry-After');
     } catch (error) {

@@ -1,5 +1,5 @@
 // Local automation belongs to the agent host; no central scheduler or model account is needed.
-import {readFile,writeFile,mkdir,rename,rm,open,copyFile,access,chmod} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rename,rm,open,copyFile,access,chmod,stat} from 'node:fs/promises';
 import {dirname,join,resolve,isAbsolute,delimiter} from 'node:path';
 import {constants} from 'node:fs';
 import {homedir} from 'node:os';
@@ -15,6 +15,7 @@ import {NativeRuntime} from './native-runtime.mjs';
 import {drainNative} from './native-mailbox.mjs';
 import {forwardCheck,serveChecks} from './runtime-host.mjs';
 import {startDirect} from './direct-delivery.mjs';
+import {recoveryRecords,recoverySummary,requestRecovery,resolveRecovery} from './mailbox-recovery.mjs';
 
 export function interval(value='30m') {
   const m=/^(\d+)(s|m|h)$/.exec(value), seconds=m?Number(m[1])*({s:1,m:60,h:3600}[m[2]]):NaN;
@@ -60,7 +61,7 @@ function flags(args){
   for(let i=0;i<args.length;i++){
     const key=args[i];
     if(key==='--system')result.system=true;
-    else if(['--every','--runner-file','--at','--runtime','--workspace','--thread','--session-socket','--manager'].includes(key)){if(!args[i+1]||args[i+1].startsWith('--'))throw new Error('Missing '+key+' value.');result[key.slice(2)]=args[++i];}
+    else if(['--every','--runner-file','--at','--runtime','--workspace','--thread','--session-socket','--manager','--result-file'].includes(key)){if(!args[i+1]||args[i+1].startsWith('--'))throw new Error('Missing '+key+' value.');result[key.slice(2)]=args[++i];}
     else if(key.startsWith('--'))throw new Error('Unknown option '+key);
     else result.positionals.push(key);
   }
@@ -103,7 +104,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
   const systemctl=(system,...parts)=>controlSystemd(env,system,...parts);
   const f=flags(args),action=f.positionals.shift();
   const root=profile+'.automation';
-  if(command!=='listen'||action!=='status')await mkdir(root,{recursive:true,mode:0o700});
+  if(!['listen','mailbox'].includes(command)||action!=='status')await mkdir(root,{recursive:true,mode:0o700});
   const settingsPath=join(root,'listener.json'),statePath=join(root,'status.json'),queuePath=join(root,'outbox.json');
   const settings=await readJSON(settingsPath,null);
   const realtimeStatePath=join(root,'realtime.json');
@@ -147,6 +148,22 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
     return {verified:acknowledged>0,pending:unacknowledged.length>0};
   }
   async function active(){if((await dshStatus(profile))?.scheduled_dispatch)return true;if(settings?.manager==='process')return (await processStatus(root)).active;if(!settings||process.platform!=='linux')return false;try{return systemctl(settings.system,'is-active',unit+'.timer')==='active';}catch{return false;}}
+  if(command==='mailbox'){
+    const native=await dshStatus(profile),recoveryRoot=!settings&&native?profile+'.dsh-plugin':root;
+    if(action==='status'&&!f.positionals.length){const items=await recoveryRecords(recoveryRoot,identity);return {...recoverySummary(items),items};}
+    if(!['retry','reconcile','resolve'].includes(action)||f.positionals.length!==1||Boolean(f['result-file'])!==(action==='resolve'))throw Error('Use mailbox status, mailbox retry MESSAGE_ID, mailbox reconcile MESSAGE_ID, or mailbox resolve MESSAGE_ID --result-file PATH after checking the original native session.');
+    const result=await locked(join(recoveryRoot,'lock.json'),async()=>{
+      if(action==='resolve'){
+        const path=resolve(f['result-file']);
+        const info=await stat(path);if(!info.isFile()||info.size>16384)throw Error('The confirmed result must be a UTF-8 text file within 16384 bytes.');
+        return resolveRecovery(recoveryRoot,identity,f.positionals[0],await readFile(path,'utf8'));
+      }
+      return requestRecovery(recoveryRoot,identity,f.positionals[0],action);
+    });
+    if(result.skipped)return {...result,next:'The receiver is busy. Retry this request after its current pass completes.'};
+    const wake=await forwardCheck(recoveryRoot);
+    return {...result,notified:Boolean(wake?.forwarded),next:'The existing receiver will inspect this request on notification or its next fallback check. Reconcile never starts a new model turn.'};
+  }
   if(command==='schedule')return locked(join(root,'outbox-lock.json'),async()=>{
     const items=await queue();
     if(action==='list')return {jobs:items,listener_configured:Boolean(settings),automatic_dispatch:await active()};
@@ -166,7 +183,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
     let active=managed?.active||false,enabled=active;if(settings&&!managed&&process.platform==='linux'){try{active=systemctl(settings.system,'is-active',unit+'.timer')==='active';enabled=systemctl(settings.system,'is-enabled',unit+'.timer')==='enabled';}catch{}}
     const stream=await readJSON(realtimeStatePath,null);
     let streamActive=managed?.watch_active||false;if(settings?.realtime&&!managed)try{streamActive=systemctl(settings.system,'is-active',unit+'-realtime.service')==='active';}catch{}
-    return {native:await dshStatus(profile),manager:settings?.manager||'systemd',persistence:settings?.manager==='process'?'host_lifetime':'service_manager',process:managed,receiving_transport:settings?.realtime?'websocket_with_periodic_fallback':'periodic',realtime:{...stream,active:streamActive,connected:streamActive&&(!managed||stream?.process_id===managed.worker_pid)&&stream?.connected===true&&Date.now()-Date.parse(stream.last_heartbeat_at||stream.connected_at)<120000},delivery_mode:settings?.delivery_mode||'independent',last_wake_check:await lastWake(),installed:Boolean(settings),active,enabled,task_id:settings?(managed?unit+'.process':unit+'.timer'):null,interval_seconds:settings?.every_seconds||null,last_check:await identityState(statePath),last_model_check:await identityState(join(root,'last-model.json')),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
+    return {recovery:recoverySummary(await recoveryRecords(root,identity)),native:await dshStatus(profile),manager:settings?.manager||'systemd',persistence:settings?.manager==='process'?'host_lifetime':'service_manager',process:managed,receiving_transport:settings?.realtime?'websocket_with_periodic_fallback':'periodic',realtime:{...stream,active:streamActive,connected:streamActive&&(!managed||stream?.process_id===managed.worker_pid)&&stream?.connected===true&&Date.now()-Date.parse(stream.last_heartbeat_at||stream.connected_at)<120000},delivery_mode:settings?.delivery_mode||'independent',last_wake_check:await lastWake(),installed:Boolean(settings),active,enabled,task_id:settings?(managed?unit+'.process':unit+'.timer'):null,interval_seconds:settings?.every_seconds||null,last_check:await identityState(statePath),last_model_check:await identityState(join(root,'last-model.json')),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
   }
   if(['start','stop','restart'].includes(action)){
     if(!settings||settings.manager!=='process')throw Error('Use these controls with an installed process listener.');
@@ -221,7 +238,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
       return {installed:true,active:managed.active,manager,persistence:'host_lifetime',task_id:unit+'.process',interval_seconds:seconds,receiving_transport:'websocket_with_periodic_fallback',profile_id:identity.principal_id,next:'Use listen status and doctor to verify actual processing. A background process cannot survive host suspension or restart; use listen foreground under the host supervisor for reboot recovery.'};
     }
     const service=['[Unit]','Description=AgentPeerChat mailbox and scheduled messages','[Service]','Type=oneshot','ExecStart='+[process.execPath,cli,'listen','run'].map(quoteUnit).join(' '),'TimeoutStartSec='+(timeout+180)+'s','Environment='+quoteUnit('AGENTPEERCHAT_CONFIG='+profile),'Environment='+quoteUnit('HOME='+(env.HOME||homedir())),'Environment='+quoteUnit('PATH='+bin+delimiter+dirname(cli)+delimiter+(env.PATH||''))];
-    for(const key of ['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy','NO_PROXY','no_proxy','NODE_USE_ENV_PROXY','CODEX_HOME','CLAUDE_CONFIG_DIR','AGENTPEERCHAT_DIRECT_URL','AGENTPEERCHAT_DIRECT_PORT','AGENTPEERCHAT_DIRECT_BIND'])if(env[key])service.push('Environment='+quoteUnit(key+'='+env[key]));
+    for(const key of ['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy','NO_PROXY','no_proxy','NODE_USE_ENV_PROXY','CODEX_HOME','CLAUDE_CONFIG_DIR','XDG_STATE_HOME','AGENTPEERCHAT_DIRECT_URL','AGENTPEERCHAT_DIRECT_PORT','AGENTPEERCHAT_DIRECT_BIND'])if(env[key])service.push('Environment='+quoteUnit(key+'='+env[key]));
     await writeFile(join(unitDirectory,unit+'.service'),service.join('\n')+'\n',{mode:0o644});
     const streamService=service.map(line=>line==='Type=oneshot'?'Type=simple':line.startsWith('ExecStart=')?'ExecStart='+[process.execPath,cli,'listen','watch'].map(quoteUnit).join(' '):line).filter(line=>!line.startsWith('TimeoutStartSec='));
     streamService.push('Restart=always','RestartSec=10s','[Install]','WantedBy='+(system?'multi-user.target':'default.target'));
@@ -244,9 +261,9 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
       const controller=new AbortController(),stop=()=>controller.abort();process.once('SIGTERM',stop);process.once('SIGINT',stop);
       const recipe=await readJSON(settings.runner_file,null);
       const engine=recipe?.mode==='native'?new NativeRuntime({runner:recipe,root,identity,env:connectionEnv(),signal:controller.signal}):null;
-      let retry,retries=0;
-      const retryCheck=delay=>{if(!retry&&!controller.signal.aborted)retry=setTimeout(()=>{retry=null;void check().catch(()=>{});},delay);};
-      const check=async()=>{if(controller.signal.aborted)return {skipped:true,reason:'stopping'};try{const value=await automation('listen',['run'],{cli,env,nativeEngine:engine});if(value?.skipped)retryCheck(1000);else retries=0;return value;}catch(error){if(!/acceptance was interrupted|already exists without a completed result|Inspect.*session before retrying/.test(error.message))retryCheck(Math.min(60000,1000*2**Math.min(retries++,6)));throw error;}};
+      let retry,retryAt=Infinity,retries=0;
+      const retryCheck=delay=>{const at=Date.now()+delay;if(at>=retryAt||controller.signal.aborted)return;clearTimeout(retry);retryAt=at;retry=setTimeout(()=>{retry=null;retryAt=Infinity;void check().catch(()=>{});},delay);};
+      const check=async()=>{if(controller.signal.aborted)return {skipped:true,reason:'stopping'};try{const value=await automation('listen',['run'],{cli,env,nativeEngine:engine});if(value?.skipped)retryCheck(1000);else{retries=0;if(value?.next_check_at)retryCheck(Math.max(1000,Date.parse(value.next_check_at)-Date.now()));}return value;}catch(error){if(!/acceptance was interrupted|already exists without a completed result|Inspect.*session before retrying/.test(error.message))retryCheck(Math.min(60000,1000*2**Math.min(retries++,6)));throw error;}};
       const stopHost=engine?await serveChecks(root,check):null;
       let direct={available:false,close:async()=>{}};
       try{direct=await startDirect({identity,root,env,onWork:check,request:requestJSON});}catch{/* Optional ingress must never disable outbound receiving. */}
@@ -302,9 +319,9 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
       const state={principal_id:identity.principal_id,url:identity.url,checked_at:checkedAt,pending_count:summary?.pending_count??(pending?1:0),pending_count_is_lower_bound:!summary&&pending,new_chats:summary?.new_chats.length??(changed?1:0),new_chats_is_lower_bound:!summary&&changed,membership_changed:changed,scheduled_deliveries:delivered.length,failed_deliveries:(await queue()).filter(j=>j.last_error&&!j.cancelled&&!j.completed_at).length,model_started:false,success:false};
       const runner=await readJSON(settings.runner_file,null);
       if(runner?.mode==='native'){
-        if(pending){state.model_started=true;await privateWrite(statePath,state);const engine=nativeEngine||new NativeRuntime({runner,root,identity,env:connectionEnv()});try{Object.assign(state,await drainNative({identity,root,engine}));}finally{if(!nativeEngine)await engine.close();}}
+        if(pending||(await recoveryRecords(root,identity)).length){state.model_started=true;await privateWrite(statePath,state);const engine=nativeEngine||new NativeRuntime({runner,root,identity,env:connectionEnv()});try{Object.assign(state,await drainNative({identity,root,engine}));}finally{if(!nativeEngine)await engine.close();}}
         if(nextProbe)await privateWrite(probePath,nextProbe);
-        state.success=true;if(state.model_started)await privateWrite(join(root,'last-model.json'),state);await privateWrite(statePath,state);return state;
+        state.success=true;if(state.model_started||state.acknowledged>0)await privateWrite(join(root,'last-model.json'),state);await privateWrite(statePath,state);return state;
       }
       if(runner?.mode==='session'){
         const path=join(root,'wake.json'),previous=await readJSON(path,null);

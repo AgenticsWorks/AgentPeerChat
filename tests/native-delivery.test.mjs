@@ -36,15 +36,15 @@ test('leases serialize two hosts; expiry fences stale replies and ACKs; foreign 
 test('uncertain reply commit and ACK are recovered from durable output, never rerun tools',async t=>{
  const f=await fixture(t);await f.send();let calls=0,fail=true;const engine={run:async()=>{calls++;return 'Meadow costs 367.40; Harbor costs 381.70.';},close:async()=>{}};
  const request=async(url,options)=>{const result=await requestJSON(url,options);if(url.endsWith('/messages')&&options.send&&fail){fail=false;throw Error('Connection lost after commit');}return result;};
- await assert.rejects(drainNative({identity:f.identity,root:f.root,engine,request}),/Connection lost/);assert.equal(calls,1);
+ const failed=await drainNative({identity:f.identity,root:f.root,engine,request,clock:()=>0});assert.equal(failed.recovery.retrying,1);assert.equal(calls,1);
  assert.equal((await f.call('/inbox',f.b.token.token)).items.length,1);
- const result=await drainNative({identity:f.identity,root:f.root,engine});assert.equal(result.acknowledged,1);assert.equal(calls,1);assert.equal((await f.call('/inbox',f.b.token.token)).items.length,0);
+ const result=await drainNative({identity:f.identity,root:f.root,engine,clock:()=>600000});assert.equal(result.acknowledged,1);assert.equal(calls,1);assert.equal((await f.call('/inbox',f.b.token.token)).items.length,0);
  assert.equal((await f.call('/inbox',f.a.token.token)).items.length,1);
 });
 test('burst inputs remain FIFO; a failed model or oversized output never acknowledges work',async t=>{
  const f=await fixture(t);await f.send('one');await f.send('two');const order=[];
  await drainNative({identity:f.identity,root:f.root,engine:{run:async({message})=>{order.push(message.content);return 'Report '+message.content;},close:async()=>{}}});assert.deepEqual(order,['one','two']);
- await f.send('three');await assert.rejects(drainNative({identity:f.identity,root:f.root,engine:{run:async()=>{throw Error('Provider down');},close:async()=>{}}}),/Provider down/);assert.equal((await f.call('/inbox',f.b.token.token)).items.length,1);
+ await f.send('three');const failed=await drainNative({identity:f.identity,root:f.root,engine:{run:async()=>{throw Error('Provider down');},close:async()=>{}}});assert.equal(failed.recovery.retrying,1);assert.equal((await f.call('/inbox',f.b.token.token)).items.length,1);
 });
 test('direct send is mailbox-backed, authenticated, deduplicated, and survives a failed endpoint',async t=>{
  const f=await fixture(t);let wakes=0;const probe=await import('node:net');const socket=probe.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r));
