@@ -10,11 +10,13 @@ export interface Message {
   type: 'text' | 'json' | 'url' | 'artifact'; content: unknown; created_at: string;
   acked_at?: string | null;
   reply_to?: string;
+  mentions?: string[];
 }
 export interface NewMessage {
   id: string; thread_id: string; sender_id: string; type: Message['type'];
   content: unknown; idempotency_key: string; request_hash: string;
   reply_to?: string;
+  mentions?: string[];
   recipients: string[]; new_thread?: { title: string; members: string[]; kind?: 'group' | 'direct' };
 }
 export interface Page<T> { items: T[]; next_cursor: string; has_more: boolean }

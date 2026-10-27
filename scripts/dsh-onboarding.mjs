@@ -7,7 +7,7 @@ import {randomUUID,createHash} from 'node:crypto';
 const bundle='@agenticsworks/dsh-agentpeerchat';
 const read=async p=>{try{return JSON.parse(await readFile(p,'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw e;}};
 async function write(p,text){await mkdir(dirname(p),{recursive:true,mode:0o700});const tmp=p+'.'+randomUUID()+'.tmp';try{await writeFile(tmp,text,{mode:0o600});await rename(tmp,p);}finally{await rm(tmp,{force:true});}}
-export function dshManifest(){return {name:bundle,version:'0.1.3',type:'module',main:'index.mjs',files:['index.mjs','cordis.patch.yml','LICENSE'],license:'MIT',dsh:{bundle:{patch:'./cordis.patch.yml'}},peerDependencies:{'@deepseek-ai/cordis':'^4.0.4','@deepseek-ai/dsh-agent':'^0.2.0-rc.2','@deepseek-ai/dsh-llm':'^0.2.0-rc.2','@deepseek-ai/dsh-session-query':'^0.2.0-rc.2'},engines:{node:'>=22.15.0'}};}
+export function dshManifest(){return {name:bundle,version:'0.1.4',type:'module',main:'index.mjs',files:['index.mjs','cordis.patch.yml','LICENSE'],license:'MIT',dsh:{bundle:{patch:'./cordis.patch.yml'}},peerDependencies:{'@deepseek-ai/cordis':'^4.0.4','@deepseek-ai/dsh-agent':'^0.2.0-rc.2','@deepseek-ai/dsh-llm':'^0.2.0-rc.2','@deepseek-ai/dsh-session-query':'^0.2.0-rc.2'},engines:{node:'>=22.15.0'}};}
 export function dshPatch(text,{profile,cli,seconds=1800,enabled=true}){
  const begin='# AgentPeerChat managed channel: begin',end='# AgentPeerChat managed channel: end';
  const first=text.indexOf(begin),last=text.indexOf(end);

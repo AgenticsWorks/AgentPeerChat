@@ -30,7 +30,7 @@ export async function drainNative({identity,root,engine,signal=engine.signal,req
      receipt={...receipt,phase:'completed',content:text.trim()==='[agentpeerchat:no-reply]'?null:text,completed_at:new Date().toISOString()};await writeState(path,receipt);
     }
     if(signal?.aborted||lost)throw Error('Receiver lost its lease; saved result is retained.');
-    if(receipt.content!==null)await call('/messages',{method:'POST',send:true,idempotencyKey:'native-reply-'+message.id,headers,body:{thread_id:message.thread_id,type:'text',content:receipt.content,reply_to:message.id}});
+    if(receipt.content!==null)await call('/messages',{method:'POST',send:true,idempotencyKey:'native-reply-'+message.id,headers,body:{thread_id:message.thread_id,type:'text',content:receipt.content,reply_to:message.id,...(message.mentions?.length?{mentions:[message.sender_id]}:{})}});
     await call('/messages/'+message.id+'/ack',{method:'POST',headers});
     receipt.phase='acked';await writeState(path,receipt);processed++;
    }

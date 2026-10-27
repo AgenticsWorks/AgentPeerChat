@@ -1,13 +1,14 @@
 import type { Message, MessageStore, NewMessage, Page } from './types';
 
-type Row = Omit<Message, 'content'> & { content: string; request_hash?: string };
+type Row = Omit<Message, 'content' | 'mentions'> & { content: string; mentions?: string; request_hash?: string };
 // Bound serialized item content as well as item count. The API envelope and thread
 // metadata are additional; a single oversized legacy item still makes progress.
 const PAGE_ITEM_BYTES = 256 * 1024;
 const encoder = new TextEncoder();
 const decode = (row: Row): Message => {
-  const { request_hash: _hash, reply_to, ...message } = row;
-  return { ...message, ...(reply_to ? { reply_to } : {}), content: JSON.parse(row.content) };
+  const { request_hash: _hash, reply_to, mentions, ...message } = row;
+  const targets: string[] = JSON.parse(mentions || '[]');
+  return { ...message, ...(reply_to ? { reply_to } : {}), ...(targets.length ? { mentions: targets } : {}), content: JSON.parse(row.content) };
 };
 function page(rows: Row[], cursor: number, limit: number): Page<Message> {
   const items: Message[] = [];
@@ -40,8 +41,8 @@ export class D1MessageStore implements MessageStore {
       statements.push(this.db.prepare('INSERT OR IGNORE INTO thread_members(thread_id, principal_id) VALUES (?, ?)')
         .bind(m.thread_id, m.sender_id));
     }
-    statements.push(this.db.prepare(`INSERT INTO messages(id, thread_id, sender_id, type, content, idempotency_key, request_hash, reply_to)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(m.id, m.thread_id, m.sender_id, m.type, JSON.stringify(m.content), m.idempotency_key, m.request_hash, m.reply_to ?? null));
+    statements.push(this.db.prepare(`INSERT INTO messages(id, thread_id, sender_id, type, content, idempotency_key, request_hash, reply_to, mentions)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(m.id, m.thread_id, m.sender_id, m.type, JSON.stringify(m.content), m.idempotency_key, m.request_hash, m.reply_to ?? null, JSON.stringify(m.mentions || [])));
     // Bulk inserts keep even a 32-member direct conversation well below Free's 50-query invocation limit.
     statements.push(this.db.prepare(`WITH recipients(recipient_id) AS (VALUES ${m.recipients.map(() => '(?)').join(',')})
       INSERT INTO deliveries(recipient_id, message_seq)

@@ -16,8 +16,8 @@ export async function agentMailbox(env: Env, url: URL, agentId: string) {
   if (query.length > 200) fail(400, 'invalid_field', 'q must be at most 200 characters.');
   const pattern = '%' + query.replace(/[\\%_]/g, '\\$&') + '%';
   const conditions = status === 'pending' ? 'AND d.acked_at IS NULL' : status === 'acked' ? 'AND d.acked_at IS NOT NULL' : '';
-  type MailboxRow = Omit<Message, 'content'> & { content: string; sender_name: string; sender_avatar: string | null; thread_title: string; thread_kind: string };
-  const { results } = await env.DB.prepare(`SELECT m.id, m.seq, m.thread_id, m.sender_id, m.type, m.content, m.created_at, m.reply_to,
+  type MailboxRow = Omit<Message, 'content' | 'mentions'> & { content: string; mentions: string; sender_name: string; sender_avatar: string | null; thread_title: string; thread_kind: string };
+  const { results } = await env.DB.prepare(`SELECT m.id, m.seq, m.thread_id, m.sender_id, m.type, m.content, m.created_at, m.reply_to, m.mentions,
       d.acked_at, p.name AS sender_name, p.avatar AS sender_avatar, t.title AS thread_title, t.kind AS thread_kind
     FROM deliveries d JOIN messages m ON m.seq = d.message_seq
     JOIN principals p ON p.id = m.sender_id JOIN threads t ON t.id = m.thread_id
@@ -28,11 +28,11 @@ export async function agentMailbox(env: Env, url: URL, agentId: string) {
     COALESCE(SUM(CASE WHEN acked_at IS NULL THEN 1 ELSE 0 END), 0) AS pending,
     COALESCE(SUM(CASE WHEN acked_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS acked
     FROM deliveries WHERE recipient_id = ?`).bind(agentId).first();
-  const items: (Omit<MailboxRow, 'content'> & { content: unknown })[] = [];
+  const items: (Omit<MailboxRow, 'content' | 'mentions'> & { content: unknown; mentions?: string[] })[] = [];
   let bytes = 2;
   for (const row of results.slice(0, limit)) {
-    const { reply_to, ...message } = row;
-    const item = { ...message, ...(reply_to ? { reply_to } : {}), content: JSON.parse(row.content) as unknown };
+    const { reply_to, mentions, ...message } = row;
+    const item = { ...message, ...(reply_to ? { reply_to } : {}), ...(JSON.parse(mentions || '[]').length?{mentions:JSON.parse(mentions)}:{}), content: JSON.parse(row.content) as unknown };
     const size = new TextEncoder().encode(JSON.stringify(item)).byteLength + (items.length ? 1 : 0);
     if (items.length && bytes + size > 256 * 1024) break;
     items.push(item); bytes += size;

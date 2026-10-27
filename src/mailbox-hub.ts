@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './types';
-import { validStreamKey } from './realtime';
+import { validStreamKey, validBrowserKey } from './realtime';
 import { notificationSnapshot } from './receiving';
 
 // One notification coordinator per principal. All durable messages remain in D1.
@@ -18,7 +18,7 @@ export class MailboxHub extends DurableObject<Env> {
       if (this.ctx.getWebSockets().length >= 8) return new Response(null, { status: 429 });
       const pair = new WebSocketPair(), client = pair[0], server = pair[1];
       this.ctx.acceptWebSocket(server);
-      server.serializeAttachment({ principal, token, connected_at: new Date().toISOString() });
+      server.serializeAttachment({ principal, token, browser:request.headers.get('X-Browser')==='1', connected_at: new Date().toISOString() });
       server.send(JSON.stringify({ type: 'ready' }));
       return new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': 'apc-v1' } });
     }
@@ -35,8 +35,8 @@ export class MailboxHub extends DurableObject<Env> {
     if (path === '/notify' && request.method === 'POST') {
       for (const socket of this.ctx.getWebSockets()) {
         try {
-          const { principal, token } = socket.deserializeAttachment() as { principal: string; token: string };
-          if (!await validStreamKey(this.env, principal, token)) socket.close(4401, 'Connection revoked');
+          const { principal, token, browser } = socket.deserializeAttachment() as { principal: string; token: string; browser?:boolean };
+          if (!await (browser ? validBrowserKey(this.env, principal, token) : validStreamKey(this.env, principal, token))) socket.close(4401, 'Connection revoked');
           else socket.send(JSON.stringify({ type: 'mailbox_changed' }));
         } catch { try { socket.close(1011, 'Reconnect'); } catch { /* Already closed. */ } }
       }

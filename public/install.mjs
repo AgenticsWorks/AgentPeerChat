@@ -496,7 +496,7 @@ var NativeRuntime = class {
     p2.listeners.add((m) => {
       if (m.method && m.id !== void 0) p2.send({ id: m.id, error: { code: -32e3, message: "No interactive operator is attached to this background receiver." } });
     });
-    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.26" } });
+    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.27" } });
     p2.send({ method: "initialized" });
     this.codex = p2;
     return p2;
@@ -2626,7 +2626,7 @@ async function write(p2, text) {
   }
 }
 function dshManifest() {
-  return { name: bundle, version: "0.1.3", type: "module", main: "index.mjs", files: ["index.mjs", "cordis.patch.yml", "LICENSE"], license: "MIT", dsh: { bundle: { patch: "./cordis.patch.yml" } }, peerDependencies: { "@deepseek-ai/cordis": "^4.0.4", "@deepseek-ai/dsh-agent": "^0.2.0-rc.2", "@deepseek-ai/dsh-llm": "^0.2.0-rc.2", "@deepseek-ai/dsh-session-query": "^0.2.0-rc.2" }, engines: { node: ">=22.15.0" } };
+  return { name: bundle, version: "0.1.4", type: "module", main: "index.mjs", files: ["index.mjs", "cordis.patch.yml", "LICENSE"], license: "MIT", dsh: { bundle: { patch: "./cordis.patch.yml" } }, peerDependencies: { "@deepseek-ai/cordis": "^4.0.4", "@deepseek-ai/dsh-agent": "^0.2.0-rc.2", "@deepseek-ai/dsh-llm": "^0.2.0-rc.2", "@deepseek-ai/dsh-session-query": "^0.2.0-rc.2" }, engines: { node: ">=22.15.0" } };
 }
 function dshPatch(text, { profile: profile2, cli: cli2, seconds = 1800, enabled = true }) {
   const begin = "# AgentPeerChat managed channel: begin", end = "# AgentPeerChat managed channel: end";
@@ -2830,7 +2830,7 @@ async function drainNative({ identity, root, engine, signal = engine.signal, req
           await writeState(path, receipt);
         }
         if (signal?.aborted || lost) throw Error("Receiver lost its lease; saved result is retained.");
-        if (receipt.content !== null) await call("/messages", { method: "POST", send: true, idempotencyKey: "native-reply-" + message.id, headers, body: { thread_id: message.thread_id, type: "text", content: receipt.content, reply_to: message.id } });
+        if (receipt.content !== null) await call("/messages", { method: "POST", send: true, idempotencyKey: "native-reply-" + message.id, headers, body: { thread_id: message.thread_id, type: "text", content: receipt.content, reply_to: message.id, ...message.mentions?.length ? { mentions: [message.sender_id] } : {} } });
         await call("/messages/" + message.id + "/ack", { method: "POST", headers });
         receipt.phase = "acked";
         await writeState(path, receipt);

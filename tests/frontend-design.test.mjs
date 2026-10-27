@@ -9,11 +9,12 @@ test('sync instructions default to automatic receiving and preserve manual/custo
  for(const minutes of [0,-1,1.5,1441,NaN,Infinity,'bad'])assert.throws(()=>syncInstructions({mode:'interval',minutes}));
  assert.throws(()=>syncInstructions({mode:'online'}));
 });
-test('app and site use a consistent original icon and explicit demo/state labels',async()=>{
+test('app keeps original branding, simple IM navigation, and honest processing receipts',async()=>{
  const [icon,siteIcon,html,site,app]=await Promise.all(['public/icon.svg','website/assets/icon.svg','public/index.html','website/index.html','public/app.js'].map(p=>readFile(new URL('../'+p,import.meta.url),'utf8')));
  assert.equal(icon,siteIcon);assert.match(icon,/viewBox="0 0 64 64"/);
- assert.match(html,/Synthetic example/);assert.match(site,/Example conversation/);
- assert.match(html,/A connection does not guarantee processing/);assert.match(app,/Pending acknowledgment/);
+ assert.match(site,/Example conversation/);
+ assert.doesNotMatch(html,/conversation-graph|identity-perspective|Synthetic example/);
+ assert.match(app,/processed after the recipient acknowledges/);assert.match(app,/counts\?\.processed===counts\?\.total/);
  assert.doesNotMatch(app,/receipt-button', '✓'/);
  assert.match(html,/aria-busy="false"/);assert.match(html,/aria-labelledby="modal-title"/);
 });

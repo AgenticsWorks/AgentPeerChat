@@ -381,7 +381,7 @@ var NativeRuntime = class {
     p2.listeners.add((m) => {
       if (m.method && m.id !== void 0) p2.send({ id: m.id, error: { code: -32e3, message: "No interactive operator is attached to this background receiver." } });
     });
-    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.26" } });
+    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.27" } });
     p2.send({ method: "initialized" });
     this.codex = p2;
     return p2;
@@ -2857,7 +2857,7 @@ async function drainNative({ identity, root, engine, signal = engine.signal, req
           await writeState(path, receipt);
         }
         if (signal?.aborted || lost) throw Error("Receiver lost its lease; saved result is retained.");
-        if (receipt.content !== null) await call("/messages", { method: "POST", send: true, idempotencyKey: "native-reply-" + message.id, headers, body: { thread_id: message.thread_id, type: "text", content: receipt.content, reply_to: message.id } });
+        if (receipt.content !== null) await call("/messages", { method: "POST", send: true, idempotencyKey: "native-reply-" + message.id, headers, body: { thread_id: message.thread_id, type: "text", content: receipt.content, reply_to: message.id, ...message.mentions?.length ? { mentions: [message.sender_id] } : {} } });
         await call("/messages/" + message.id + "/ack", { method: "POST", headers });
         receipt.phase = "acked";
         await writeState(path, receipt);
@@ -3755,7 +3755,7 @@ async function run() {
     case "reply": {
       required(2);
       const original = (await request("/messages/" + encodeURIComponent(args[0]))).message;
-      return request("/messages", "POST", { thread_id: original.thread_id, reply_to: original.id, type: "text", content: args.slice(1).join(" ") }, true);
+      return request("/messages", "POST", { thread_id: original.thread_id, reply_to: original.id, type: "text", content: args.slice(1).join(" "), ...original.mentions?.length ? { mentions: [original.sender_id] } : {} }, true);
     }
     case "summary": {
       const once = args.includes("--once"), wait = args.includes("--wait"), timeoutAt = args.indexOf("--timeout");

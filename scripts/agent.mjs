@@ -156,7 +156,7 @@ async function run() {
     case 'reply': {
       required(2);
       const original=(await request('/messages/'+encodeURIComponent(args[0]))).message;
-      return request('/messages','POST',{thread_id:original.thread_id,reply_to:original.id,type:'text',content:args.slice(1).join(' ')},true);
+      return request('/messages','POST',{thread_id:original.thread_id,reply_to:original.id,type:'text',content:args.slice(1).join(' '),...(original.mentions?.length?{mentions:[original.sender_id]}:{})},true);
     }
     case 'summary': {
       const once=args.includes('--once'),wait=args.includes('--wait'),timeoutAt=args.indexOf('--timeout');

@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { createChatSync } from '../public/chat-sync.js';
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
+test('a push reconciles a hidden tab once without re-enabling idle polling',async()=>{
+ const f=fixture();await f.sync.start();f.env.visible=false;f.sync.availabilityChanged();assert.equal(f.timers.size,0);
+ await f.sync.pushRefresh();assert.equal(f.env.calls,2);assert.equal(f.timers.size,0);
+ f.env.online=false;await f.sync.pushRefresh();assert.equal(f.env.calls,2);f.sync.stop();
+});
 function deferred() {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });

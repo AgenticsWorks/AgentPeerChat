@@ -41,6 +41,13 @@ test('uncertain reply commit and ACK are recovered from durable output, never re
  const result=await drainNative({identity:f.identity,root:f.root,engine});assert.equal(result.acknowledged,1);assert.equal(calls,1);assert.equal((await f.call('/inbox',f.b.token.token)).items.length,0);
  assert.equal((await f.call('/inbox',f.a.token.token)).items.length,1);
 });
+test('a reply to a mentioned group task notifies the requester without waking other members',async t=>{
+ const f=await fixture(t);const thread=(await f.call('/threads',f.owner.access_key,{title:'Focused task',members:[f.a.principal.id,f.b.principal.id]})).thread;
+ const original=(await f.call('/messages',f.a.token.token,{thread_id:thread.id,type:'text',content:'@Muse compare these fares.',mentions:[f.b.principal.id]},{send:true})).message;
+ await drainNative({identity:f.identity,root:f.root,engine:{run:async()=> 'The refundable fare is 360 yuan more.',close:async()=>{}}});
+ const reply=(await f.call('/inbox',f.a.token.token)).items.find(m=>m.reply_to===original.id);assert.ok(reply);assert.deepEqual(reply.mentions,[f.a.principal.id]);
+ const receipts=(await f.call('/messages/'+reply.id,f.owner.access_key)).receipts;assert.equal(receipts.length,1);assert.equal(receipts[0].recipient_id,f.a.principal.id);
+});
 test('burst inputs remain FIFO; a failed model or oversized output never acknowledges work',async t=>{
  const f=await fixture(t);await f.send('one');await f.send('two');const order=[];
  await drainNative({identity:f.identity,root:f.root,engine:{run:async({message})=>{order.push(message.content);return 'Report '+message.content;},close:async()=>{}}});assert.deepEqual(order,['one','two']);

@@ -1061,6 +1061,17 @@
                             "maxLength": 80,
                             "minLength": 1
                           },
+                          "mentions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "minItems": 1,
+                            "maxItems": 32,
+                            "uniqueItems": true
+                          },
                           "created_at": {
                             "type": "string",
                             "format": "date-time"
@@ -1103,6 +1114,7 @@
                           "type",
                           "content",
                           "reply_to",
+                          "mentions",
                           "created_at",
                           "acked_at",
                           "sender_name",
@@ -3293,7 +3305,7 @@
     "/messages": {
       "post": {
         "summary": "Send an idempotent group or direct message",
-        "description": "201 first send; 200 identical retry; 409 changed request. Text max 16 KiB UTF-8; JSON max 32 KiB. URL/artifact must use HTTP(S). Total request max 64 KiB. Optional reply_to preserves the source message relationship in the same accessible thread.",
+        "description": "201 first send; 200 identical retry; 409 changed request. Text max 16 KiB UTF-8; JSON max 32 KiB. URL/artifact must use HTTP(S). Total request max 64 KiB. Optional reply_to preserves the source message relationship in the same accessible thread. Optional mentions restrict inbox delivery to named active members without hiding group history.",
         "operationId": "post__messages",
         "x-roles": [
           "owner",
@@ -3375,6 +3387,18 @@
                     "type": "string",
                     "maxLength": 80,
                     "minLength": 1
+                  },
+                  "mentions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 80,
+                      "minLength": 1
+                    },
+                    "minItems": 0,
+                    "maxItems": 32,
+                    "uniqueItems": true,
+                    "description": "Optional active member IDs to notify. Group history remains visible to every member."
                   },
                   "reply_to": {
                     "type": [
@@ -3946,6 +3970,17 @@
             "maxLength": 80,
             "minLength": 1
           },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -4253,6 +4288,17 @@
             "type": "string",
             "maxLength": 80,
             "minLength": 1
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true
           },
           "created_at": {
             "type": "string",

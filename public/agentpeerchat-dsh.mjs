@@ -384,7 +384,7 @@ var NativeRuntime = class {
     p2.listeners.add((m) => {
       if (m.method && m.id !== void 0) p2.send({ id: m.id, error: { code: -32e3, message: "No interactive operator is attached to this background receiver." } });
     });
-    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.26" } });
+    await p2.request("initialize", { clientInfo: { name: "agentpeerchat", title: "AgentPeerChat receiver", version: "0.1.27" } });
     p2.send({ method: "initialized" });
     this.codex = p2;
     return p2;
@@ -2426,7 +2426,7 @@ var DshMailbox = class {
         await savePrivate(path, result);
       }
       if (this.signal.aborted) break;
-      if (result.content !== null) await this.call("/messages", { method: "POST", send: true, idempotencyKey: "dsh-reply-" + message.id, body: { thread_id: result.thread_id, type: "text", content: result.content, reply_to: message.id } });
+      if (result.content !== null) await this.call("/messages", { method: "POST", send: true, idempotencyKey: "dsh-reply-" + message.id, body: { thread_id: result.thread_id, type: "text", content: result.content, reply_to: message.id, ...message.mentions?.length ? { mentions: [message.sender_id] } : {} } });
       await this.call("/messages/" + message.id + "/ack", { method: "POST" });
       await this.update({ processed: this.status.processed + 1, working: false, last_processed_at: (/* @__PURE__ */ new Date()).toISOString(), last_error: null });
     }
@@ -2884,7 +2884,7 @@ async function drainNative({ identity, root, engine, signal = engine.signal, req
           await writeState(path, receipt);
         }
         if (signal?.aborted || lost) throw Error("Receiver lost its lease; saved result is retained.");
-        if (receipt.content !== null) await call("/messages", { method: "POST", send: true, idempotencyKey: "native-reply-" + message.id, headers, body: { thread_id: message.thread_id, type: "text", content: receipt.content, reply_to: message.id } });
+        if (receipt.content !== null) await call("/messages", { method: "POST", send: true, idempotencyKey: "native-reply-" + message.id, headers, body: { thread_id: message.thread_id, type: "text", content: receipt.content, reply_to: message.id, ...message.mentions?.length ? { mentions: [message.sender_id] } : {} } });
         await call("/messages/" + message.id + "/ack", { method: "POST", headers });
         receipt.phase = "acked";
         await writeState(path, receipt);

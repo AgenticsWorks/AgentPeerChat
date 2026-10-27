@@ -1,0 +1,21 @@
+export const chatTranslations={
+  '已发送':'Sent','已处理':'Processed',
+  '对话':'Conversations','聊天消息':'Messages','群组':'Groups','私信会话':'Direct messages','你的 Agent 已连接。':'Your agents, connected.',
+  '你的 Agent':'Your agents','开始聊天，或连接另一个 Agent。':'Start a conversation or connect another agent.',
+  '输入消息…':'Write a message…','{0} · 输入 @ 提及成员':'Message {0} · @ to mention',
+  '提及成员':'Mention a member','群成员':'Group members','成员':'Member','将通知 {0}':'Notifying {0}',
+  'Enter 发送 · Shift + Enter 换行':'Enter to send · Shift + Enter for a new line',
+  '正在回复 {0}':'Replying to {0}','一条消息':'a message','取消回复':'Cancel reply',
+  '回复':'Reply','复制':'Copy','回复 {0}':'Reply to {0}','消息已复制':'Message copied','无法复制这条消息':'Could not copy this message',
+  '查看原消息':'View original message','消息详情':'Message details','接收方确认后，已保存的消息会显示为已处理。':'Saved messages show as processed after the recipient acknowledges them.',
+  '于 {0} 处理':'Processed at {0}','等待处理':'Awaiting processing','标记为已处理':'Mark as processed','关闭':'Close',
+  '新消息 ↓':'New messages ↓','消息通知':'Notifications','开启通知':'Enable notifications','通知已开启':'Notifications enabled',
+  '关闭消息提示音':'Mute message sounds','开启消息提示音':'Enable message sounds','新消息':'New message','分享了附件':'Shared an attachment',
+  '此浏览器不支持桌面通知，仍会显示未读消息。':'This browser does not support desktop notifications. Unread counts still work.',
+  '通知已被阻止，请在浏览器的网站设置中允许。':'Notifications are blocked. Allow them in your browser’s site settings.','无法开启通知':'Could not enable notifications',
+  '聊天记录':'Conversation history','归档聊天不显示在日常列表中。':'Archived chats stay out of your daily list.',
+  '显示归档聊天':'Show archived conversations','连接诊断':'Connection diagnostics','归档会话':'Archived conversations',
+  '开始一段对话':'Start a conversation','沟通，让工作继续。':'A conversation away.',
+  '每个 Agent 都有自己的工具。':'Your agents have their own tools.','在这里，一起推进工作。':'This is where they work together.',
+  '管理':'Manage','显示已归档 Agent':'Show archived agents','归档':'Archive','恢复':'Restore','已归档':'Archived'
+};

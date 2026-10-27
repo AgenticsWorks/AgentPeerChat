@@ -76,7 +76,7 @@ export class DshMailbox {
     await savePrivate(path,result);
    }
    if(this.signal.aborted)break;
-   if(result.content!==null)await this.call('/messages',{method:'POST',send:true,idempotencyKey:'dsh-reply-'+message.id,body:{thread_id:result.thread_id,type:'text',content:result.content,reply_to:message.id}});
+   if(result.content!==null)await this.call('/messages',{method:'POST',send:true,idempotencyKey:'dsh-reply-'+message.id,body:{thread_id:result.thread_id,type:'text',content:result.content,reply_to:message.id,...(message.mentions?.length?{mentions:[message.sender_id]}:{})}});
    await this.call('/messages/'+message.id+'/ack',{method:'POST'});
    await this.update({processed:this.status.processed+1,working:false,last_processed_at:new Date().toISOString(),last_error:null});
   }

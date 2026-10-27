@@ -29,15 +29,15 @@ export function createChatSync({
     lastSyncedAt = null; failed = false; delay = baseDelay;
     publish();
   }
-  function requestRefresh() {
+  function requestRefresh({background=false}={}) {
     cancelTimer();
-    if (!active || !available()) { publish(); return Promise.resolve(); }
+    if (!active || !isOnline() || (!background && !isVisible())) { publish(); return Promise.resolve(); }
     if (cycle) {
       // A mutation or resume during a request needs a fresh snapshot after it finishes.
-      cycle.again = true;
+      cycle.again = true; cycle.background ||= background;
       return cycle.promise;
     }
-    const current = { again: false, promise: null };
+    const current = { again: false, promise: null, background };
     const isCurrent = () => active && cycle === current;
     cycle = current;
     current.promise = Promise.resolve().then(async () => {
@@ -48,7 +48,7 @@ export function createChatSync({
           await refresh(isCurrent);
           if (!isCurrent()) return;
           lastSyncedAt = now(); failed = false; delay = baseDelay;
-        } while (current.again && available());
+        } while (current.again && isOnline() && (current.background || isVisible()));
       } catch (error) {
         if (!isCurrent()) return;
         if (error.status === 401) { stop(); onUnauthorized(); }
@@ -70,6 +70,6 @@ export function createChatSync({
   }
   return {
     start() { stop(); active = true; return requestRefresh(); },
-    stop, refresh: requestRefresh, availabilityChanged, snapshot
+    stop, refresh: requestRefresh, pushRefresh: () => requestRefresh({background:true}), availabilityChanged, snapshot
   };
 }

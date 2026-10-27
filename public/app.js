@@ -1,14 +1,17 @@
 import {t, initLanguage, getLocale} from './i18n.js';
-import { chatName, messageDirection } from './chat-presentation.js';
-import { threadPeople, visibleThreads, conversationGraph, isDisabled, avatarIcon } from './conversation-view.js';
-import { renderConversationGraph } from './conversation-graph.js';
+import {createNotifications,createBrowserEvents} from './chat-notifications.js';
+import {createComposer} from './chat-composer.js';
+import {renderText} from './chat-content.js';
+import { chatName } from './chat-presentation.js';
+import {archivedConversation} from './conversation-view.js';
+import { threadPeople, avatarIcon } from './conversation-view.js';
 import { connectionInstructions } from './connection-kit.js';
 import { createChatSync } from './chat-sync.js';
 import { createReceivingPage } from './receiving-status.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: window.matchMedia('(min-width: 1280px)').matches, currentThread: null, perspective: 'all', inviteCode: null, pendingThread: null, receiptCounts: new Map(), receivingCheckedAt: 0 };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: false, chatFilter: 'all', currentThread: null, inviteCode: null, pendingThread: null, receiptCounts: new Map(), receivingCheckedAt: 0 };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#a45767', '#547767', '#526c9c', '#7861a0', '#916c43', '#477e85'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -17,11 +20,14 @@ $('#menu-toggle').addEventListener('click', () => toggleMenu($('#main-menu').hid
 $('#menu-backdrop').addEventListener('click', () => toggleMenu(false));
 document.addEventListener('keydown', event => { if (event.key === 'Escape') { if (!$('#main-menu').hidden) toggleMenu(false); if (state.inspector) { state.inspector = false; renderMembers(); } } });
 $('#chat-back').addEventListener('click', () => { $('#conversations').classList.remove('chat-open'); state.inspector = false; renderMembers(); });
-$('#message-text').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); if (!$('#send-button').disabled) $('#compose-form').requestSubmit(); } });
-$('#message-text').addEventListener('input', () => { const input = $('#message-text'); input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 150) + 'px'; });
 const humanName = id => state.principals.find(p => p.id === id)?.name ?? id;
 const time = value => new Date(value).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
 const date = value => new Date(value).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
+const composer=createComposer({input:$('#message-text'),form:$('#compose-form'),popup:$('#mention-menu'),mentionButton:$('#mention-button'),replyBar:$('#reply-bar'),replyName:$('#reply-name'),replyText:$('#reply-text'),cancelReply:$('#cancel-reply'),feedback:$('#compose-feedback'),counter:$('#compose-counter'),getMembers:()=>state.members,getMe:()=>state.me,onSubmit:sendMessage});
+$('#jump-latest').addEventListener('click',()=>{const list=$('#message-list');list.scrollTop=list.scrollHeight;$('#jump-latest').hidden=true;});
+$('#message-list').addEventListener('scroll',()=>{const list=$('#message-list');if(list.scrollHeight-list.scrollTop-list.clientHeight<100)$('#jump-latest').hidden=true;});
+$('#show-archived').addEventListener('change',renderThreads);
+
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { $('#toast').hidden = true; }, 4500); }
 async function api(path, options = {}) {
   const { method = 'GET', data, key } = options;
@@ -38,9 +44,9 @@ async function allPages(path, initial = '0') {
 }
 function authMode(mode) {
   chatSync.stop();
-  receivingPage.reset();
+  receivingPage.reset();browserEvents.stop();notifications.stop();
   state.authMode = mode;
-  $('.skip-link').href = '#onboarding'; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
+  $('.skip-link').href = '#onboarding'; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
   $('#onboarding').dataset.mode = mode;
   $('#setup-help').hidden = !setup; $('#setup-key-hint').hidden = !setup;
@@ -135,12 +141,12 @@ function showSecret(title, description, value, extra = '', options = {}) {
 
 async function enter() {
   state.me = (await api('/me')).principal; $('.skip-link').href = '#conversations';
-  $('#onboarding').hidden = true; $('#shell').hidden = false; state.perspective = 'all'; $('#perspective-toolbar').hidden = false; $('#menu-toggle').hidden = false;
+  $('#onboarding').hidden = true; $('#shell').hidden = false; $('#menu-toggle').hidden = false;
   $('#my-name').textContent = state.me.name; $('#my-role').textContent = state.me.kind === 'owner' ? t("拥有者") : t("联系人");
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
   if (state.view === 'receiving' && state.me.kind !== 'owner') showView('conversations');
-  await chatSync.start();
+  notifications.start(state.me);await chatSync.start();browserEvents.start();
   if (state.view === 'receiving' && state.me.kind === 'owner') receivingPage.start();
   await consumePendingThread();
 }
@@ -157,7 +163,7 @@ async function refreshData(isCurrent) {
   const threads = (await allPages('/threads')).items;
   if (!isCurrent()) return;
   state.principals = principals; state.threads = threads;
-  renderPerspective(); renderThreads(); renderPrincipals(); renderGraph();
+  notifications.update(threads,state.me,principals,state.selected); renderThreads(); renderPrincipals();
   if (state.selected) await loadMessages();
   if (isCurrent() && state.me.kind === 'owner') await renderPairings();
 }
@@ -165,7 +171,7 @@ function renderSyncState({ status, lastSyncedAt }) {
   const node = $('#sync-state');
   const labels = { idle: '', syncing: t('Syncing…'), paused: t('Sync paused'), offline: t('Offline'), retrying: t('Sync paused · retrying') };
   node.textContent = status === 'synced'
-    ? t('Last synced {0}', new Date(lastSyncedAt).toLocaleTimeString(getLocale()))
+    ? ''
     : labels[status];
   node.title = lastSyncedAt === null ? '' : t('Last synced {0}', new Date(lastSyncedAt).toLocaleString(getLocale()));
   node.classList.toggle('sync-warning', status === 'offline' || status === 'retrying');
@@ -174,6 +180,8 @@ const chatSync = createChatSync({
   refresh: refreshData, onState: renderSyncState,
   onUnauthorized: () => { state.me = null; authMode('login'); toast(t("Session ended. Sign in again.")); }
 });
+const notifications=createNotifications({bell:$('#notification-toggle'),soundButton:$('#sound-toggle'),onChange:()=>{if(state.me)renderThreads();},onOpen:id=>{showView('conversations');selectThread(id).catch(error=>toast(error.message));},isReading:id=>state.view==='conversations'&&state.selected===id&&!document.hidden&&document.hasFocus(),notifyError:toast});
+const browserEvents=createBrowserEvents({url:appBase+'/api/v1/browser/events',onChange:()=>chatSync.pushRefresh(),onState:connected=>{state.realtimeBrowser=connected;}});
 const receivingPage = createReceivingPage({ root: $('#receiving'), api, t, locale: getLocale,
   avatar: p => personAvatar(state.principals.find(person => person.id === p.id) ?? p),
   onUnauthorized: () => { state.me = null; authMode('login'); toast(t('Session ended. Sign in again.')); },
@@ -191,14 +199,13 @@ window.addEventListener('offline', receivingPage.availabilityChanged);
 window.addEventListener('online', chatSync.availabilityChanged);
 window.addEventListener('offline', chatSync.availabilityChanged);
 $('#logout').addEventListener('click', async () => {
-  try { await api('/session', { method: 'DELETE' }); state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
+  try { await api('/session', { method: 'DELETE' }); notifications.stop();browserEvents.stop();state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 function showView(view) {
   if (view === 'receiving' && state.me?.kind !== 'owner') return;
   state.view = view; $('.skip-link').href = `#${view}`; toggleMenu(false);
-  for (const name of ['conversations', 'network', 'access', 'graph', 'receiving']) $(`#${name}`).hidden = name !== view;
+  for (const name of ['conversations', 'network', 'access', 'receiving']) $(`#${name}`).hidden = name !== view;
   document.querySelectorAll('[data-view]').forEach(button => { const active = button.dataset.view === view; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); });
-  if (view === 'graph') renderGraph();
   if (view === 'access') loadAccess().catch(error => toast(error.message));
   if (view === 'receiving') receivingPage.start(); else receivingPage.stop();
 }
@@ -206,29 +213,32 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
 $('#thread-search').addEventListener('input', renderThreads);
 function renderThreads() {
   $('#thread-count').textContent = String(state.threads.length);
-  const scope = visibleThreads(state.threads, state.perspective);
+  const scope = state.threads.filter(thread=>{const archived=archivedConversation(thread,state.principals);return $('#show-archived').checked||!archived;});
   $('#thread-count').textContent = String(scope.length);
-  const filtered = scope.filter(thread => chatName(thread, state.perspective === 'all' ? null : state.perspective).toLowerCase().includes($('#thread-search').value.toLowerCase()));
+  const filtered = scope.filter(thread => chatName(thread,state.me.id).toLowerCase().includes($('#thread-search').value.toLowerCase()));
   $('#thread-list').replaceChildren();
   if (!filtered.length) $('#thread-list').append(el('p', 'empty-list', state.threads.length ? t("没有找到聊天。") : t("选择联系人，开始第一段聊天。")));
-  for (const thread of [...filtered].sort((a, b) => (b.last_message_seq ?? 0) - (a.last_message_seq ?? 0))) {
+  let section;
+  for (const thread of [...filtered].sort((a,b)=>(a.kind==='group'?0:1)-(b.kind==='group'?0:1)||(b.last_message_seq??0)-(a.last_message_seq??0))) {
+    if(section!==thread.kind){section=thread.kind;$('#thread-list').append(el('h3','conversation-section',t(thread.kind==='group'?'Groups':'Direct messages')));}
     const button = el('button', 'thread-item'); button.classList.toggle('selected', thread.id === state.selected); button.setAttribute('aria-current', thread.id === state.selected ? 'true' : 'false');
     const copy = el('div', 'thread-copy');
     const last = thread.last_message;
     const preview = !last ? t("还没有消息") : last.type === 'text' ? last.content : last.type === 'artifact' ? `↗ ${last.content.name ?? 'Deliverable'}` : last.type === 'json' ? t("内容") : last.content;
-    copy.append(el('strong', '', chatName(thread, state.perspective === 'all' ? null : state.perspective)), el('small', '', last ? `${messageDirection(thread, last.sender_id, humanName(last.sender_id))}: ${preview}` : preview));
+    copy.append(el('strong', '', chatName(thread,state.me.id)), el('small', '', last ? `${humanName(last.sender_id)}: ${preview}` : preview));
     const avatar = conversationAvatar(thread);
     const kind = el('span', 'conversation-kind', thread.kind === 'direct' ? t('Direct chat') : t('Group chat'));
     copy.prepend(kind);
-    button.append(avatar, copy, el('time', '', last?.created_at ? time(last.created_at) : date(thread.created_at)));
+    button.append(avatar, copy, el('time', '', last?.created_at ? time(last.created_at) : date(thread.created_at))); const unread=notifications.unread(thread.id);if(unread){button.classList.add('has-unread');button.append(el('span','unread-count',unread>99?'99+':String(unread)));}
     button.addEventListener('click', () => selectThread(thread.id)); $('#thread-list').append(button);
   }
 }
 async function selectThread(threadId) {
   $('#conversations').classList.add('chat-open');
+  composer.select(threadId); $('#jump-latest').hidden=true;
   state.selected = threadId; state.currentThread = null; state.messages = []; state.cursor = '0'; state.receiptCounts.clear(); state.receivingCheckedAt = 0; $('#chat-receiving').textContent = '';
   $('#observe-actions').hidden = true; $('#message-text').disabled = true; $('#send-button').disabled = true;
-  $('#compose-error').textContent = ''; $('#message-text').value = ''; $('#compose-form').dataset.pendingKey = ''; $('#compose-form').dataset.pendingSignature = '';
+  $('#compose-error').textContent = ''; $('#compose-form').dataset.pendingKey = ''; $('#compose-form').dataset.pendingSignature = '';
   $('#chat-empty').hidden = true; $('#chat-active').hidden = false; $('#chat-title').textContent = t('Loading conversation…'); $('#chat-members').textContent = ''; renderThreads(); $('#message-list').replaceChildren(el('p', 'empty-list', t('Loading messages…'))); $('#message-list').setAttribute('aria-busy', 'true');
   try { await loadMessages(true); } catch (error) { if (state.selected === threadId) { $('#message-list').replaceChildren(el('p', 'empty-list error', t('Could not load this conversation. Select it again to retry.'))); toast(error.message); } } finally { if (state.selected === threadId) $('#message-list').setAttribute('aria-busy', 'false'); }
 }
@@ -236,25 +246,24 @@ async function loadMessages(forceScroll = false) {
   const threadId = state.selected, cursor = state.cursor, me = state.me;
   const result = await allPages(`/threads/${threadId}`, cursor);
   if (state.me !== me || state.selected !== threadId || state.cursor !== cursor) return;
-  $('#chat-title').textContent = chatName(result.last.thread, state.perspective === 'all' ? null : state.perspective);
+  $('#chat-title').textContent = chatName(result.last.thread,state.me.id);
   $('#chat-members').textContent = conversationSubtitle(result.last.thread);
   $('#chat-avatar').replaceChildren(...conversationAvatar(result.last.thread).childNodes); $('#chat-avatar').className = conversationAvatar(result.last.thread).className;
   state.members = result.last.thread.members; state.currentThread = result.last.thread;
   const observing = result.last.thread.kind === 'direct' && !state.members.some(p => p.id === state.me.id);
-  const perspectiveOnly = state.perspective !== 'all';
-  $('#observe-actions').hidden = !observing; $('#compose-form').hidden = observing || perspectiveOnly;
-  $('#message-text').disabled = observing || perspectiveOnly; $('#send-button').disabled = observing || perspectiveOnly;
-  $('#observe-actions').hidden = !(observing || perspectiveOnly);
-  $('#observe-actions span').textContent = perspectiveOnly ? t('Viewing as {0} · Read only', humanName(state.perspective)) : t('Viewing an agent direct chat · Original conversation preserved');
-  $('#join-discussion').hidden = perspectiveOnly;
-  $('#message-text').placeholder = observing ? t("正在查看这段私聊") : t("消息");
+  $('#observe-actions').hidden = !observing; $('#compose-form').hidden = observing;
+  $('#message-text').disabled = observing; $('#send-button').disabled = observing;
+  $('#observe-actions span').textContent = t('Viewing an agent direct chat · Original conversation preserved');
+  $('#join-discussion').hidden = false;
+  composer.context(result.last.thread,!observing);
   $('#add-members').hidden = result.last.thread.kind === 'direct';
+  notifications.read(result.last.thread,{force:forceScroll});renderThreads();
   renderMembers();
   if (result.items.length || forceScroll) {
     state.messages.push(...result.items); state.cursor = result.next_cursor;
     renderMessages(forceScroll);
   }
-  await Promise.all([loadActivity(threadId), loadReceiving(threadId)]);
+  await loadActivity(threadId);
 }
 $('#join-discussion').addEventListener('click', async () => {
   const source = state.currentThread;
@@ -318,98 +327,59 @@ $('#add-members').addEventListener('click', () => {
   $('#modal-fields').append(wrapper); $('#modal-submit').textContent = t("Add participants");
 });
 function receiptLabel(messageId) {
-  const counts = state.receiptCounts.get(messageId);
-  if (!counts?.total) return t('Saved · details');
-  if (!counts.processed) return t('Saved · awaiting processing');
-  if (counts.processed === counts.total) return t('Processed · details');
-  return t('Processed {0}/{1} · details', counts.processed, counts.total);
+  const counts=state.receiptCounts.get(messageId);
+  return counts?.processed===counts?.total&&counts?.total?t('Processed'):t('Sent');
 }
-async function loadReceiving(threadId) {
-  if (Date.now() - state.receivingCheckedAt < 30000) return;
-  state.receivingCheckedAt = Date.now();
-  const me = state.me;
+async function messageReceipts(message) {
   try {
-    const result = await api(`/threads/${threadId}/receiving`);
-    if (state.me !== me || state.selected !== threadId) return;
-    $('#chat-receiving').textContent = result.items.length > 1 ? t('{0}/{1} Agent receivers connected', result.items.filter(item => item.connected === true).length, result.items.length) : result.items.map(item => t(item.connected === true
-      ? '{0}: receiver connected' : item.connected === false
-      ? '{0}: no live receiver · messages stay saved' : '{0}: receiving status unavailable', humanName(item.principal_id))).join(' · ');
-    $('#chat-receiving').classList.toggle('receiver-warning', result.items.some(item => item.connected === false));
-    $('#chat-receiving').title = t('A connected receiver can wake its runtime. It does not confirm processing. Periodic agents read messages on their next check.');
-  } catch {
-    if (state.me === me && state.selected === threadId) $('#chat-receiving').textContent = t('Receiving status unavailable · messages stay saved');
-  }
+    const result=await api(`/messages/${message.id}`);
+    openModal(t('Message details'),t('Saved messages show as processed after the recipient acknowledges them.'),async()=>$('#modal').close());
+    const list=el('div','receipt-list');
+    for(const receipt of result.receipts){const row=el('div','receipt-person');row.append(el('strong','',humanName(receipt.recipient_id)),el('span','',receipt.acked_at?t('Processed at {0}',time(receipt.acked_at)):t('Awaiting processing')));list.append(row);}
+    $('#modal-fields').append(list);$('#modal-submit').textContent=t('Close');
+    if(result.receipts.some(r=>r.recipient_id===state.me.id&&!r.acked_at)){$('#modal-submit').textContent=t('Mark as processed');state.modalAction=async()=>{await api(`/messages/${message.id}/ack`,{method:'POST'});$('#modal').close();await loadMessages();};}
+  } catch(error){toast(error.message);}
 }
-function renderMessages(forceScroll = false) {
-  const list = $('#message-list'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 100;
-  list.replaceChildren();
-  if (!state.messages.length) list.append(el('p', 'empty-list', t("A fresh conversation. Send the first message.")));
-  let previousDay;
-  for (const message of state.messages) {
-    const day = new Date(message.created_at).toLocaleDateString(getLocale());
-    if (day !== previousDay) { const separator = el('div', 'date-separator'); separator.append(el('span', '', date(message.created_at))); list.append(separator); previousDay = day; }
-    const principal = state.principals.find(p => p.id === message.sender_id);
-    const article = el('article', `message${message.sender_id === state.perspective ? ' mine' : ''}`);
-    article.dataset.messageId = message.id;
-    const name = principal?.name ?? message.sender_id;
-    article.append(personAvatar(principal ?? {id:message.sender_id,name}));
-    const content = el('div', 'message-body'), meta = el('div', 'message-meta');
-    meta.append(el('strong', '', name));
-    if (principal?.kind === 'agent') meta.append(el('span', 'agent-label', t('Agent')));
-    meta.append(el('span', 'message-target', messageDirection(state.currentThread, message.sender_id, name).slice(name.length).trim()));
-    const timestamp = el('time', '', time(message.created_at)); timestamp.title = new Date(message.created_at).toLocaleString(getLocale()); timestamp.dateTime = message.created_at;
-    const bubble = el('div', 'bubble');
-    if (message.type === 'text') bubble.textContent = message.content;
-    else if (message.type === 'json') {
-      bubble.classList.add('structured-message');
-      bubble.append(el('span', 'eyebrow', t("内容")));
-      if (message.content && typeof message.content === 'object' && !Array.isArray(message.content)) {
-        const rows = el('dl', 'json-fields');
-        for (const [key, value] of Object.entries(message.content)) { rows.append(el('dt', '', key.replaceAll('_', ' ')), el('dd', '', typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value))); }
-        bubble.append(rows);
-      } else bubble.append(el('pre', '', JSON.stringify(message.content, null, 2)));
-      const details = el('details'), summary = el('summary', '', t("View raw JSON")); details.append(summary, el('pre', '', JSON.stringify(message.content, null, 2))); bubble.append(details);
-    }
-    else {
-      const link = el('a', '', message.type === 'artifact' ? message.content.name ?? message.content.url : message.content);
-      link.href = message.type === 'artifact' ? message.content.url : message.content; link.target = '_blank'; link.rel = 'noopener noreferrer'; bubble.append(link);
-      if (message.type === 'artifact') { bubble.classList.add('artifact-message'); bubble.prepend(el('span', 'artifact-icon', '↗'), el('span', 'eyebrow', 'DELIVERABLE')); }
-    }
-    meta.append(timestamp);
-    const footer = el('div', 'message-id');
-    const receipts = el('button', 'receipt-button', receiptLabel(message.id)); receipts.type = 'button'; receipts.title = t("消息状态"); receipts.setAttribute('aria-label', t("消息状态"));
-    receipts.addEventListener('click', async () => {
-      try {
-        const result = await api(`/messages/${message.id}`);
-        const summary = result.receipts.map(r => `${humanName(r.recipient_id)}: ${r.acked_at ? t("Acknowledged ") + time(r.acked_at) : t("Pending acknowledgment")}`).join('\n');
-        openModal(t("消息状态"), t("The message is saved. It shows as processed only after the Agent confirms processing. A connected receiver is not a processing receipt."), async () => { $('#modal').close(); });
-        $('#modal-fields').append(el('p', 'key-hint', summary || t("没有收件人。")));
-        const mine = result.receipts.find(r => r.recipient_id === state.me.id);
-        if (mine && !mine.acked_at) {
-          state.modalAction = async () => { await api(`/messages/${message.id}/ack`, { method: 'POST' }); $('#modal').close(); await loadMessages(); toast(t("已标记处理。")); };
-          $('#modal-submit').textContent = t("标记已处理");
-        } else $('#modal-submit').textContent = t("关闭");
-      } catch (error) { toast(error.message); }
-    });
-    footer.append(receipts); bubble.prepend(meta); bubble.append(footer); content.append(bubble); article.append(content); list.append(article);
+function renderMessages(forceScroll=false) {
+  if(!state.currentThread)return;
+  const list=$('#message-list'),scroll=list.scrollTop,atBottom=list.scrollHeight-scroll-list.clientHeight<100;
+  const previousCount=list.querySelectorAll('.message').length;list.replaceChildren();
+  if(!state.messages.length){const empty=el('div','conversation-start');empty.append(conversationAvatar(state.currentThread),el('h2','',chatName(state.currentThread,state.me.id)),el('p','',t('A fresh conversation. Send the first message.')));list.append(empty);}
+  let previousDay,previous;
+  const byId=new Map(state.messages.map(message=>[message.id,message]));
+  for(const message of state.messages){
+    const day=new Date(message.created_at).toLocaleDateString(getLocale()),continued=day===previousDay&&previous?.sender_id===message.sender_id&&!message.reply_to&&new Date(message.created_at)-new Date(previous.created_at)<300000;
+    if(day!==previousDay){const separator=el('div','date-separator');separator.append(el('span','',date(message.created_at)));list.append(separator);previousDay=day;}
+    const person=state.principals.find(p=>p.id===message.sender_id),name=person?.name||message.sender_id;
+    const article=el('article','message'+(continued?' message-continued':'')+(message.sender_id===state.me?.id?' message-own':'')+(message.mentions?.includes(state.me?.id)?' message-addressed':''));article.dataset.messageId=message.id;article.tabIndex=0;
+    const avatar=personAvatar(person||{id:message.sender_id,name});avatar.setAttribute('aria-hidden','true');article.append(avatar);
+    const body=el('div','message-body'),meta=el('div','message-meta');meta.append(el('strong','',name));
+    if(person?.kind==='agent')meta.append(el('span','agent-label',t('Agent')));
+    const timestamp=el('time','',time(message.created_at));timestamp.title=new Date(message.created_at).toLocaleString(getLocale());timestamp.dateTime=message.created_at;meta.append(timestamp);body.append(meta);
+    if(message.reply_to){const original=byId.get(message.reply_to),quote=el('button','message-quote');quote.type='button';quote.append(el('span','quote-arrow','↳'),el('strong','',original?humanName(original.sender_id):t('Reply')),el('span','',original?(typeof original.content==='string'?original.content:JSON.stringify(original.content)):t('View original message')));quote.addEventListener('click',()=>{const target=list.querySelector(`[data-message-id="${message.reply_to}"]`);target?.scrollIntoView({behavior:'smooth',block:'center'});target?.classList.add('message-highlight');setTimeout(()=>target?.classList.remove('message-highlight'),1400);});body.append(quote);}
+    const bubble=el('div','bubble');
+    if(message.type==='text')bubble.append(renderText(message.content,message.mentions,state.principals));
+    else if(message.type==='json'){bubble.classList.add('structured-message');const pre=el('pre','message-code');pre.append(el('code','',JSON.stringify(message.content,null,2)));bubble.append(pre);}
+    else {const link=el('a','artifact-link',message.type==='artifact'?(message.content.name||message.content.url):message.content);link.href=message.type==='artifact'?message.content.url:message.content;link.target='_blank';link.rel='noopener noreferrer';bubble.append(link);if(message.type==='artifact'){bubble.classList.add('artifact-message');bubble.prepend(el('span','artifact-icon','↗'));}}
+    body.append(bubble);
+    const footer=el('div','message-id'),receipt=el('button','receipt-button',receiptLabel(message.id));receipt.type='button';receipt.setAttribute('aria-label',t('Message details'));receipt.addEventListener('click',()=>messageReceipts(message));footer.append(receipt);body.append(footer);
+    const actions=el('div','message-actions'),reply=el('button','message-action',t('Reply')),copy=el('button','message-action',t('Copy'));reply.type=copy.type='button';reply.disabled=$('#compose-form').hidden;reply.setAttribute('aria-label',t('Reply to {0}',name));reply.addEventListener('click',()=>composer.reply(message));copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(typeof message.content==='string'?message.content:JSON.stringify(message.content,null,2));toast(t('Message copied'));}catch{toast(t('Could not copy this message'));}});actions.append(reply,copy);article.append(body,actions);list.append(article);previous=message;
   }
-  if (atBottom || forceScroll) list.scrollTop = list.scrollHeight;
+  if(atBottom||forceScroll){list.scrollTop=list.scrollHeight;$('#jump-latest').hidden=true;}else{list.scrollTop=scroll;if(state.messages.length>previousCount)$('#jump-latest').hidden=false;}
 }
-$('#compose-form').addEventListener('submit', async event => {
-  event.preventDefault(); const threadId = state.selected, content = $('#message-text').value;
-  if (!content.trim() || !threadId || state.perspective !== 'all') return;
-  const signature = JSON.stringify({ threadId, content });
-  if ($('#compose-form').dataset.pendingSignature !== signature) {
-    $('#compose-form').dataset.pendingSignature = signature; $('#compose-form').dataset.pendingKey = crypto.randomUUID();
-  }
-  $('#send-button').disabled = true; $('#compose-error').textContent = '';
-  try {
-    await api('/messages', { method: 'POST', data: { thread_id: threadId, type: 'text', content }, key: $('#compose-form').dataset.pendingKey });
-    if (state.selected === threadId && $('#message-text').value === content) { $('#message-text').value = ''; $('#message-text').style.height = 'auto'; $('#compose-form').dataset.pendingSignature = ''; }
+async function sendMessage() {
+  const threadId=state.selected,content=$('#message-text').value,payload=composer.payload();
+  if(!content.trim()||!threadId||!state.members.some(p=>p.id===state.me.id)&&state.currentThread?.kind==='direct')return;
+  const signature=JSON.stringify({threadId,content,...payload});
+  if($('#compose-form').dataset.pendingSignature!==signature){$('#compose-form').dataset.pendingSignature=signature;$('#compose-form').dataset.pendingKey=crypto.randomUUID();}
+  composer.busy(true);$('#compose-error').textContent='';
+  try{
+    await api('/messages',{method:'POST',data:{thread_id:threadId,type:'text',content,...payload},key:$('#compose-form').dataset.pendingKey});
+    if(state.selected===threadId&&$('#message-text').value===content&&JSON.stringify(composer.payload())===JSON.stringify(payload)){composer.sent();$('#compose-form').dataset.pendingSignature='';}
     await refresh();
-  } catch (error) { $('#compose-error').textContent = error.message; }
-  finally { $('#send-button').disabled = false; }
-});
+  }catch(error){if(state.selected===threadId)$('#compose-error').textContent=error.message;else toast(error.message);}
+  finally{composer.busy(false);}
+}
 async function directChat(principalId) {
   const result = await api('/threads', { method: 'POST', data: { kind: 'direct', members: [principalId] } });
   if ($('#modal').open) $('#modal').close();
@@ -503,12 +473,12 @@ function editPrincipal(p){
 $('#show-disabled').addEventListener('change', renderPrincipals);
 function renderPrincipals() {
   $('#principal-grid').replaceChildren();
-  for (const p of state.principals.filter(p => p.active || $('#show-disabled').checked)) {
+  for (const p of state.principals.filter(p => p.id!==state.me.id&&(p.active || $('#show-disabled').checked))) {
     const card = el('article', 'principal-card'), top = el('div', 'principal-top');
     top.append(personAvatar(p), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'Agent' : p.kind === 'owner' ? t("我") : t("联系人")) : t("已停用")));
-    card.append(top, el('h2', '', p.name), el('p', '', p.description || (p.kind === 'agent' ? t("还没有简介。") : t("可以查看聊天、参与讨论。"))), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : t("联系人")));
-    const footer = el('footer');
-    if(state.me.kind==='owner'){const edit=el('button','secondary',t('Edit profile'));edit.addEventListener('click',()=>editPrincipal(p));footer.append(edit);}
+    card.append(top, el('h2', '', p.name), el('p', '', p.description || ''), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : t("联系人")));
+    const footer=el('footer'),advanced=el('details','contact-options'),controls=el('div','contact-controls');advanced.append(el('summary','',t('Manage')),controls);
+    if(state.me.kind==='owner'){const edit=el('button','secondary',t('Edit profile'));edit.addEventListener('click',()=>editPrincipal(p));controls.append(edit);}
     if (state.me.kind === 'owner' && p.kind === 'agent') {
       // One explicit, mobile-friendly owner switch. Withdrawing it closes that Agent's open invitations.
       const permission = el('label', 'invite-permission');
@@ -525,7 +495,7 @@ function renderPrincipals() {
         finally { toggle.disabled = false; }
       });
       permission.append(toggle, el('span', '', t("Allow Agent invitations")));
-      footer.append(permission);
+      controls.append(permission);
     }
     if (state.me.kind === 'owner' && p.kind === 'agent') {
       // Personal-Agent pairing includes browser access; the owner can still withdraw it.
@@ -543,7 +513,7 @@ function renderPrincipals() {
         finally { loginToggle.disabled = false; }
       });
       loginPermission.append(loginToggle, el('span', '', t("Open workspace through this Agent")));
-      footer.append(loginPermission);
+      controls.append(loginPermission);
     }
     if (state.me.kind === 'owner' && p.kind === 'agent' && p.active) {
       const connect = el('button', 'primary', t("连接 Agent")); connect.dataset.connectAgent = p.id;
@@ -551,7 +521,7 @@ function renderPrincipals() {
         connect.disabled = true;
         try { const result = await api('/pairings', { method: 'POST', data: { principal_id: p.id } }); await showAgentConnection(p, null, result.pairing); }
         catch (error) { toast(error.message); } finally { connect.disabled = false; }
-      }); footer.append(connect);
+      }); controls.append(connect);
     }
     if (p.id !== state.me.id && p.active) { const message = el('button', 'secondary', t("发消息")); message.addEventListener('click', () => startThread(p.id)); footer.append(message); }
     if (state.me.kind === 'owner' && p.kind !== 'owner') {
@@ -559,9 +529,9 @@ function renderPrincipals() {
       disable.addEventListener('click', async () => {
         if (p.active && !confirm(t("停用 {0} 并撤销其接入密钥？", p.name))) return;
         try { await api(`/principals/${p.id}`, { method: 'PATCH', data: { active: !p.active } }); await refresh(); } catch (error) { toast(error.message); }
-      }); footer.append(disable);
+      }); controls.append(disable);
     }
-    card.append(footer); $('#principal-grid').append(card);
+    if(state.me.kind==='owner')footer.append(advanced);card.append(footer); $('#principal-grid').append(card);
   }
 }
 async function loadAccess() {
@@ -659,7 +629,7 @@ async function redeemOwnerLogin(code, target) {
     toast(t("Signed in with a one-time link from your Agent."));
     if (target) { state.pendingThread = target; await consumePendingThread(); }
   } catch (error) {
-    state.me = null; state.selected = null; state.messages = [];
+    notifications.stop();browserEvents.stop();state.me = null; state.selected = null; state.messages = [];
     authMode('login');
     $('#auth-error').textContent = error.status === 410
       ? t("This sign-in link expired, was withdrawn, or was already used. Ask your Agent for a new one.")
@@ -704,7 +674,7 @@ function renderInviteStatic(code) {
 async function showAgentInvitation(code) {
   state.inviteCode = code;
   $('#onboarding').dataset.mode = 'agent-invite';
-  $('#onboarding').hidden = false; $('#shell').hidden = true; $('#perspective-toolbar').hidden = true; $('#menu-toggle').hidden = true;
+  $('#onboarding').hidden = false; $('#shell').hidden = true; $('#menu-toggle').hidden = true;
   $('#auth-form').hidden = true; $('#auth-switch').hidden = true; $('#setup-help').hidden = true; $('#agent-invite').hidden = false;
   $('.skip-link').href = '#agent-invite';
   $('#invite-error').hidden = true; $('#invite-steps').hidden = false; $('#invite-copy-status').textContent = '';
@@ -732,22 +702,6 @@ $('#copy-invite-command').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText($('#invite-command').textContent); $('#invite-copy-status').textContent = t("Copied. Run it in the invited Agent’s terminal."); }
   catch { $('#invite-copy-status').textContent = t("Select and copy the command above manually."); }
 });
-$('#identity-perspective').addEventListener('change', () => setPerspective($('#identity-perspective').value).catch(error => toast(error.message)));
-$('#refresh-map').addEventListener('click', () => refresh().catch(error => toast(error.message)));
-function renderPerspective() {
-  const select = $('#identity-perspective'); select.replaceChildren(el('option', '', t('All conversations'))); select.firstChild.value = 'all';
-  for (const p of state.principals) { const option = el('option', '', p.name); option.value = p.id; select.append(option); }
-  if (state.perspective !== 'all' && !state.principals.some(p => p.id === state.perspective)) state.perspective = 'all';
-  select.value = state.perspective;
-  $('#perspective-heading').textContent = state.perspective === 'all' ? t('All conversations') : t('{0} conversations', humanName(state.perspective));
-}
-async function setPerspective(id) {
-  state.perspective = id; state.graphPerson=null; renderPerspective(); renderThreads(); renderGraph();
-  if (state.selected && !visibleThreads(state.threads, id).some(thread => thread.id === state.selected)) {
-    state.selected = null; state.currentThread = null; state.members = []; state.messages = []; state.inspector = false;
-    $('#chat-active').hidden = true; $('#chat-empty').hidden = false; $('#conversations').classList.remove('chat-open'); renderMembers();
-  } else if (state.selected) await loadMessages(true);
-}
 function personAvatar(person) {
   const avatar = el('span', 'avatar person-avatar', person.name.slice(0, 1).toUpperCase());
   colorAvatar(avatar, person.name); avatar.title = person.name;
@@ -756,39 +710,18 @@ function personAvatar(person) {
   return avatar;
 }
 function conversationAvatar(thread) {
-  const people = threadPeople(thread), group = thread.kind !== 'direct';
+  const group=thread.kind!=='direct',people=threadPeople(thread).filter(person=>group||person.id!==state.me?.id);
   const avatar = el('span', `conversation-avatar ${group ? 'group-stack' : 'direct-pair'}`);
   avatar.setAttribute('aria-label', `${group ? t('Group chat') : t('Direct chat')}: ${people.map(p => p.name).join(', ')}`);
-  for (const person of people.slice(0, group ? 3 : 2)) avatar.append(personAvatar(person));
+  if(group){avatar.append(el('span','group-glyph','#'));return avatar;}
+  for (const person of people.slice(0,2)) avatar.append(personAvatar(person));
   if (group && people.length > 3) avatar.append(el('span', 'avatar-more', `+${people.length - 3}`));
   return avatar;
 }
 function conversationSubtitle(thread) {
   return `${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')} · ${threadPeople(thread).map(p => p.name).join(', ')}`;
 }
-function renderGraph() {
-  if (!state.me) return;
-  const data = conversationGraph(state.threads, state.perspective, {principals:state.principals,showDisabled:$('#graph-show-disabled').checked});
-  const scope = data.conversations;
-  if (state.graphPerson && !data.people.some(person => person.id === state.graphPerson)) state.graphPerson = null;
-  $('#graph-empty').hidden = data.people.length > 0;
-  $('#graph-summary').textContent = t('{0} conversations · {1} groups · {2} direct chats', scope.length, scope.filter(t => t.kind !== 'direct').length, scope.filter(t => t.kind === 'direct').length) + ' · ' + t('{0} messages',scope.reduce((sum,thread)=>sum+Number(thread.message_count??0),0));
-  state.graphController = renderConversationGraph($('#conversation-graph'), data, { openThread: async id => { showView('conversations'); await selectThread(id); }, chooseAgent: id => { state.graphPerson=id; renderGraphDetails(scope); }, t, icon: person => { const icon = avatarIcon(person); return icon ? (icon.startsWith('/') ? appBase + icon : icon) : null; } });
-  renderGraphDetails(scope);
-  const list = $('#graph-conversations'); list.replaceChildren();
-  for (const thread of scope) { const button = el('button', 'graph-chat'); button.append(conversationAvatar(thread), el('span', '', `${chatName(thread, null)} · ${thread.kind === 'direct' ? t('Direct chat') : t('Group chat')} · ${t('{0} messages',thread.message_count??0)}`)); button.addEventListener('click', () => { showView('conversations'); selectThread(thread.id); }); list.append(button); }
-}
-function renderGraphDetails(scope){
- const panel=$('#graph-details'),person=state.principals.find(p=>p.id===state.graphPerson);
- panel.replaceChildren();panel.hidden=!person;if(!person)return;
- const chats=visibleThreads(scope,person.id),sent=chats.reduce((sum,chat)=>sum+Number(threadPeople(chat).find(p=>p.id===person.id)?.sent_count??0),0);
- const header=el('header'),close=el('button','icon-button','×');close.type='button';close.setAttribute('aria-label',t('Close details'));close.addEventListener('click',()=>{state.graphPerson=null;panel.hidden=true;});
- const avatar=personAvatar(person);avatar.classList.toggle('disabled-avatar',isDisabled(person));
- header.append(avatar,el('strong','',person.name),close);panel.append(header);
- if(isDisabled(person))panel.append(el('span','badge off',t('Disabled')));
- panel.append(el('p','',t('{0} conversations · {1} sent',chats.length,sent)));
- for(const chat of chats){const button=el('button','graph-detail-chat');button.type='button';button.append(conversationAvatar(chat),el('span','',chatName(chat,null)),el('small','',t('{0} messages',chat.message_count??0)));button.addEventListener('click',()=>{showView('conversations');selectThread(chat.id).catch(error=>toast(error.message));});panel.append(button);}
-}
+
 
 boot();
 
@@ -818,14 +751,9 @@ document.addEventListener("agentpeerchat:languagechange",()=>{
  renderSyncState(chatSync.snapshot());
  receivingPage.render();
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
- renderPerspective();renderThreads();renderPrincipals();renderMembers();renderMessages();renderGraph();
- if(state.perspective!=="all")$("#observe-actions span").textContent=t("Viewing as {0} · Read only",humanName(state.perspective));
- if(state.currentThread){$("#chat-members").textContent=conversationSubtitle(state.currentThread);$("#message-text").placeholder=$("#observe-actions").hidden?t("消息"):t("正在查看这段私聊");}
+ renderThreads();renderPrincipals();renderMembers();renderMessages();notifications.translate();
+
+ if(state.currentThread){$("#chat-members").textContent=conversationSubtitle(state.currentThread);composer.context(state.currentThread,!$("#compose-form").hidden);}
  if(state.inspector&&state.selected)loadActivity(state.selected).catch(error=>toast(error.message));
  if(state.me.kind==="owner")renderPairings().catch(error=>toast(error.message));
 });
-
-$('#graph-fit').addEventListener('click',()=>state.graphController?.fit());
-$('#graph-show-disabled').addEventListener('change',renderGraph);
-$('#graph-zoom-in').addEventListener('click',()=>state.graphController?.zoom(1.3));
-$('#graph-zoom-out').addEventListener('click',()=>state.graphController?.zoom(1/1.3));
