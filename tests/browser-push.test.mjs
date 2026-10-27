@@ -1,0 +1,34 @@
+import {test,before,after} from 'node:test';import assert from 'node:assert/strict';import {build} from 'esbuild';import {readFile,readdir} from 'node:fs/promises';import {SQLiteDatabase} from '../server/sqlite.mjs';
+let db,worker,owner,agent,cookie,push;const privateKeys=new Map();const origin='https://push.test';
+async function api(path,{key=owner,body,method=body?'POST':'GET',headers={}}={}){return worker.fetch(new Request(origin+'/api/v1'+path,{method,headers:{...(key?{Authorization:'Bearer '+key}:{}),'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID(),...headers},body:body?JSON.stringify(body):undefined}),{DB:db,ASSETS:{fetch:()=>new Response('asset')},SETUP_SECRET:'push-private-fixture-secret'});}
+const encode=b=>Buffer.from(b).toString('base64url');
+async function subscription(endpoint='https://fcm.googleapis.com/fcm/send/private-device'){const pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);privateKeys.set(endpoint,pair.privateKey);return{endpoint,keys:{p256dh:encode(await crypto.subtle.exportKey('raw',pair.publicKey)),auth:encode(crypto.getRandomValues(new Uint8Array(16)))} };}
+before(async()=>{db=new SQLiteDatabase(':memory:');for(const f of(await readdir('migrations')).filter(f=>f.endsWith('.sql')).sort())await db.exec(await readFile('migrations/'+f,'utf8'));const bundle=await build({entryPoints:['src/index.ts','src/push.ts'],bundle:true,format:'esm',platform:'node',write:false,outdir:'out'});const load=async text=>import('data:text/javascript;base64,'+Buffer.from(text).toString('base64'));worker=(await load(bundle.outputFiles.find(f=>f.path.endsWith('/index.js')).text)).default;push=await load(bundle.outputFiles.find(f=>f.path.endsWith('/push.js')).text);owner=(await(await api('/setup',{key:null,body:{name:'Owner',setup_secret:'push-private-fixture-secret'}})).json()).access_key;agent=await(await api('/agents',{body:{name:'Muse'}})).json();const r=await api('/session',{key:null,body:{access_key:owner},headers:{Origin:origin}});cookie=r.headers.get('set-cookie').split(';')[0];});after(()=>db.close());
+const browser=(body,method)=>({key:null,body,method,headers:{Cookie:cookie,Origin:origin}});
+test('only authenticated browsers can subscribe; invalid endpoints, redirects and keys cannot become outbound requests',async()=>{
+ assert.equal((await api('/push/key',{key:null})).status,401);assert.equal((await api('/push/key')).status,403);assert.equal((await api('/push/key',{key:agent.token.token})).status,403);
+ for(const endpoint of ['http://fcm.googleapis.com/send','https://127.0.0.1/','https://fcm.googleapis.com.attacker.test/','https://fcm.googleapis.com:444/send','https://user:password@fcm.googleapis.com/send'])assert.equal((await api('/push/subscriptions',browser(await subscription(endpoint)))).status,400);
+ assert.equal((await api('/push/subscriptions',browser({endpoint:'https://fcm.googleapis.com/fcm/send/a',keys:{p256dh:'invalid',auth:'invalid'}}))).status,400);
+ const foreign=browser(await subscription());foreign.headers.Origin='https://foreign.test';assert.equal((await api('/push/subscriptions',foreign)).status,403);
+});
+test('per-instance keys remain stable across simultaneous first use and never expose the private key',async()=>{
+ const values=await Promise.all(Array.from({length:4},async()=>{const r=await api('/push/key',browser());assert.equal(r.status,200);return r.json();}));assert.equal(new Set(values.map(v=>v.public_key)).size,1);for(const value of values){assert.deepEqual(Object.keys(value),['public_key']);assert.equal(Buffer.from(value.public_key,'base64url').length,65);}
+});
+test('push payloads are encrypted, target valid recipient sessions, and expired subscriptions are removed',async()=>{
+ const sub=await subscription();assert.equal((await api('/push/subscriptions',browser({...sub,language:'zh'}))).status,201);const identity=(await(await api('/me')).json()).principal;
+ const calls=[];await push.notifyPush({DB:db},[identity.id],'thr_private',origin,async(url,options)=>{calls.push({url,options});return new Response('',{status:201});});assert.equal(calls.length,1);const call=calls[0];assert.equal(call.options.redirect,'error');const headers=new Headers(call.options.headers);assert.equal(headers.get('Content-Encoding'),'aes128gcm');assert.match(headers.get('Authorization'),/^vapid /);assert.ok(!Buffer.from(call.options.body).includes(Buffer.from('thr_private')));assert.ok(!JSON.stringify([...headers]).includes(owner));
+
+ // Independent RFC 8291 decode: proves interoperability rather than checking only ciphertext shape.
+ const bytes=new Uint8Array(call.options.body),serverPoint=bytes.slice(21,21+bytes[20]),clientPoint=Buffer.from(sub.keys.p256dh,'base64url');
+ const serverKey=await crypto.subtle.importKey('raw',serverPoint,{name:'ECDH',namedCurve:'P-256'},false,[]);
+ const shared=await crypto.subtle.deriveBits({name:'ECDH',public:serverKey},privateKeys.get(sub.endpoint),256);
+ const hkdf=async(ikm,salt,info,bits)=>crypto.subtle.deriveBits({name:'HKDF',hash:'SHA-256',salt,info},await crypto.subtle.importKey('raw',ikm,'HKDF',false,['deriveBits']),bits);
+ const ikm=await hkdf(shared,Buffer.from(sub.keys.auth,'base64url'),Buffer.concat([Buffer.from('WebPush: info\0'),clientPoint,serverPoint]),256);
+ const cek=await hkdf(ikm,bytes.slice(0,16),Buffer.from('Content-Encoding: aes128gcm\0'),128),iv=await hkdf(ikm,bytes.slice(0,16),Buffer.from('Content-Encoding: nonce\0'),96);
+ const plaintext=Buffer.from(await crypto.subtle.decrypt({name:'AES-GCM',iv},await crypto.subtle.importKey('raw',cek,'AES-GCM',false,['decrypt']),bytes.slice(21+bytes[20])));
+ let marker=plaintext.length-1;while(plaintext[marker]===0)marker--;assert.equal(plaintext[marker],2);assert.deepEqual(JSON.parse(plaintext.subarray(0,marker).toString()),{thread_id:'thr_private',language:'zh'});
+ const authorization=headers.get('Authorization'),jwt=/t=([^, ]+)/.exec(authorization)[1],publicKey=/k=([^, ]+)/.exec(authorization)[1];
+ const verify=await crypto.subtle.importKey('raw',Buffer.from(publicKey,'base64url'),{name:'ECDSA',namedCurve:'P-256'},false,['verify']);const parts=jwt.split('.');assert.equal(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},verify,Buffer.from(parts[2],'base64url'),Buffer.from(parts.slice(0,2).join('.'))),true);assert.equal(JSON.parse(Buffer.from(parts[1],'base64url')).aud,'https://fcm.googleapis.com');
+ await push.notifyPush({DB:db},[identity.id],'thr_private',origin,async()=>new Response('',{status:410}));assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions').first()).n,0);
+ assert.equal((await api('/push/subscriptions',browser(sub))).status,201);await api('/session',browser(undefined,'DELETE'));assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions').first()).n,0);assert.equal((await api('/push/key',browser())).status,401);
+});

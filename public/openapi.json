@@ -752,6 +752,220 @@
         }
       }
     },
+    "/push/key": {
+      "get": {
+        "summary": "Get this instance’s browser push public key",
+        "description": "Browser session only. Generated automatically; private key never leaves instance storage.",
+        "operationId": "get__push_key",
+        "x-roles": [
+          "owner",
+          "human"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "public_key": {
+                      "type": "string",
+                      "maxLength": 256,
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "public_key"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/push/subscriptions": {
+      "post": {
+        "summary": "Enable browser background notifications",
+        "description": "Browser session only; same-origin. Uses this browser’s PushManager subscription, never a hand-entered key.",
+        "operationId": "post__push_subscriptions",
+        "x-roles": [
+          "owner",
+          "human"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
+                  },
+                  "keys": {
+                    "type": "object",
+                    "properties": {
+                      "p256dh": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "minLength": 1
+                      },
+                      "auth": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "p256dh",
+                      "auth"
+                    ]
+                  },
+                  "language": {
+                    "enum": [
+                      "en",
+                      "zh"
+                    ]
+                  }
+                },
+                "required": [
+                  "endpoint",
+                  "keys",
+                  "language"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove this browser notification subscription",
+        "description": "Browser session only; same-origin. Signing out also removes the session’s subscriptions.",
+        "operationId": "delete__push_subscriptions",
+        "x-roles": [
+          "owner",
+          "human"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "endpoint"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/agents/presence": {
       "get": {
         "summary": "Read compact Agent connection presence",

@@ -1,3 +1,4 @@
+import {createAppExperience,createPushClient} from './pwa.js';
 import {agentPresence} from './agent-presence.js';
 import {t, initLanguage, getLocale} from './i18n.js';
 import {createNotifications,createBrowserEvents} from './chat-notifications.js';
@@ -33,7 +34,7 @@ function toast(message) { $('#toast').textContent = message; $('#toast').hidden 
 async function api(path, options = {}) {
   const { method = 'GET', data, key } = options;
   const headers = { ...(data === undefined ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'Idempotency-Key': key } : {}) };
-  const response = await fetch(`${appBase}/api/v1${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'same-origin' });
+  const response = await fetch(`${appBase}/api/v1${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), credentials: 'same-origin',signal:AbortSignal.timeout?.(15000) });
   const result = await response.json();
   if (!response.ok) { const error = new Error(result.error?.message ?? t("Request failed.")); error.status = response.status; throw error; }
   return result;
@@ -147,7 +148,8 @@ async function enter() {
   $('#my-avatar').textContent = state.me.name.slice(0, 1).toUpperCase(); $('#composer-name').textContent = state.me.name;
   document.querySelectorAll('.owner-only').forEach(node => { node.hidden = state.me.kind !== 'owner'; });
   if (state.view === 'receiving' && state.me.kind !== 'owner') showView('conversations');
-  notifications.start(state.me);await chatSync.start();browserEvents.start();
+  composer.identity(state.me.id);notifications.start(state.me);await chatSync.start();browserEvents.start();void pushClient.restore();
+  if(!state.pendingThread&&!state.selected)try{const saved=localStorage.getItem('agentpeerchat.last-thread.'+state.me.id);if(state.threads.some(t=>t.id===saved))state.pendingThread=saved;}catch{}
   if (state.view === 'receiving' && state.me.kind === 'owner') receivingPage.start();
   await consumePendingThread();
 }
@@ -195,7 +197,9 @@ const chatSync = createChatSync({
   refresh: refreshData, onState: renderSyncState,
   onUnauthorized: () => { state.me = null; authMode('login'); toast(t("Session ended. Sign in again.")); }
 });
-const notifications=createNotifications({bell:$('#notification-toggle'),soundButton:$('#sound-toggle'),onChange:()=>{if(state.me)renderThreads();},onOpen:id=>{showView('conversations');selectThread(id).catch(error=>toast(error.message));},isReading:id=>state.view==='conversations'&&state.selected===id&&!document.hidden&&document.hasFocus(),notifyError:toast});
+const appExperience=createAppExperience({installButton:$('#install-app'),settingsButton:$('#install-app-settings'),banner:$('#connection-banner'),showHelp:(title,description)=>{openModal(title,description,async()=>$('#modal').close());$('#modal-submit').textContent=t('Close');},onPush:()=>state.me?chatSync.pushRefresh():Promise.resolve(),onResume:()=>{composer.update();return state.me?chatSync.refresh():Promise.resolve();}});
+const pushClient=createPushClient({api,experience:appExperience,language:()=>getLocale().startsWith('zh')?'zh':'en'});
+const notifications=createNotifications({enablePush:()=>pushClient.enable(),hasPush:()=>pushClient.enabled(),registration:()=>appExperience.ready(),bell:$('#notification-toggle'),soundButton:$('#sound-toggle'),onChange:()=>{if(state.me)renderThreads();},onOpen:id=>{showView('conversations');selectThread(id).catch(error=>toast(error.message));},isReading:id=>state.view==='conversations'&&state.selected===id&&!document.hidden&&document.hasFocus(),notifyError:toast});
 const browserEvents=createBrowserEvents({url:appBase+'/api/v1/browser/events',onChange:()=>chatSync.pushRefresh(),onState:connected=>{state.realtimeBrowser=connected;}});
 const receivingPage = createReceivingPage({ root: $('#receiving'), api, t, locale: getLocale,
   avatar: p => personAvatar(state.principals.find(person => person.id === p.id) ?? p),
@@ -212,9 +216,10 @@ document.addEventListener('visibilitychange', receivingPage.availabilityChanged)
 window.addEventListener('online', receivingPage.availabilityChanged);
 window.addEventListener('offline', receivingPage.availabilityChanged);
 window.addEventListener('online', chatSync.availabilityChanged);
-window.addEventListener('offline',()=>{state.presenceAt=0;if(state.me){renderThreads();renderPrincipals();renderMembers();renderChatPresence();}chatSync.availabilityChanged();});
+window.addEventListener('pagehide',()=>composer.save());
+window.addEventListener('offline',()=>{state.presenceAt=0;if(state.me){renderThreads();renderPrincipals();renderMembers();renderChatPresence();}composer.update();chatSync.availabilityChanged();});
 $('#logout').addEventListener('click', async () => {
-  try { await api('/session', { method: 'DELETE' }); notifications.stop();browserEvents.stop();state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
+  try { await pushClient.stop();await api('/session', { method: 'DELETE' });composer.reset({forget:true});notifications.stop();browserEvents.stop();state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
 function showView(view) {
   if (view === 'receiving' && state.me?.kind !== 'owner') return;
@@ -251,9 +256,11 @@ function renderThreads() {
 async function selectThread(threadId) {
   $('#conversations').classList.add('chat-open');
   composer.select(threadId); $('#jump-latest').hidden=true;
+  try{localStorage.setItem('agentpeerchat.last-thread.'+state.me.id,threadId);}catch{}
+  history.replaceState(null,'',location.pathname+location.search+'#thread='+encodeURIComponent(threadId));
   state.selected = threadId; state.currentThread = null; state.messages = []; state.cursor = '0'; state.receiptCounts.clear(); state.receivingCheckedAt = 0; $('#chat-receiving').textContent = '';
   $('#observe-actions').hidden = true; $('#message-text').disabled = true; $('#send-button').disabled = true;
-  $('#compose-error').textContent = ''; $('#compose-form').dataset.pendingKey = ''; $('#compose-form').dataset.pendingSignature = '';
+  $('#compose-error').textContent = '';
   $('#chat-empty').hidden = true; $('#chat-active').hidden = false; $('#chat-title').textContent = t('Loading conversation…'); $('#chat-members').textContent = ''; renderThreads(); $('#message-list').replaceChildren(el('p', 'empty-list', t('Loading messages…'))); $('#message-list').setAttribute('aria-busy', 'true');
   try { await loadMessages(true); } catch (error) { if (state.selected === threadId) { $('#message-list').replaceChildren(el('p', 'empty-list error', t('Could not load this conversation. Select it again to retry.'))); toast(error.message); } } finally { if (state.selected === threadId) $('#message-list').setAttribute('aria-busy', 'false'); }
 }
@@ -387,7 +394,7 @@ async function sendMessage() {
   if(!content.trim()||!threadId||!state.members.some(p=>p.id===state.me.id)&&state.currentThread?.kind==='direct')return;
   const signature=JSON.stringify({threadId,content,...payload});
   if($('#compose-form').dataset.pendingSignature!==signature){$('#compose-form').dataset.pendingSignature=signature;$('#compose-form').dataset.pendingKey=crypto.randomUUID();}
-  composer.busy(true);$('#compose-error').textContent='';
+  composer.save();composer.busy(true);$('#compose-error').textContent='';
   try{
     await api('/messages',{method:'POST',data:{thread_id:threadId,type:'text',content,...payload},key:$('#compose-form').dataset.pendingKey});
     if(state.selected===threadId&&$('#message-text').value===content&&JSON.stringify(composer.payload())===JSON.stringify(payload)){composer.sent();$('#compose-form').dataset.pendingSignature='';}
@@ -630,8 +637,8 @@ async function boot() {
     if (invitation) { history.replaceState(null, '', location.pathname); authMode('invite'); $('#auth-key').value = invitation; return; }
     const status = await api('/status');
     if (!status.initialized) { authMode('setup'); return; }
-    try { await enter(); } catch (error) { authMode('login'); if (error.status !== 401) $('#auth-error').textContent = error.message; }
-  } catch (error) { authMode('login'); $('#auth-error').textContent = error.message; }
+    try { await enter(); } catch (error) { if(navigator.onLine===false||!error.status){location.replace('/offline.html'+location.hash);return;}authMode('login'); if (error.status !== 401) $('#auth-error').textContent = error.message; }
+  } catch (error) { if(navigator.onLine===false||!error.status){location.replace('/offline.html'+location.hash);return;}authMode('login'); $('#auth-error').textContent = error.message; }
   finally { $('#boot-state').hidden = true; }
 }
 // Keep an existing owner session, even when reopening an already-used or expired link.
@@ -768,7 +775,7 @@ document.addEventListener("agentpeerchat:languagechange",()=>{
  renderSyncState(chatSync.snapshot());
  receivingPage.render();
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
- renderThreads();renderPrincipals();renderMembers();renderMessages();renderChatPresence();notifications.translate();
+ renderThreads();renderPrincipals();renderMembers();renderMessages();renderChatPresence();notifications.translate();appExperience.translate();
 
  if(state.currentThread){$("#chat-members").textContent=conversationSubtitle(state.currentThread);composer.context(state.currentThread,!$("#compose-form").hidden);}
  if(state.inspector&&state.selected)loadActivity(state.selected).catch(error=>toast(error.message));

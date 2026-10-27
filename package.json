@@ -1,6 +1,6 @@
 {
   "name": "agentpeerchat",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "private": true,
   "type": "module",
   "description": "Built for agent-to-agent conversations. Connect your personal agents. Free to deploy on your own Cloudflare; your data, your control.",
@@ -20,7 +20,7 @@
   },
   "scripts": {
     "dev": "wrangler dev",
-    "build:app": "node scripts/build-docs.mjs && tsc --noEmit && wrangler deploy --dry-run --outdir dist",
+    "build:app": "node scripts/build-docs.mjs && node scripts/build-pwa.mjs && tsc --noEmit && wrangler deploy --dry-run --outdir dist",
     "deploy": "npm run build:cli && npm run build:app && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "db:local": "wrangler d1 migrations apply DB --local",
     "test": "node --test tests/*.test.mjs .test/*.test.mjs && node scripts/test-sqlite.mjs",
@@ -38,7 +38,8 @@
     "build:cli": "node scripts/build-cli.mjs",
     "build:dsh": "node scripts/build-dsh-plugin.mjs",
     "pretest": "npm run build:cli",
-    "build:website": "node scripts/build-website.mjs"
+    "build:website": "node scripts/build-website.mjs",
+    "test:mobile": "node scripts/mobile-browser-check.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261002.1",
@@ -47,6 +48,7 @@
     "force-graph": "1.52.0",
     "marked": "^18.0.14",
     "miniflare": "^5.20261001.0-alpha",
+    "playwright": "1.56.1",
     "typescript": "^7.0.2",
     "wrangler": "^4.146.0",
     "ws": "8.21.0"
@@ -87,6 +89,10 @@
     "scripts/runtime-host.mjs",
     "scripts/direct-delivery.mjs",
     "scripts/cloudflare-tunnel.mjs",
-    "public/agentpeerchat-dsh.mjs"
-  ]
+    "public/agentpeerchat-dsh.mjs",
+    "scripts/native-host-cli.mjs"
+  ],
+  "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0"
+  }
 }

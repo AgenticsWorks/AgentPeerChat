@@ -12,11 +12,11 @@ export function setupOptions(args,env=process.env){
   const key=args[n],value=args[++n];
   if(seen.has(key))throw Error('Duplicate setup option '+key);seen.add(key);
   if(!value||value.startsWith('--'))throw Error('Missing '+key+' value.');
-  if(key==='--runtime'&&['current','codex','claude','dsh','workbuddy'].includes(value)&&runtime===undefined)runtime=value;
+  if(key==='--runtime'&&['current','codex','claude','opencode','openclaw','dsh','workbuddy'].includes(value)&&runtime===undefined)runtime=value;
   else if(key==='--dsh-profile')next.AGENTPEERCHAT_DSH_PROFILE=value;
   else if(key==='--workspace')next.AGENTPEERCHAT_WORKSPACE=resolve(value);
   else if(key==='--every'&&/^([1-9][0-9]*)(m|h)$/.test(value)){const match=value.match(/^(\d+)(m|h)$/);const minutes=Number(match[1])*(match[2]==='h'?60:1);if(minutes>1440)throw Error('Use an interval from 1m to 24h.');preference={mode:'interval',minutes};}
-  else throw Error('Use setup [--runtime current|codex|claude|dsh|workbuddy] [--dsh-profile NAME] [--workspace PATH] [--every 30m].');
+  else throw Error('Use setup [--runtime current|codex|claude|opencode|openclaw|dsh|workbuddy] [--dsh-profile NAME] [--workspace PATH] [--every 30m].');
  }
  return {runtime,env:next,preference};
 }
@@ -25,16 +25,16 @@ export async function detectRuntime(env=process.env){
  // CodeBuddy executable is not evidence of independently authenticated CLI access.
  if(env.DSH_SHELL==='1'&&env.DSH_PROFILE)return 'dsh';
  if(env.CODEBUDDY_HOST==='workbuddy-desktop')return 'workbuddy';
- const exists=async runtime=>{const override=env[runtime==='codex'?'AGENTPEERCHAT_CODEX_CLI':'AGENTPEERCHAT_CLAUDE_CLI'];return (await Promise.all((override?[override]:(env.PATH||'').split(delimiter).filter(Boolean).map(p=>join(p,runtime))).map(p=>access(p,constants.X_OK).then(()=>true,()=>false)))).some(Boolean);};
+ const exists=async runtime=>{const override=env['AGENTPEERCHAT_'+runtime.toUpperCase()+'_CLI'];return (await Promise.all((override?[override]:(env.PATH||'').split(delimiter).filter(Boolean).map(p=>join(p,runtime))).map(p=>access(p,constants.X_OK).then(()=>true,()=>false)))).some(Boolean);};
  // Prefer the invoking runtime over an unrelated executable also on PATH.
  const preferred=env.CODEX_THREAD_ID?'codex':env.CLAUDECODE||env.CLAUDE_CODE_MESSAGING_SOCKET?'claude':null;
  if(preferred&&await exists(preferred))return preferred;
- const available=[];for(const runtime of ['codex','claude'])if(await exists(runtime))available.push(runtime);
+ const available=[];for(const runtime of ['codex','claude','opencode','openclaw'])if(await exists(runtime))available.push(runtime);
  return available.length===1?available[0]:null;
 }
 export async function installSkill({source,target,env=process.env,runtime}={}){
  const home=env.HOME||homedir();
- const directory=target?resolve(target):env.AGENTPEERCHAT_SKILL_DIRECTORY?resolve(env.AGENTPEERCHAT_SKILL_DIRECTORY):runtime==='dsh'?join(env.DSH_HOME||join(home,'.dsh'),'skills','agentpeerchat'):runtime==='workbuddy'?join(env.WORKBUDDY_CONFIG_DIR||join(home,'.workbuddy'),'skills','agentpeerchat'):runtime==='claude'?join(env.CLAUDE_CONFIG_DIR||join(home,'.claude'),'skills','agentpeerchat'):runtime==='codex'?join(env.CODEX_HOME||join(home,'.codex'),'skills','agentpeerchat'):join(home,'.agents','skills','agentpeerchat');
+ const directory=target?resolve(target):env.AGENTPEERCHAT_SKILL_DIRECTORY?resolve(env.AGENTPEERCHAT_SKILL_DIRECTORY):runtime==='dsh'?join(env.DSH_HOME||join(home,'.dsh'),'skills','agentpeerchat'):runtime==='workbuddy'?join(env.WORKBUDDY_CONFIG_DIR||join(home,'.workbuddy'),'skills','agentpeerchat'):runtime==='claude'?join(env.CLAUDE_CONFIG_DIR||join(home,'.claude'),'skills','agentpeerchat'):runtime==='opencode'?join(env.XDG_CONFIG_HOME||join(home,'.config'),'opencode','skills','agentpeerchat'):runtime==='openclaw'?join(env.OPENCLAW_STATE_DIR||join(home,'.openclaw'),'skills','agentpeerchat'):runtime==='codex'?join(env.CODEX_HOME||join(home,'.codex'),'skills','agentpeerchat'):join(home,'.agents','skills','agentpeerchat');
  await mkdir(directory,{recursive:true});
  await writeFile(join(directory,'SKILL.md'),await readFile(source,'utf8'));
  const references=join(dirname(source),'references');if(await access(references).then(()=>true,()=>false))await cp(references,join(directory,'references'),{recursive:true});
@@ -89,7 +89,7 @@ export async function onboard({profile,cli,skillSource,preference,env=process.en
   } else if(selected||env.AGENTPEERCHAT_RUNNER_FILE){
    const minutes=choice.mode==='interval'?Number(choice.minutes):30;
    if(!Number.isInteger(minutes)||minutes<1||minutes>1440)throw Error('Invalid receiving interval (1..1440 minutes).');
-   const args=['install',...(env.AGENTPEERCHAT_RUNNER_FILE?['--runner-file',resolve(env.AGENTPEERCHAT_RUNNER_FILE)]:['--runtime',selected]),'--workspace',resolve(env.AGENTPEERCHAT_WORKSPACE||process.cwd()),'--every',minutes+'m'];
+   const args=['install',...(env.AGENTPEERCHAT_RUNNER_FILE?['--runner-file',resolve(env.AGENTPEERCHAT_RUNNER_FILE)]:['--runtime',selected]),...(selected==='openclaw'&&!env.AGENTPEERCHAT_WORKSPACE?[]:['--workspace',resolve(env.AGENTPEERCHAT_WORKSPACE||process.cwd())]),'--every',minutes+'m'];
    // Only a runtime-provided exact session identifier may bind an existing conversation.
    // No temporary setup session is guessed from process lists or installation history.
    const hostedCodex=await readFile('/proc/1/comm','utf8').then(value=>value.trim()==='codex',()=>false);

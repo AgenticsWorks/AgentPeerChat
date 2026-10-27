@@ -1,3 +1,4 @@
+import {createDraftStore} from './draft-store.js';
 import {t} from './i18n.js';
 const escaped = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function mentionQuery(text, caret = text.length) {
@@ -10,7 +11,7 @@ export function resolveMentions(text, members, selected = []) {
 }
 export function createComposer({input,form,popup,mentionButton,replyBar,replyName,replyText,cancelReply,feedback,counter,getMembers,getMe,onSubmit,onDraft}) {
   let matches = [], index = 0, query = null, selected = [], replying = null, thread = null, enabled = false, busy = false;
-  const drafts = new Map(), send = form.querySelector('[type=submit]');
+  const drafts = createDraftStore(), send = form.querySelector('[type=submit]');
   const members = () => getMembers().filter(person => person.id !== getMe()?.id && person.active !== 0 && person.active !== false);
   function close() { popup.hidden = true; input.setAttribute('aria-expanded','false'); input.removeAttribute('aria-activedescendant'); matches = []; }
   function resize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight,160) + 'px'; }
@@ -21,11 +22,11 @@ export function createComposer({input,form,popup,mentionButton,replyBar,replyNam
   }
   function update() {
     resize(); const bytes = new TextEncoder().encode(input.value).length;
-    send.disabled = busy || !enabled || !input.value.trim() || bytes > 16384;
+    send.disabled = globalThis.navigator?.onLine===false || busy || !enabled || !input.value.trim() || bytes > 16384;
     input.disabled = !enabled; mentionButton.disabled = !enabled || !members().length;
     counter.hidden = bytes < 14000; counter.textContent = `${bytes.toLocaleString()} / 16,384`; counter.classList.toggle('over-limit',bytes > 16384);
     const targets = payload().mentions || [];
-    feedback.textContent = targets.length ? t('Notifying {0}',targets.map(id => members().find(p => p.id === id)?.name).filter(Boolean).join(', ')) : t('Enter to send · Shift + Enter for a new line');
+    feedback.textContent = targets.length ? t('Notifying {0}',targets.map(id => members().find(p => p.id === id)?.name).filter(Boolean).join(', ')) : t(matchMedia('(pointer:coarse)').matches?'Tap send to send · Enter for a new line':'Enter to send · Shift + Enter for a new line');
     replyBar.hidden = !replying; if(replying){replyName.textContent=t('Replying to {0}',getMembers().find(p=>p.id===replying.sender_id)?.name || t('a message'));replyText.textContent=typeof replying.content==='string'?replying.content:JSON.stringify(replying.content);}
   }
   function choose(person) {
@@ -47,7 +48,7 @@ export function createComposer({input,form,popup,mentionButton,replyBar,replyNam
     popup.hidden=false;input.setAttribute('aria-expanded','true');highlight();
   }
   function highlight(){popup.querySelectorAll('[role=option]').forEach((node,i)=>node.setAttribute('aria-selected',String(i===index)));input.setAttribute('aria-activedescendant','mention-option-'+index);popup.querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});}
-  function save(){if(thread)drafts.set(thread.id,{text:input.value,selected:[...selected],replying});onDraft?.();}
+  function save(){if(thread)drafts.set(thread.id,{text:input.value,selected:[...selected],replying:replying?{id:replying.id,sender_id:replying.sender_id,content:typeof replying.content==='string'?replying.content.slice(0,300):'[attachment]'}:null,attempt:{signature:form.dataset.pendingSignature||'',key:form.dataset.pendingKey||''}});onDraft?.();}
   input.addEventListener('input',()=>{update();suggestions();save();});
   input.addEventListener('click',suggestions);
   input.addEventListener('keydown',event=>{
@@ -57,14 +58,16 @@ export function createComposer({input,form,popup,mentionButton,replyBar,replyNam
       index=(index+(event.key==='ArrowDown'?1:-1)+matches.length)%matches.length;highlight();return;
     }
     if(event.key==='Escape'&&replying){replying=null;update();save();}
-    if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();if(!send.disabled)form.requestSubmit();}
+    if(event.key==='Enter'&&!event.shiftKey&&!matchMedia('(pointer:coarse)').matches){event.preventDefault();if(!send.disabled)form.requestSubmit();}
   });
   mentionButton.addEventListener('click',()=>{input.focus();const start=input.selectionStart,end=input.selectionEnd;input.setRangeText((start&& !/\s/.test(input.value[start-1])?' ':'')+'@',start,end,'end');update();suggestions();save();});
   cancelReply.addEventListener('click',()=>{replying=null;update();save();input.focus();});
   document.addEventListener('pointerdown',event=>{if(!form.contains(event.target))close();});
   form.addEventListener('submit',event=>{event.preventDefault();if(!send.disabled)onSubmit();});
   return {payload,save,close,update,
-    select(id){save();close();thread={id};const draft=drafts.get(id);input.value=draft?.text||'';selected=draft?.selected||[];replying=draft?.replying||null;enabled=false;update();},
+    identity(id){drafts.identity(id);},
+    reset({forget=false}={}){if(forget)drafts.clear();thread=null;input.value='';selected=[];replying=null;enabled=false;close();update();},
+    select(id){save();close();thread={id};const draft=drafts.get(id);input.value=draft?.text||'';selected=Array.isArray(draft?.selected)?draft.selected:[];replying=draft?.replying?.id?draft.replying:null;form.dataset.pendingKey=draft?.attempt?.key||'';form.dataset.pendingSignature=draft?.attempt?.signature||'';enabled=false;update();},
     context(value,canSend){thread=value;enabled=canSend;input.placeholder=value?.kind==='group'?t('Message {0} · @ to mention',value.title):t('Write a message…');update();},
     reply(message){if(!enabled)return;replying=message;update();save();input.focus();},
     sent(){input.value='';selected=[];replying=null;close();save();update();},

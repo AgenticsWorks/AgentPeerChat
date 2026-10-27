@@ -1,3 +1,4 @@
+import {pushRoutes,notifyPush} from './push';
 import { realtimeTicket, realtimeConnect, notifyAgents, receiverConnected, browserConnect, notifyBrowsers } from './realtime';
 import { receivingStatus, agentPresence, recordInboxCheck } from './receiving';
 import { agentMailbox } from './mailbox';
@@ -94,12 +95,16 @@ async function publicRoutes(request: Request, env: Env, path: string) {
   return null;
 }
 
-async function api(request: Request, env: Env, url: URL) {
+async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext) {
   const path = url.pathname.slice('/api/v1'.length).replace(/\/$/, '') || '/';
   if (path === '/events' && request.method === 'GET') return realtimeConnect(request, env);
   const publicResponse = await publicRoutes(request, env, path);
   if (publicResponse) return publicResponse;
   const identity = await authenticate(request, env), p = identity.principal;
+  if (path.startsWith('/push/')) {
+    if(identity.tokenKind!=='session'||p.kind==='agent')fail(403,'browser_session_required','Use your signed-in browser.');
+    return pushRoutes(request,env,path,p.id,identity.tokenId);
+  }
   if (path === '/browser/events' && request.method === 'GET') {
     if (identity.tokenKind !== 'session' || p.kind === 'agent') fail(403, 'browser_session_required', 'Use your signed-in browser.');
     return browserConnect(request,env,p.id,identity.tokenId);
@@ -151,7 +156,7 @@ async function api(request: Request, env: Env, url: URL) {
     return json({ principal: await findPrincipal(env, p.id) });
   }
   if (path === '/session' && method === 'DELETE') {
-    if (identity.tokenKind === 'session') await env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE id = ?').bind(now(), identity.tokenId).run();
+    if (identity.tokenKind === 'session') {await env.DB.prepare('DELETE FROM push_subscriptions WHERE token_id=?').bind(identity.tokenId).run();await env.DB.prepare('UPDATE tokens SET revoked_at = ? WHERE id = ?').bind(now(), identity.tokenId).run();}
     return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(request, '', true) });
   }
 
@@ -426,6 +431,7 @@ async function api(request: Request, env: Env, url: URL) {
       idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread, reply_to: replyTo, mentions });
     if (!result.replayed) await notifyAgents(env, recipients);
     if (!result.replayed && env.NOTIFICATIONS) await notifyBrowsers(env, (await threadMembers(env,threadId)).map(member=>member.id));
+    if(!result.replayed){const job=notifyPush(env,recipients,threadId,url.origin).catch(()=>console.warn(JSON.stringify({code:'browser_push_deferred'})));if(ctx)ctx.waitUntil(job);else await job;}
     const direct=await directHints(env,result.message,recipients);
     return json({...result,...(direct.length?{direct}:{})}, result.replayed ? 200 : 201);
   }
@@ -491,12 +497,12 @@ async function api(request: Request, env: Env, url: URL) {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const requestId = crypto.randomUUID();
     let response: Response;
     try {
       const url = new URL(request.url);
-      if (url.pathname === '/api/v1' || url.pathname.startsWith('/api/v1/')) response = await api(request, env, url);
+      if (url.pathname === '/api/v1' || url.pathname.startsWith('/api/v1/')) response = await api(request, env, url, ctx);
       else if (url.pathname.startsWith('/api/')) response = json({ error: { code: 'not_found', message: 'Use /api/v1.', request_id: requestId } }, 404);
       else response = await env.ASSETS.fetch(request);
     } catch (error) {
@@ -517,6 +523,7 @@ export default {
     headers.set('X-Request-Id', requestId);
     headers.set('X-Content-Type-Options', 'nosniff');
     headers.set('Referrer-Policy', 'no-referrer');
+    if(new URL(request.url).pathname==='/sw.js'){headers.set('Cache-Control','no-cache');headers.set('Service-Worker-Allowed','/');}
     headers.set('X-Frame-Options', 'DENY');
     headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });

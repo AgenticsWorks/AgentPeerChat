@@ -68,14 +68,15 @@ function flags(args){
 }
 export async function runtimeRecipe(runtime,workspace,env=process.env,cli){
   if(runtime==='workbuddy')throw Error('WorkBuddy uses its native local task scheduler. Run setup --runtime workbuddy and read the generated native_wake plan; the bundled CodeBuddy CLI does not establish desktop login or wake capability.');
-  if(!['codex','claude'].includes(runtime))throw new Error('Use --runtime codex or claude, or provide your runtime with --runner-file.');
-  const cwd=resolve(workspace||process.cwd());await access(cwd);
-  const override=env[runtime==='codex'?'AGENTPEERCHAT_CODEX_CLI':'AGENTPEERCHAT_CLAUDE_CLI'];
+  if(!['codex','claude','opencode','openclaw'].includes(runtime))throw new Error('Use --runtime codex, claude, opencode or openclaw, or provide your runtime with --runner-file.');
+  let cwd=resolve(workspace||process.cwd());await access(cwd);
+  const override=env['AGENTPEERCHAT_'+runtime.toUpperCase()+'_CLI'];
   const candidates=override?[resolve(override)]:(env.PATH||'').split(delimiter).filter(Boolean).map(p=>join(p,runtime));
   let executable;for(const path of candidates)if(await access(path,constants.X_OK).then(()=>true,()=>false)){executable=resolve(path);break;}
   if(!executable)throw new Error('The selected model runtime is not installed. Install/sign in to it first.');
+  let agent_id;if(runtime==='openclaw'){const list=spawnSync(executable,['agents','list','--json'],{cwd,env,encoding:'utf8',timeout:15000,maxBuffer:1048576});let items;try{items=JSON.parse(list.stdout);}catch{throw Error('Initialize your OpenClaw agent before enabling receiving.');}const selected=items.find(p=>p.id===(env.AGENTPEERCHAT_OPENCLAW_AGENT||'main'));if(!selected?.workspace)throw Error('Choose a configured OpenClaw agent.');if(workspace&&resolve(selected.workspace)!==cwd)throw Error('OpenClaw workspace differs from --workspace; use its configured workspace.');cwd=resolve(selected.workspace);agent_id=selected.id;}
   // Reuse saved host authentication. Never put provider keys in arguments or the recipe.
-  return {argv:[executable],cwd,timeout_seconds:300,result_protocol:runtime,mode:'native'};
+  return {argv:[executable],cwd,timeout_seconds:300,result_protocol:runtime,mode:'native',...(agent_id?{agent_id}:{})};
 }
 function quoteUnit(value){if(/[\n\r\0]/.test(value))throw new Error('Invalid unit path.');return '"'+value.replaceAll('\\','\\\\').replaceAll('"','\\"').replaceAll('%','%%').replaceAll('$','$$')+'"';}
 function controlSystemd(env,system,...args){const r=spawnSync('systemctl',[...(system?[]:['--user']),...args],{env,encoding:'utf8'});if(r.status!==0)throw new Error('systemd '+args[0]+' failed. Use your host scheduler if no systemd session is available.');return r.stdout.trim();}
@@ -203,7 +204,7 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
     const runner=native?await sessionRecipe({runtime:f.runtime,thread:f.thread,socket:f['session-socket'],executable:normal.argv[0],workspace:f.workspace,env}):normal;
     if(runner?.mode!=='session'&&(!Array.isArray(runner?.argv)||!runner.argv.length||!runner.argv.every(x=>typeof x==='string'&&!/[\n\r\0]/.test(x))||!isAbsolute(runner.argv[0])||!isAbsolute(runner.cwd||'')))throw new Error('Runner needs absolute argv[0] and cwd; arguments must be strings.');
     if(runner.argv)await access(runner.argv[0]);await access(runner.cwd);
-    if(runner.result_protocol!==undefined&&!['codex','claude'].includes(runner.result_protocol))throw Error('Runner result_protocol must be codex or claude.');
+    if(runner.result_protocol!==undefined&&!['codex','claude','opencode','openclaw'].includes(runner.result_protocol))throw Error('Runner result_protocol must name a supported native host.');
     const timeout=runner.timeout_seconds??240;if(!Number.isInteger(timeout)||timeout<10||timeout>1800)throw new Error('Runner timeout_seconds must be 10..1800.');
     const seconds=interval(f.every),system=Boolean(f.system);
     if(settings&&(settings.manager||'systemd')!==manager)throw Error('Remove the existing listener before changing its process manager.');

@@ -18,5 +18,6 @@ export const chatTranslations={
   '开始一段对话':'Start a conversation','沟通，让工作继续。':'A conversation away.',
   '每个 Agent 都有自己的工具。':'Your agents have their own tools.','在这里，一起推进工作。':'This is where they work together.',
   '在线':'Online','正在连接':'Connecting','刚检查过收件箱':'Mailbox checked recently','离线':'Offline',
+  '回车换行 · 点按发送按钮发送':'Tap send to send · Enter for a new line','你已离线。草稿已保存，联网后即可发送。':'You’re offline. Your draft is saved; reconnect to send.','安装应用':'Install app','应用已安装':'App installed','你正在使用应用。':'You’re already using the app.','在 Chrome 中打开 ⋮ 菜单，选择安装应用或添加到主屏幕。':'In Chrome, open the ⋮ menu and choose Install app or Add to Home screen.','在 Safari 中打开此网站，点按分享，再选择添加到主屏幕。':'Open this site in Safari, tap Share, then Add to Home Screen.','从主屏幕打开，浏览器会记住登录状态。':'Open from your home screen. Your browser remembers sign-in.','应用':'App','暂时无法启用后台通知，请点按铃铛重试。':'Background notifications could not be enabled. Tap the bell to retry.',
   '管理':'Manage','显示已归档 Agent':'Show archived agents','归档':'Archive','恢复':'Restore','已归档':'Archived'
 };

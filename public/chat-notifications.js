@@ -1,5 +1,5 @@
 import {t} from './i18n.js';
-export function createNotifications({bell,soundButton,onChange,onOpen,storage=globalThis.localStorage,NotificationAPI=globalThis.Notification,isReading=id=>!document.hidden&&document.hasFocus(),notifyError=()=>{}}) {
+export function createNotifications({bell,soundButton,onChange,onOpen,storage=globalThis.localStorage,NotificationAPI=globalThis.Notification,isReading=id=>!document.hidden&&document.hasFocus(),notifyError=()=>{},enablePush=async()=>false,hasPush=()=>false,registration=async()=>null}) {
   let me,seen={},latest=new Map(),counts=new Map(),audio,sound=true,started=false,first=true;
   try{sound=storage.getItem('agentpeerchat.sound')!=='off';}catch{}
   const key=()=>`agentpeerchat.read.${me?.id}`;
@@ -20,15 +20,16 @@ export function createNotifications({bell,soundButton,onChange,onOpen,storage=gl
       const joined=(thread.participants||thread.members||[]).some(p=>p.id===me.id);
       if(!first&&unread>prior&&last&&last.sender_id!==me.id&&joined){
         shouldSound=true;
-        if(NotificationAPI?.permission==='granted'&&(document.hidden||!document.hasFocus())){
+        if(!hasPush()&&NotificationAPI?.permission==='granted'&&(document.hidden||!document.hasFocus())){
           const sender=principals.find(p=>p.id===last.sender_id)?.name||t('New message');
-          try{const notification=new NotificationAPI(thread.kind==='group'?thread.title:sender,{body:`${sender}: ${typeof last.content==='string'?last.content.slice(0,160):t('Shared an attachment')}`,tag:thread.id,icon:'/icon-192.png'});notification.onclick=()=>{window.focus();onOpen(thread.id);notification.close();};}catch{}
+          const options={body:`${sender}: ${typeof last.content==='string'?last.content.slice(0,160):t('Shared an attachment')}`,tag:thread.id,icon:'/icon-192.png',data:{url:'/#thread='+encodeURIComponent(thread.id)}};
+          void registration().then(worker=>{if(worker)return worker.showNotification(thread.kind==='group'?thread.title:sender,options);const notification=new NotificationAPI(thread.kind==='group'?thread.title:sender,options);notification.onclick=()=>{window.focus();onOpen(thread.id);notification.close();};}).catch(()=>{});
         }
       }
     }
     first=false;save();title();if(shouldSound)void ding();
   }
-  bell.addEventListener('click',async()=>{if(!NotificationAPI){notifyError(t('This browser does not support desktop notifications. Unread counts still work.'));return;}try{if(NotificationAPI.permission==='default')await NotificationAPI.requestPermission();if(NotificationAPI.permission==='denied')notifyError(t('Notifications are blocked. Allow them in your browser’s site settings.'));translate();}catch{notifyError(t('Could not enable notifications'));}});
+  bell.addEventListener('click',async()=>{if(!NotificationAPI){notifyError(t('This browser does not support desktop notifications. Unread counts still work.'));return;}try{if(NotificationAPI.permission==='default')await NotificationAPI.requestPermission();if(NotificationAPI.permission==='granted')try{await enablePush();}catch{notifyError(t('Background notifications could not be enabled. Tap the bell to retry.'));}if(NotificationAPI.permission==='denied')notifyError(t('Notifications are blocked. Allow them in your browser’s site settings.'));translate();}catch{notifyError(t('Could not enable notifications'));}});
   soundButton.addEventListener('click',()=>{sound=!sound;try{storage.setItem('agentpeerchat.sound',sound?'on':'off');}catch{}primeAudio();translate();if(sound)void ding();});
   document.addEventListener('pointerdown',primeAudio,{passive:true});document.addEventListener('keydown',primeAudio,{passive:true});
   const focused=()=>{for(const thread of latest.values())if(isReading(thread.id))read(thread);};window.addEventListener('focus',focused);document.addEventListener('visibilitychange',focused);

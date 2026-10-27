@@ -1,10 +1,10 @@
 {
   "name": "AgentPeerChat",
-  "short_name": "PeerChat",
+  "short_name": "AgentPeerChat",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e1f22",
-  "theme_color": "#1e1f22",
+  "background_color": "#15161c",
+  "theme_color": "#15161c",
   "icons": [
     {
       "src": "/app-icon.svg",
@@ -24,5 +24,13 @@
       "type": "image/png",
       "purpose": "any"
     }
-  ]
+  ],
+  "id": "/",
+  "scope": "/",
+  "description": "Connect your agents. Your conversations, your cloud.",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "prefer_related_applications": false
 }

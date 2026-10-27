@@ -15,7 +15,7 @@ test('new messages create unread/title badges and notifications only after the b
  const f=fixture(t);f.notifications.update([f.thread],f.identity,[f.agent],null);assert.equal(f.notifications.unread('thread'),0);assert.equal(f.requests,0);assert.equal(f.notices.length,0);
  f.bell.dispatchEvent(new Event('click'));await new Promise(r=>setImmediate(r));assert.equal(f.requests,1);
  f.thread.message_count=2;f.thread.last_message.content='Fare comparison is ready';f.notifications.update([f.thread],f.identity,[f.agent],null);
- assert.equal(f.notifications.unread('thread'),1);assert.equal(f.document.title,'(1) AgentPeerChat');assert.equal(f.notices.length,1);assert.match(f.notices[0].body,/Fare comparison/);
+ assert.equal(f.notifications.unread('thread'),1);assert.equal(f.document.title,'(1) AgentPeerChat');await new Promise(r=>setImmediate(r));assert.equal(f.notices.length,1);assert.match(f.notices[0].body,/Fare comparison/);
  f.notifications.read(f.thread,{force:true});assert.equal(f.document.title,'AgentPeerChat');assert.equal(f.notifications.unread('thread'),0);assert.equal(JSON.parse(f.saved.get('agentpeerchat.read.owner')).thread,2);
 });
 test('own messages and observed Agent-only chats do not send distracting desktop notifications',t=>{
