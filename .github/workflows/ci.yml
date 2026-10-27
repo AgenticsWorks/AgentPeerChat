@@ -35,7 +35,8 @@ jobs:
       - run: npm run build:cli
       - run: AGENTPEERCHAT_TEST_BACKEND=sqlite npm test
   mobile-app:
-    runs-on: ubuntu-latest
+    # Match the browser dependencies supported by the pinned Playwright version.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
