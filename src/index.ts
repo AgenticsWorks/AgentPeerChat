@@ -1,5 +1,5 @@
 import { realtimeTicket, realtimeConnect, notifyAgents, receiverConnected, browserConnect, notifyBrowsers } from './realtime';
-import { receivingStatus, recordInboxCheck } from './receiving';
+import { receivingStatus, agentPresence, recordInboxCheck } from './receiving';
 import { agentMailbox } from './mailbox';
 import { avatarValue } from './avatar';
 import { pairingPublic, pairingOwner } from './pairing';
@@ -111,6 +111,10 @@ async function api(request: Request, env: Env, url: URL) {
   const store = new D1MessageStore(env.DB), method = request.method;
   const receiverResponse=await receiverRoutes(request,env,path,p);if(receiverResponse)return receiverResponse;
   if(path==='/messages'&&method==='POST'||/^\/messages\/[^/]+\/ack$/.test(path)&&method==='POST')await checkReceiverFence(request,env,p);
+  if (path === '/agents/presence' && method === 'GET') {
+    if (p.kind === 'agent') fail(403, 'human_required', 'Use a signed-in workspace viewer.');
+    return json(await agentPresence(env));
+  }
   if (path === '/agents/receiving' && method === 'GET') {
     owner(p);
     return json(await receivingStatus(env));

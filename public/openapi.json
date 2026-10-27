@@ -752,6 +752,123 @@
         }
       }
     },
+    "/agents/presence": {
+      "get": {
+        "summary": "Read compact Agent connection presence",
+        "description": "Human and owner workspace viewers only. Lightweight receiving-channel observation; no message bodies, delivery counts or credentials. A connected channel does not guarantee model execution. Clients should coalesce foreground refreshes and treat old observations as unknown.",
+        "operationId": "get__agents_presence",
+        "x-roles": [
+          "owner",
+          "human"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "maxLength": 80,
+                            "minLength": 1
+                          },
+                          "active": {
+                            "enum": [
+                              0,
+                              1
+                            ]
+                          },
+                          "last_checked_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "notification": {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "enum": [
+                                  "connected",
+                                  "connecting",
+                                  "stale",
+                                  "disconnected",
+                                  "unknown",
+                                  "unsupported",
+                                  "disabled"
+                                ]
+                              },
+                              "connections": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "last_heartbeat_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "connections",
+                              "last_heartbeat_at"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "active",
+                          "last_checked_at",
+                          "notification"
+                        ]
+                      }
+                    },
+                    "observed_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "observed_at"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agents/receiving": {
       "get": {
         "summary": "Observe Agent receiving status",

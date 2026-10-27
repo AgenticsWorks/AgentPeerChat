@@ -17,5 +17,6 @@ export const chatTranslations={
   '显示归档聊天':'Show archived conversations','连接诊断':'Connection diagnostics','归档会话':'Archived conversations',
   '开始一段对话':'Start a conversation','沟通，让工作继续。':'A conversation away.',
   '每个 Agent 都有自己的工具。':'Your agents have their own tools.','在这里，一起推进工作。':'This is where they work together.',
+  '在线':'Online','正在连接':'Connecting','刚检查过收件箱':'Mailbox checked recently','离线':'Offline',
   '管理':'Manage','显示已归档 Agent':'Show archived agents','归档':'Archive','恢复':'Restore','已归档':'Archived'
 };

@@ -1,3 +1,4 @@
+import {agentPresence} from './agent-presence.js';
 import {t, initLanguage, getLocale} from './i18n.js';
 import {createNotifications,createBrowserEvents} from './chat-notifications.js';
 import {createComposer} from './chat-composer.js';
@@ -11,7 +12,7 @@ import { createReceivingPage } from './receiving-status.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: false, chatFilter: 'all', currentThread: null, inviteCode: null, pendingThread: null, receiptCounts: new Map(), receivingCheckedAt: 0 };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: false, chatFilter: 'all', currentThread: null, inviteCode: null, pendingThread: null, receiptCounts: new Map(), receivingCheckedAt: 0, presence: new Map(), presenceAt: 0, presenceAttempt: 0 };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#a45767', '#547767', '#526c9c', '#7861a0', '#916c43', '#477e85'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -44,7 +45,7 @@ async function allPages(path, initial = '0') {
 }
 function authMode(mode) {
   chatSync.stop();
-  receivingPage.reset();browserEvents.stop();notifications.stop();
+  receivingPage.reset();browserEvents.stop();notifications.stop();state.presence.clear();state.presenceAt=0;state.presenceAttempt=0;
   state.authMode = mode;
   $('.skip-link').href = '#onboarding'; $('#menu-toggle').hidden = true; $('#onboarding').hidden = false; $('#shell').hidden = true; $('#auth-error').textContent = '';
   const setup = mode === 'setup', invite = mode === 'invite';
@@ -158,14 +159,28 @@ async function consumePendingThread() {
   await selectThread(target);
 }
 async function refreshData(isCurrent) {
-  const principals = (await api('/principals')).items;
+  const [directory,conversations] = await Promise.all([api('/principals'),allPages('/threads'),refreshPresence(isCurrent)]);
   if (!isCurrent()) return;
-  const threads = (await allPages('/threads')).items;
-  if (!isCurrent()) return;
+  const principals=directory.items,threads=conversations.items;
   state.principals = principals; state.threads = threads;
-  notifications.update(threads,state.me,principals,state.selected); renderThreads(); renderPrincipals();
+  notifications.update(threads,state.me,principals,state.selected); renderThreads(); renderPrincipals();renderChatPresence();
   if (state.selected) await loadMessages();
   if (isCurrent() && state.me.kind === 'owner') await renderPairings();
+}
+async function refreshPresence(isCurrent){
+  if(Date.now()-state.presenceAttempt<15000)return;
+  state.presenceAttempt=Date.now();
+  try{const result=await api('/agents/presence');if(!isCurrent())return;state.presence=new Map(result.items.map(p=>[p.id,p]));state.presenceAt=Date.now();}
+  catch{if(isCurrent())state.presenceAt=0;}
+}
+function presenceFor(person){return agentPresence(person,state.presence.get(person.id),state.presenceAt);}
+function presenceLabel(person){const status=presenceFor(person),record=state.presence.get(person.id);return `${person.name}: ${t(status.label)}`+(record?.last_checked_at?` · ${t('Last inbox check')}: ${new Date(record.last_checked_at).toLocaleString(getLocale())}`:'');}
+function presenceBadge(person,withName=false){const status=presenceFor(person),badge=el('span',`agent-presence ${status.state}`);badge.append(el('span','presence-dot'),document.createTextNode((withName?person.name+' · ':'')+t(status.label)));badge.title=presenceLabel(person);return badge;}
+function renderChatPresence(){
+ const target=$('#chat-receiving');target.replaceChildren();const agents=state.members.filter(p=>p.kind==='agent');
+ for(const person of agents.slice(0,3))target.append(presenceBadge(person,agents.length>1));
+ if(agents.length>3)target.append(el('span','presence-more',`+${agents.length-3}`));
+ target.hidden=!agents.length;
 }
 function renderSyncState({ status, lastSyncedAt }) {
   const node = $('#sync-state');
@@ -197,7 +212,7 @@ document.addEventListener('visibilitychange', receivingPage.availabilityChanged)
 window.addEventListener('online', receivingPage.availabilityChanged);
 window.addEventListener('offline', receivingPage.availabilityChanged);
 window.addEventListener('online', chatSync.availabilityChanged);
-window.addEventListener('offline', chatSync.availabilityChanged);
+window.addEventListener('offline',()=>{state.presenceAt=0;if(state.me){renderThreads();renderPrincipals();renderMembers();renderChatPresence();}chatSync.availabilityChanged();});
 $('#logout').addEventListener('click', async () => {
   try { await api('/session', { method: 'DELETE' }); notifications.stop();browserEvents.stop();state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
 });
@@ -258,7 +273,7 @@ async function loadMessages(forceScroll = false) {
   composer.context(result.last.thread,!observing);
   $('#add-members').hidden = result.last.thread.kind === 'direct';
   notifications.read(result.last.thread,{force:forceScroll});renderThreads();
-  renderMembers();
+  renderMembers();renderChatPresence();
   if (result.items.length || forceScroll) {
     state.messages.push(...result.items); state.cursor = result.next_cursor;
     renderMessages(forceScroll);
@@ -285,7 +300,7 @@ function renderMembers() {
   $('#inspector-member-list').replaceChildren();
   for (const p of state.members) {
     const row = el('div', 'member-row'), summary = el('div');
-    summary.append(el('strong', '', p.name), el('small', '', p.kind === 'agent' ? p.description || 'Agent' : p.kind === 'owner' ? t("拥有者") : t("联系人")));
+    summary.append(el('strong', '', p.name), p.kind==='agent'?presenceBadge(p):el('small','',p.kind==='owner'?t('拥有者'):t('联系人')));
     row.append(personAvatar(p), summary);
     if (!p.active) row.append(el('span', 'badge off', 'OFF'));
     $('#inspector-member-list').append(row);
@@ -477,6 +492,7 @@ function renderPrincipals() {
     const card = el('article', 'principal-card'), top = el('div', 'principal-top');
     top.append(personAvatar(p), el('span', `badge${p.active ? '' : ' off'}`, p.active ? (p.kind === 'agent' ? 'Agent' : p.kind === 'owner' ? t("我") : t("联系人")) : t("已停用")));
     card.append(top, el('h2', '', p.name), el('p', '', p.description || ''), el('small', 'principal-kind', p.kind === 'agent' ? 'Agent' : t("联系人")));
+    if(p.kind==='agent')card.append(presenceBadge(p));
     const footer=el('footer'),advanced=el('details','contact-options'),controls=el('div','contact-controls');advanced.append(el('summary','',t('Manage')),controls);
     if(state.me.kind==='owner'){const edit=el('button','secondary',t('Edit profile'));edit.addEventListener('click',()=>editPrincipal(p));controls.append(edit);}
     if (state.me.kind === 'owner' && p.kind === 'agent') {
@@ -707,6 +723,7 @@ function personAvatar(person) {
   colorAvatar(avatar, person.name); avatar.title = person.name;
   const icon = avatarIcon(person);
   if (icon) { const image = el('img'); image.src = icon.startsWith('/') ? appBase + icon : icon; image.alt = ''; avatar.replaceChildren(image); }
+  if(person.kind==='agent'){const status=presenceFor(person),dot=el('span',`avatar-presence presence-dot ${status.state}`);dot.dataset.agentPresence=person.id;dot.setAttribute('aria-label',t(status.label));dot.title=presenceLabel(person);avatar.append(dot);}
   return avatar;
 }
 function conversationAvatar(thread) {
@@ -751,7 +768,7 @@ document.addEventListener("agentpeerchat:languagechange",()=>{
  renderSyncState(chatSync.snapshot());
  receivingPage.render();
  $("#my-role").textContent=state.me.kind==="owner"?t("拥有者"):t("联系人");
- renderThreads();renderPrincipals();renderMembers();renderMessages();notifications.translate();
+ renderThreads();renderPrincipals();renderMembers();renderMessages();renderChatPresence();notifications.translate();
 
  if(state.currentThread){$("#chat-members").textContent=conversationSubtitle(state.currentThread);composer.context(state.currentThread,!$("#compose-form").hidden);}
  if(state.inspector&&state.selected)loadActivity(state.selected).catch(error=>toast(error.message));

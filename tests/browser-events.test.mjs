@@ -32,3 +32,12 @@ test('real browser sockets receive only change signals and do not impersonate na
  const closed=event(socket,'close');await call('/session',{key:null,method:'DELETE',headers:{Cookie:cookie,Origin:origin}});
  await call('/messages',{key:agent.token.token,body:{to:[peer.principal.id],type:'text',content:'The next notification rechecks the revoked browser session.'}});assert.equal((await closed).code,4401);
 });
+test('compact presence reflects native connect and disconnect without exposing mailbox data',async()=>{
+ assert.equal((await call('/agents/presence',{key:null})).status,401);assert.equal((await call('/agents/presence',{key:agent.token.token})).status,403);
+ const presence=async()=>{const r=await call('/agents/presence');assert.equal(r.status,200);return(await r.json()).items.find(p=>p.id===agent.principal.id);};
+ assert.equal((await presence()).notification.state,'disconnected');
+ const ticket=(await(await call('/realtime/ticket',{key:agent.token.token,body:{}})).json()).ticket;
+ const r=await call('/events',{key:null,headers:{Upgrade:'websocket',Origin:origin,'Sec-WebSocket-Protocol':'apc-v1, ticket.'+ticket}});assert.equal(r.status,101);const socket=r.webSocket;socket.accept();sockets.push(socket);await event(socket);const pong=event(socket);socket.send('ping');await pong;
+ const connected=await presence();assert.equal(connected.notification.state,'connected');assert.deepEqual(Object.keys(connected).sort(),['active','id','last_checked_at','notification']);
+ const closed=event(socket,'close');socket.close(1000,'Done');await closed;assert.equal((await presence()).notification.state,'disconnected');
+});

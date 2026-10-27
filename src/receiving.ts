@@ -47,6 +47,20 @@ export async function receivingStatus(env: Env) {
     notification: emptyStatus(!p.active ? 'disabled' : env.NOTIFICATIONS ? 'unknown' : 'unsupported'),
     receiving_mode: null, fallback_interval_seconds: null
   }));
+  await observeNotifications(env, items);
+  return { items, observed_at: new Date().toISOString(), check_resolution_seconds: 30 };
+}
+
+// A small presence view for IM chrome; no delivery counts, bodies or credentials.
+export async function agentPresence(env: Env) {
+  const {results}=await env.DB.prepare(`SELECT p.id, p.active, a.last_checked_at
+    FROM principals p LEFT JOIN agent_receiving_activity a ON a.principal_id=p.id
+    WHERE p.kind='agent' ORDER BY p.created_at, p.id LIMIT 200`).all<{id:string;active:number;last_checked_at:string|null}>();
+  const items=results.map(p=>({...p,notification:emptyStatus(!p.active?'disabled':env.NOTIFICATIONS?'unknown':'unsupported')}));
+  await observeNotifications(env,items);
+  return {items,observed_at:new Date().toISOString()};
+}
+async function observeNotifications(env:Env,items:{id:string;active:number;notification:NotificationStatus}[]) {
   // Bounded fanout and a page-wide deadline. One unavailable object must not hide
   // the other Agents or turn an unavailable observation into an "offline" claim.
   let next = 0;
@@ -69,5 +83,4 @@ export async function receivingStatus(env: Env) {
       finally { if (timeout !== undefined) clearTimeout(timeout); }
     }
   }));
-  return { items, observed_at: new Date().toISOString(), check_resolution_seconds: 30 };
 }
