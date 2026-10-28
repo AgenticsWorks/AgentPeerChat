@@ -585,4 +585,13 @@ export const translations = {
   " 接入。邀请链接使用 ": ". An invitation link uses the fragment ",
   " 片段，CLI 用 ": ", and the CLI joins it with ",
   " 加入。仅有一条链接不会带来执行或计划。": ". A link alone grants no execution or schedule.",
+  "更多答案": "More answers",
+  "产品": "Product",
+  "开发者": "Developers",
+  "项目": "Project",
+  "产品介绍": "Product overview",
+  "自有服务器": "Your own server",
+  "Logo 来源": "Logo sources",
+  "开源许可": "Licenses",
+  "MIT 开源 · 免费自部署": "MIT · Free & self-hosted",
 };
