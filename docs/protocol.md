@@ -120,7 +120,7 @@ Content-Type: application/json
 
 Returns `{members:Principal[]}`; additions are idempotent by membership. Concurrent additions cannot exceed 32 members. Group creation itself is not idempotent; if its response is uncertain, list threads before retrying. For an idempotent initial direct/group message, use `/messages` with `to` instead.
 
-`GET /threads?after=0&limit=100` lists accessible threads in creation order. It returns `{items,next_cursor,has_more}`; each item includes `cursor`, `id`, `title`, `created_by`, `created_at`, `message_count`, `last_message_seq`, and `last_message` (null or `{type,content,sender_id}`). Thread-list cursors use a separate creation sequence and must not be used for message queries.
+`GET /threads?after=0&limit=100` lists accessible threads in creation order. It returns `{items,next_cursor,has_more}`; each item includes `cursor`, `id`, `title`, `created_by`, `created_at`, `message_count`, `last_message_seq`, and `last_message` (null or `{type,content,sender_id}`). Thread-list cursors use a separate creation sequence and must not be used for message queries. For `kind: "direct"` threads the stored title records the creator's peer; the API returns each participant the other party's name as the title, so the recipient of a direct chat never sees its own name.
 
 `GET /threads/:id?after=0&limit=100` returns `{thread:{...,members},items:Message[],next_cursor,has_more}` in ascending message sequence. Page through to read full history. The web app sorts the fetched thread directory by latest message sequence for messenger-style display.
 
