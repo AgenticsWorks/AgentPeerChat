@@ -137,3 +137,41 @@ test('a busy model does not block the independent scheduled outbox',async t=>{
  const result=await automation('listen',['run'],{cli:resolve('cli/agentpeerchat.mjs'),env:{...process.env,AGENTPEERCHAT_CONFIG:profile,NODE_USE_ENV_PROXY:'0'}});
  assert.equal(result.skipped,true);assert.equal(sent,1);assert.ok(JSON.parse(await readFile(join(state,'outbox.json'),'utf8'))[0].completed_at);
 });
+
+test('listen remove clears stale direct delivery state while the private identity and queue survive',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'apc-remove-direct-')),profile=join(root,'identity.json'),state=profile+'.automation';await mkdir(state);
+ const identity={url:'http://127.0.0.1:3000',principal_id:'agt_remove',token:'private-fixture'};
+ const env={...process.env,AGENTPEERCHAT_CONFIG:profile,NODE_USE_ENV_PROXY:'0'};
+ for(const name of Object.keys(env))if(/^(AGENTGRAM_|AGENTPENPAL_|AGENTPEERCHAT_)/.test(name)&&name!=='AGENTPEERCHAT_CONFIG')delete env[name];
+ const context={cli:resolve('cli/agentpeerchat.mjs'),env};
+ try{
+  await writeFile(profile,JSON.stringify(identity),{mode:0o600});
+  await writeFile(join(state,'listener.json'),JSON.stringify({every_seconds:1800,system:false,manager:'process',runner_file:join(state,'runner.json')}),{mode:0o600});
+  await writeFile(join(state,'runner.json'),JSON.stringify({argv:[process.execPath,'-e','""'],cwd:root,timeout_seconds:10}),{mode:0o600});
+  // Artifacts a previous receiver incarnation would have left behind.
+  await writeFile(join(state,'direct-state.json'),JSON.stringify({configured:true,mode:'cloudflare-tunnel',available:false,state:'retrying',endpoint:'https://old.trycloudflare.com/agentpeerchat/direct',last_error:null}),{mode:0o600});
+  await writeFile(join(state,'direct-key.json'),JSON.stringify({url:identity.url,principal_id:identity.principal_id,key:'stale-signing-key'}),{mode:0o600});
+  const removed=await automation('listen',['remove'],context);
+  assert.equal(removed.removed,true);assert.equal(removed.queued_messages_preserved,true);
+  const direct=JSON.parse(await readFile(join(state,'direct-state.json'),'utf8'));
+  assert.equal(direct.configured,false);assert.equal(direct.state,'cleared');assert.equal(direct.available,false);assert.equal(direct.endpoint,null);
+  const key=JSON.parse(await readFile(join(state,'direct-key.json'),'utf8'));
+  assert.equal(key.cleared,true);assert.equal(key.key,undefined);
+  assert.equal(JSON.parse(await readFile(profile,'utf8')).token,'private-fixture');
+  const status=await automation('listen',['status'],context);
+  assert.equal(status.realtime.direct.state,'cleared');assert.equal(status.realtime.direct.configured,false);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+
+test('listen status keeps an explicit tunnel opt-out authoritative instead of rewriting it as stopped',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'apc-disabled-status-')),profile=join(root,'identity.json'),state=profile+'.automation';await mkdir(state);
+ const env={...process.env,AGENTPEERCHAT_CONFIG:profile,NODE_USE_ENV_PROXY:'0'};
+ for(const name of Object.keys(env))if(/^(AGENTGRAM_|AGENTPENPAL_|AGENTPEERCHAT_)/.test(name)&&name!=='AGENTPEERCHAT_CONFIG')delete env[name];
+ const context={cli:resolve('cli/agentpeerchat.mjs'),env};
+ try{
+  await writeFile(profile,JSON.stringify({url:'http://127.0.0.1:3000',principal_id:'agt_off',token:'private-fixture'}),{mode:0o600});
+  await writeFile(join(state,'direct-state.json'),JSON.stringify({configured:false,mode:null,available:false,state:'disabled',endpoint:null,last_error:null}),{mode:0o600});
+  const status=await automation('listen',['status'],context);
+  assert.equal(status.realtime.direct.state,'disabled');assert.equal(status.realtime.direct.configured,false);
+ }finally{await rm(root,{recursive:true,force:true});}
+});

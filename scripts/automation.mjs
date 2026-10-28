@@ -14,7 +14,7 @@ import {validateRuntimeResult} from './runtime-result.mjs';
 import {NativeRuntime} from './native-runtime.mjs';
 import {drainNative} from './native-mailbox.mjs';
 import {forwardCheck,serveChecks} from './runtime-host.mjs';
-import {startDirect} from './direct-delivery.mjs';
+import {startDirect,clearDirectState} from './direct-delivery.mjs';
 
 export function interval(value='30m') {
   const m=/^(\d+)(s|m|h)$/.exec(value), seconds=m?Number(m[1])*({s:1,m:60,h:3600}[m[2]]):NaN;
@@ -168,7 +168,9 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
     const stream=await readJSON(realtimeStatePath,null);
     let streamActive=managed?.watch_active||false;if(settings?.realtime&&!managed)try{streamActive=systemctl(settings.system,'is-active',unit+'-realtime.service')==='active';}catch{}
     const direct=await readJSON(join(root,'direct-state.json'),null);
-    if(direct&&!streamActive){direct.available=false;direct.state='stopped';direct.endpoint=null;}
+    // Terminal states (disabled opt-out, cleared listener) stay authoritative;
+    // only a crash-stale active attempt is rewritten as stopped.
+    if(direct&&!streamActive&&!['stopped','disabled','cleared'].includes(direct.state)){direct.available=false;direct.state='stopped';direct.endpoint=null;}
     return {native:await dshStatus(profile),manager:settings?.manager||'systemd',persistence:settings?.manager==='process'?'host_lifetime':'service_manager',process:managed,receiving_transport:settings?.realtime?'websocket_with_periodic_fallback':'periodic',realtime:{...stream,...(direct?{direct}:{}),active:streamActive,connected:streamActive&&(!managed||stream?.process_id===managed.worker_pid)&&stream?.connected===true&&Date.now()-Date.parse(stream.last_heartbeat_at||stream.connected_at)<120000},delivery_mode:settings?.delivery_mode||'independent',last_wake_check:await lastWake(),installed:Boolean(settings),active,enabled,task_id:settings?(managed?unit+'.process':unit+'.timer'):null,interval_seconds:settings?.every_seconds||null,last_check:await identityState(statePath),last_model_check:await identityState(join(root,'last-model.json')),queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled).length,failed_queued:(await queue()).filter(j=>!j.completed_at&&!j.cancelled&&j.last_error).length};
   }
   if(['start','stop','restart'].includes(action)){
@@ -183,7 +185,11 @@ export async function automation(command,args,{cli,env=process.env,nativeEngine}
     else if(settings){if(settings.realtime)systemctl(settings.system,'disable','--now',unit+'-realtime.service');systemctl(settings.system,'disable','--now',unit+'.timer');systemctl(settings.system,'stop',unit+'.service');}
     return locked(join(root,'lock.json'),async()=>{
     if(settings&&settings.manager!=='process'){for(const suffix of ['timer','service','realtime.service'])await rm(join(settings.unit_directory,unit+(suffix==='realtime.service'?'-':'.')+suffix),{force:true});systemctl(settings.system,'daemon-reload');await rm(settingsPath,{force:true});}
-    await rm(settingsPath,{force:true});return {removed:true,queued_messages_preserved:true};
+    await rm(settingsPath,{force:true});
+    // The removed listener owned its direct receiver; clear that state so listen
+    // status never reports a stale tunnel. The private identity stays untouched.
+    await clearDirectState(root);
+    return {removed:true,queued_messages_preserved:true};
     });
   }
   if(action==='install')return locked(join(root,'lock.json'),async()=>{
