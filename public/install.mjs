@@ -244,7 +244,11 @@ function startQuickTunnel({
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();
-  let child, state2 = "starting", endpoint = null, closed = false;
+  let child, state2 = "starting", endpoint = null, lastError = null, closed = false;
+  const failureReason2 = (error) => {
+    const message = String(error?.message || "").replace(/[\r\n\t]+/g, " ").trim();
+    return message ? message.slice(0, 200) : "Tunnel attempt failed.";
+  };
   const task = (async () => {
     let failures = 0;
     while (!controller.signal.aborted) {
@@ -285,6 +289,7 @@ function startQuickTunnel({
                   endpoint = candidate;
                   state2 = "ready";
                   failures = 0;
+                  lastError = null;
                   clearTimeout(timeout);
                 })().catch(() => fail(Error("Tunnel endpoint verification failed.")));
               }
@@ -301,7 +306,8 @@ function startQuickTunnel({
           await stopChild(child);
           await readyTask;
         }
-      } catch {
+      } catch (error) {
+        if (!controller.signal.aborted) lastError = failureReason2(error);
       }
       endpoint = null;
       state2 = controller.signal.aborted ? "stopped" : "retrying";
@@ -314,6 +320,8 @@ function startQuickTunnel({
     return state2;
   }, get endpoint() {
     return endpoint;
+  }, get lastError() {
+    return lastError;
   }, close: async () => {
     if (closed) return task;
     closed = true;
@@ -793,9 +801,23 @@ async function deliverDirect(items, { fetchImpl = fetch } = {}) {
     await fetchImpl(url2, { method: "POST", redirect: "error", signal: AbortSignal.timeout(2e3), headers: { "Content-Type": "application/json", "X-AgentPeerChat-Signature": hint.signature }, body: hint.payload });
   }));
 }
+var failureReason = (error, fallback) => {
+  const message = String(error?.message || "").replace(/[\r\n\t]+/g, " ").trim();
+  return message ? message.slice(0, 200) : fallback;
+};
+async function clearDirectState(root) {
+  await writeState(join4(root, "direct-state.json"), { configured: false, mode: null, available: false, state: "cleared", endpoint: null, last_error: null });
+  await writeState(join4(root, "direct-key.json"), { cleared: true });
+}
 async function startDirect({ identity, root, env: env2 = process.env, onWork, request, signal, fetchImpl = fetch, tunnelFactory = startQuickTunnel }) {
   const manual = env2.AGENTPEERCHAT_DIRECT_URL, configured = Boolean(manual) || env2.AGENTPEERCHAT_TUNNEL !== "off";
-  if (!configured || signal?.aborted) return { configured, available: false, state: "disabled", close: async () => {
+  if (!configured) {
+    const disabled = { configured: false, mode: null, available: false, state: "disabled", endpoint: null, last_error: null };
+    await writeState(join4(root, "direct-state.json"), disabled);
+    return { configured: false, available: false, endpoint: null, state: "disabled", status: disabled, close: async () => {
+    } };
+  }
+  if (signal?.aborted) return { configured, available: false, state: "disabled", close: async () => {
   } };
   const url2 = manual ? new URL(manual) : null;
   if (url2 && (url2.username || url2.password || url2.search || url2.hash || url2.pathname !== "/agentpeerchat/direct" || url2.protocol !== "https:" && !(url2.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url2.hostname)))) throw Error("Use an HTTPS /agentpeerchat/direct endpoint.");
@@ -804,11 +826,11 @@ async function startDirect({ identity, root, env: env2 = process.env, onWork, re
   const key = randomBytes(32).toString("hex");
   await writeState(join4(root, "direct-key.json"), { url: identity.url, principal_id: identity.principal_id, key });
   const seen = /* @__PURE__ */ new Map(), probe = randomBytes(24).toString("hex"), healthPath = "/agentpeerchat/health/" + probe;
-  let registration = false, endpoint = manual || null, timer, closed = false, serial = Promise.resolve(), tunnel, closing;
+  let registration = false, endpoint = manual || null, timer, closed = false, serial = Promise.resolve(), tunnel, closing, lastError = null;
   const controller = new AbortController(), abort = () => {
     void close();
   };
-  const status = () => ({ configured, mode: manual ? "endpoint" : "cloudflare-tunnel", available: registration, state: closed ? "stopped" : registration ? "ready" : manual ? "retrying" : tunnel?.state || "starting", endpoint: registration ? endpoint : null });
+  const status = () => ({ configured, mode: manual ? "endpoint" : "cloudflare-tunnel", available: registration, state: closed ? "stopped" : registration ? "ready" : manual ? "retrying" : tunnel?.state || "starting", endpoint: registration ? endpoint : null, last_error: registration ? null : tunnel?.lastError ?? lastError });
   const publish = () => writeState(join4(root, "direct-state.json"), status()).catch(() => {
   });
   const server = createServer(async (req, res) => {
@@ -885,11 +907,13 @@ async function startDirect({ identity, root, env: env2 = process.env, onWork, re
       if (closed) return;
       if (result?.registered !== true) throw Error("Instance did not register the direct endpoint.");
       registration = true;
+      lastError = null;
       const seconds = Number(result?.expires_in) || 180;
       timer = setTimeout(() => void register().catch(() => {
       }), Math.max(1e4, Math.min(6e5, seconds * 1e3 / 3)));
     } catch (error) {
       registration = false;
+      lastError = failureReason(error, "Direct delivery registration failed.");
       if (!closed) timer = setTimeout(() => void register().catch(() => {
       }), 3e4);
       throw error;
@@ -3323,7 +3347,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env, n
     } catch {
     }
     const direct = await readJSON(join9(root, "direct-state.json"), null);
-    if (direct && !streamActive) {
+    if (direct && !streamActive && !["stopped", "disabled", "cleared"].includes(direct.state)) {
       direct.available = false;
       direct.state = "stopped";
       direct.endpoint = null;
@@ -3351,6 +3375,7 @@ async function automation(command, args, { cli: cli2, env: env2 = process.env, n
         await rm8(settingsPath, { force: true });
       }
       await rm8(settingsPath, { force: true });
+      await clearDirectState(root);
       return { removed: true, queued_messages_preserved: true };
     });
   }

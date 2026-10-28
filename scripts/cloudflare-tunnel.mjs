@@ -56,7 +56,12 @@ async function stopChild(child){
 export function startQuickTunnel({origin,root,env=process.env,signal,onReady,onUnavailable,
  resolveBinary=cloudflaredBinary,spawnImpl=spawn,startupMs=45000,retryMs=1000}){
  const controller=new AbortController();const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
- let child,state='starting',endpoint=null,closed=false;
+ let child,state='starting',endpoint=null,lastError=null,closed=false;
+ // cloudflared's own stderr is not republished; only our bounded, secret-free reasons are.
+ const failureReason=error=>{
+  const message=String(error?.message||'').replace(/[\r\n\t]+/g,' ').trim();
+  return (message?message.slice(0,200):'Tunnel attempt failed.');
+ };
  const task=(async()=>{
   let failures=0;
   while(!controller.signal.aborted){
@@ -81,16 +86,16 @@ export function startQuickTunnel({origin,root,env=process.env,signal,onReady,onU
        registered||=/Registered tunnel connection/.test(buffer);
        if(candidate&&registered&&!notified){
         notified=true;
-        readyTask=(async()=>{await onReady(candidate,attempt.signal);if(controller.signal.aborted||attempt.signal.aborted||child.exitCode!==null||child.signalCode)return;endpoint=candidate;state='ready';failures=0;clearTimeout(timeout);})().catch(()=>fail(Error('Tunnel endpoint verification failed.')));
+        readyTask=(async()=>{await onReady(candidate,attempt.signal);if(controller.signal.aborted||attempt.signal.aborted||child.exitCode!==null||child.signalCode)return;endpoint=candidate;state='ready';failures=0;lastError=null;clearTimeout(timeout);})().catch(()=>fail(Error('Tunnel endpoint verification failed.')));
        }
       };
       for(const stream of [child.stdout,child.stderr]){const reader=createInterface({input:stream});reader.on('line',line);lines.push(reader);}
      });
     }finally{attempt.abort();for(const reader of lines)reader.close();await stopChild(child);await readyTask;}
-   }catch{/* Retain mailbox receiving; retry only the acceleration path. */}
+   }catch(error){/* Retain mailbox receiving; retry only the acceleration path. */if(!controller.signal.aborted)lastError=failureReason(error);}
    endpoint=null;state=controller.signal.aborted?'stopped':'retrying';await onUnavailable().catch(()=>{});
    if(!controller.signal.aborted)await pause(Math.min(300000,retryMs*2**Math.min(failures++,9)),controller.signal);
   }
  })();
- return {get state(){return state;},get endpoint(){return endpoint;},close:async()=>{if(closed)return task;closed=true;abort();await task;signal?.removeEventListener('abort',abort);}};
+ return {get state(){return state;},get endpoint(){return endpoint;},get lastError(){return lastError;},close:async()=>{if(closed)return task;closed=true;abort();await task;signal?.removeEventListener('abort',abort);}};
 }

@@ -76,3 +76,40 @@ test('a tunnel capability failure never blocks creating the primary receiver; ex
  await until(()=>attempts>=2);assert.equal(receiver.available,false);assert.equal(receiver.state,'retrying');await receiver.close();
  const disabled=await startDirect({env:{AGENTPEERCHAT_TUNNEL:'off'},root});assert.equal(disabled.configured,false);await disabled.close();
 });
+test('an explicit tunnel opt-out rewrites stale tunnel status instead of leaving it behind',async t=>{
+ const root=await fixture(t);
+ await writeFile(join(root,'direct-state.json'),JSON.stringify({configured:true,mode:'cloudflare-tunnel',available:false,state:'retrying',endpoint:null}));
+ const receiver=await startDirect({identity:{url:'https://instance.invalid',principal_id:'agt_fixture'},root,env:{AGENTPEERCHAT_TUNNEL:'off'},request:async()=>{throw Error('must not register');},onWork:async()=>{}});
+ assert.equal(receiver.configured,false);assert.equal(receiver.state,'disabled');
+ const persisted=JSON.parse(await readFile(join(root,'direct-state.json'),'utf8'));
+ assert.equal(persisted.configured,false);assert.equal(persisted.state,'disabled');assert.equal(persisted.available,false);assert.equal(persisted.endpoint,null);
+ await receiver.close();
+ assert.equal(JSON.parse(await readFile(join(root,'direct-state.json'),'utf8')).state,'disabled');
+});
+test('a failing tunnel attempt reports a safe reason on direct status while receiving continues',async t=>{
+ const root=await fixture(t);let attempts=0;
+ const receiver=await startDirect({identity:{url:'https://instance.invalid',principal_id:'agt_fixture'},root,env:{},request:async()=>{throw Error('must not register');},onWork:async()=>{},
+  tunnelFactory:options=>startQuickTunnel({...options,retryMs:10,resolveBinary:async()=>{attempts++;throw Error('Edge TLS to 198.18.0.1:7844 failed.');}})});
+ t.after(()=>receiver.close());
+ const readUntil=async(check,timeout=5000)=>{const deadline=Date.now()+timeout;for(;;){let value=null;try{value=JSON.parse(await readFile(join(root,'direct-state.json'),'utf8'));}catch{}if(check(value))return value;if(Date.now()>deadline)throw Error('Condition timed out.');await wait(10);}};
+ const persisted=await readUntil(value=>value?.state==='retrying'&&value?.last_error==='Edge TLS to 198.18.0.1:7844 failed.');
+ assert.equal(persisted.configured,true);assert.equal(persisted.available,false);assert.equal(persisted.endpoint,null);
+ const status=receiver.status;
+ assert.equal(status.available,false);assert.equal(status.endpoint,null);
+ assert.equal(status.last_error,'Edge TLS to 198.18.0.1:7844 failed.');
+ await receiver.close();
+ const stopped=await readUntil(value=>value?.state==='stopped');
+ assert.equal(stopped.available,false);assert.equal(stopped.last_error,'Edge TLS to 198.18.0.1:7844 failed.');
+ assert.ok(attempts>=1);
+});
+test('a manual endpoint whose registration fails reports the reason and keeps retrying',async t=>{
+ const root=await fixture(t);let failures=0;
+ const receiver=await startDirect({identity:{url:'https://instance.invalid',principal_id:'agt_fixture'},root,env:{AGENTPEERCHAT_DIRECT_URL:'https://203.0.113.10/agentpeerchat/direct',AGENTPEERCHAT_DIRECT_PORT:'8123'},request:async()=>{failures++;throw Error('Instance refused the direct endpoint.');},onWork:async()=>{}});
+ t.after(()=>receiver.close());
+ await until(()=>failures>=1);
+ const status=receiver.status;
+ assert.equal(status.configured,true);assert.equal(status.mode,'endpoint');assert.equal(status.available,false);assert.equal(status.state,'retrying');
+ assert.equal(status.last_error,'Instance refused the direct endpoint.');
+ const persisted=JSON.parse(await readFile(join(root,'direct-state.json'),'utf8'));
+ assert.equal(persisted.last_error,'Instance refused the direct endpoint.');
+});

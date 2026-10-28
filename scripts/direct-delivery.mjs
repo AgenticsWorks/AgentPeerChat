@@ -13,9 +13,28 @@ export async function deliverDirect(items,{fetchImpl=fetch}={}){
   await fetchImpl(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(2000),headers:{'Content-Type':'application/json','X-AgentPeerChat-Signature':hint.signature},body:hint.payload});
  }));
 }
+// Failure reasons stay short, single-line and secret-free so operators can tell an
+// environment problem from a product bug without exposing tokens or signing keys.
+const failureReason=(error,fallback)=>{
+ const message=String(error?.message||'').replace(/[\r\n\t]+/g,' ').trim();
+ return message?message.slice(0,200):fallback;
+};
+export async function clearDirectState(root){
+ // Teardown rewrites terminal states instead of unlinking files, so listen status
+ // stays authoritative across crashes and never touches the private profile.
+ await writeState(join(root,'direct-state.json'),{configured:false,mode:null,available:false,state:'cleared',endpoint:null,last_error:null});
+ await writeState(join(root,'direct-key.json'),{cleared:true});
+}
 export async function startDirect({identity,root,env=process.env,onWork,request,signal,fetchImpl=fetch,tunnelFactory=startQuickTunnel}){
  const manual=env.AGENTPEERCHAT_DIRECT_URL,configured=Boolean(manual)||env.AGENTPEERCHAT_TUNNEL!=='off';
- if(!configured||signal?.aborted)return {configured,available:false,state:'disabled',close:async()=>{}};
+ if(!configured){
+  // The explicit opt-out is authoritative: a stale tunnel status from a previous
+  // incarnation must not outlive it.
+  const disabled={configured:false,mode:null,available:false,state:'disabled',endpoint:null,last_error:null};
+  await writeState(join(root,'direct-state.json'),disabled);
+  return {configured:false,available:false,endpoint:null,state:'disabled',status:disabled,close:async()=>{}};
+ }
+ if(signal?.aborted)return {configured,available:false,state:'disabled',close:async()=>{}};
  const url=manual?new URL(manual):null;
  if(url&&(url.username||url.password||url.search||url.hash||url.pathname!=='/agentpeerchat/direct'||url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname))))throw Error('Use an HTTPS /agentpeerchat/direct endpoint.');
  const port=Number(env.AGENTPEERCHAT_DIRECT_PORT||(url&&['127.0.0.1','localhost'].includes(url.hostname)?url.port:0));
@@ -23,9 +42,9 @@ export async function startDirect({identity,root,env=process.env,onWork,request,
  // A receiver incarnation has its own key, so a stale host cannot remove its successor.
  const key=randomBytes(32).toString('hex');await writeState(join(root,'direct-key.json'),{url:identity.url,principal_id:identity.principal_id,key});
  const seen=new Map(),probe=randomBytes(24).toString('hex'),healthPath='/agentpeerchat/health/'+probe;
- let registration=false,endpoint=manual||null,timer,closed=false,serial=Promise.resolve(),tunnel,closing;
+ let registration=false,endpoint=manual||null,timer,closed=false,serial=Promise.resolve(),tunnel,closing,lastError=null;
  const controller=new AbortController(),abort=()=>{void close();};
- const status=()=>({configured,mode:manual?'endpoint':'cloudflare-tunnel',available:registration,state:closed?'stopped':registration?'ready':manual?'retrying':tunnel?.state||'starting',endpoint:registration?endpoint:null});
+ const status=()=>({configured,mode:manual?'endpoint':'cloudflare-tunnel',available:registration,state:closed?'stopped':registration?'ready':manual?'retrying':tunnel?.state||'starting',endpoint:registration?endpoint:null,last_error:registration?null:(tunnel?.lastError??lastError)});
  const publish=()=>writeState(join(root,'direct-state.json'),status()).catch(()=>{});
  const server=createServer(async(req,res)=>{
   try{
@@ -56,10 +75,10 @@ export async function startDirect({identity,root,env=process.env,onWork,request,
   const target=endpoint;
   try{
    const result=await request(api,{token:identity.token,method:'POST',signal:attemptSignal?AbortSignal.any([controller.signal,attemptSignal]):controller.signal,body:{endpoint:target,signing_key:key}});
-   if(closed)return;if(result?.registered!==true)throw Error('Instance did not register the direct endpoint.');registration=true;
+   if(closed)return;if(result?.registered!==true)throw Error('Instance did not register the direct endpoint.');registration=true;lastError=null;
    const seconds=Number(result?.expires_in)||180;
    timer=setTimeout(()=>void register().catch(()=>{}),Math.max(10000,Math.min(600000,seconds*1000/3)));
-  }catch(error){registration=false;if(!closed)timer=setTimeout(()=>void register().catch(()=>{}),30000);throw error;}
+  }catch(error){registration=false;lastError=failureReason(error,'Direct delivery registration failed.');if(!closed)timer=setTimeout(()=>void register().catch(()=>{}),30000);throw error;}
   finally{await publish();}
  });
  const verify=async(base,attemptSignal)=>{
