@@ -13,11 +13,11 @@ export function tile(c,a,key,x,y,size,t=0,options={}){
  c.save();c.translate(x+size*.08,y+size*.65);c.scale(1,.24);const sh=c.createRadialGradient(0,0,0,0,0,size*.8);sh.addColorStop(0,'rgba(0,0,0,.5)');sh.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=sh;c.beginPath();c.arc(0,0,size*.8,0,7);c.fill();c.restore();
  c.save();c.translate(x,y);c.rotate(angle);c.transform(1,skew,.16,squash,0,0);
  const central=key==='brand';const lift=d=>Math.floor(d/depth*7);
- for(let d=depth;d>0;d-=1.1){const k=lift(d);rr(c,-size/2+d*.26,-size/2+d,size,size,size*.25,central?'#0B2924':`rgb(${14+k},${19+k},${16+k})`)}
+ for(let d=depth;d>0;d-=1.1){const k=lift(d);rr(c,-size/2+d*.26,-size/2+d,size,size,size*.25,central?'#0D1411':`rgb(${14+k},${19+k},${16+k})`)}
  c.shadowColor='rgba(0,0,0,.45)';c.shadowBlur=size*.16;c.shadowOffsetY=size*.06;
- const grad=c.createLinearGradient(-size/2,-size/2,size/2,size/2);grad.addColorStop(0,central?'#376B57':'#1a221c');grad.addColorStop(.5,central?'#173F35':'#131a15');grad.addColorStop(1,central?'#103529':'#0e130f');rr(c,-size/2,-size/2,size,size,size*.25,grad);c.shadowBlur=0;
+ const grad=c.createLinearGradient(-size/2,-size/2,size/2,size/2);grad.addColorStop(0,central?'#141C17':'#1a221c');grad.addColorStop(.5,central?'#0B100D':'#131a15');grad.addColorStop(1,central?'#080C0A':'#0e130f');rr(c,-size/2,-size/2,size,size,size*.25,grad);c.shadowBlur=0;
  c.save();c.beginPath();c.roundRect(-size/2,-size/2,size,size,size*.25);c.clip();if(central){fit(c,a[key],-size*.47,-size*.47,size*.94,size*.94)}else fit(c,a[key],-size*.31,-size*.31,size*.62,size*.62);c.restore();
- c.strokeStyle=central?'rgba(221,240,189,.4)':'rgba(255,255,255,.2)';c.lineWidth=1.5;c.beginPath();c.roundRect(-size/2+1,-size/2+1,size-2,size-2,size*.25);c.stroke();
+ c.strokeStyle=central?'rgba(85,224,165,.45)':'rgba(255,255,255,.2)';c.lineWidth=1.5;c.beginPath();c.roundRect(-size/2+1,-size/2+1,size-2,size-2,size*.25);c.stroke();
  c.restore();
 }
 export function ambient(c,x=640,y=320,r=390){const g=c.createRadialGradient(x,y,20,x,y,r);g.addColorStop(0,'rgba(85,224,165,.08)');g.addColorStop(.55,'rgba(85,224,165,.025)');g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(x-r,y-r,r*2,r*2)}
