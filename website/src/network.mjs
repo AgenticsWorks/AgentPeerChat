@@ -28,14 +28,14 @@ export function createAgentNetwork(container, agents, onSelect) {
       ctx.strokeStyle=color+(active?['cc','55','22'][ring]:['55','22','11'][ring]);
       ctx.lineWidth=ring===0?1.3:.6;ctx.stroke();
     }
-    ctx.fillStyle='#101a2b';ctx.beginPath();ctx.arc(x,y,27,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#0f1613';ctx.beginPath();ctx.arc(x,y,27,0,Math.PI*2);ctx.fill();
     ctx.save();ctx.beginPath();ctx.arc(x,y,19,0,Math.PI*2);ctx.clip();
     ctx.fillStyle='#fff';ctx.fillRect(x-19,y-19,38,38);
     if(node.image.complete&&node.image.naturalWidth)ctx.drawImage(node.image,x-19,y-19,38,38);
     ctx.restore();
-    ctx.textAlign='center';ctx.font='600 13px system-ui';ctx.fillStyle='#f1f5ff';
+    ctx.textAlign='center';ctx.font='600 13px system-ui';ctx.fillStyle='#edf3ee';
     ctx.fillText(node.name,x,y+62);
-    ctx.font='10px system-ui';ctx.fillStyle=active?color:'#8898b1';
+    ctx.font='10px system-ui';ctx.fillStyle=active?color:'#8fa79b';
     ctx.fillText(node.sending?t("正在发送"):node.receiving?t("收到消息"):t(node.role),x,y+79);
     ctx.restore();
   }
@@ -44,7 +44,7 @@ export function createAgentNetwork(container, agents, onSelect) {
     .nodeLabel(node=>node.name+' · '+t(node.role)).nodeVal(80)
     .nodeCanvasObject(drawNode)
     .nodePointerAreaPaint((node,color,ctx)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(node.x,node.y,40/graph.zoom(),0,Math.PI*2);ctx.fill();})
-    .linkCurvature(.18).linkColor(link=>link.active?link.color+'bb':'#56688538')
+    .linkCurvature(.18).linkColor(link=>link.active?link.color+'bb':'#ffffff10')
     .linkWidth(link=>link.active?1.5:.65)
     .linkDirectionalArrowLength(link=>link.active?5:0)
     .linkDirectionalArrowRelPos(.77).linkDirectionalArrowColor(link=>link.color)
@@ -68,7 +68,7 @@ export function createAgentNetwork(container, agents, onSelect) {
   function fit(duration=250){graph.zoomToFit(reduced.matches?0:duration,container.clientWidth<500?58:76);}
   function resize(){graph.width(container.clientWidth).height(container.clientHeight);fit(0);}
   new ResizeObserver(resize).observe(container);resize();
-  function refresh(){graph.nodeCanvasObject(drawNode).linkColor(link=>link.active?link.color+'bb':'#56688538').linkDirectionalParticles(link=>link.active&&running&&!reduced.matches?3:0);}
+  function refresh(){graph.nodeCanvasObject(drawNode).linkColor(link=>link.active?link.color+'bb':'#ffffff10').linkDirectionalParticles(link=>link.active&&running&&!reduced.matches?3:0);}
   function setMessage({sender,receivers,traffic}){
     for(const node of nodes){node.sending=node.id===sender;node.receiving=receivers.includes(node.id);Object.assign(node,traffic[node.id]);}
     for(const link of links)link.active=(typeof link.source==='object'?link.source.id:link.source)===sender&&receivers.includes(typeof link.target==='object'?link.target.id:link.target);
