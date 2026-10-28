@@ -7,10 +7,13 @@ function browser(...args){const r=spawnSync('./node_modules/.bin/agent-browser',
 function value(code){return JSON.parse(browser('eval',code));}
 const checks=[],privateOrigin=new URL(JSON.parse(await readFile('docs/research-conversation.json','utf8')).url).hostname;
 try{
- browser('open',base);browser('wait','#demo-contacts .demo-contact');browser('set','viewport','1440','960');
+ browser('open',base);
+ // Pin English so scene text assertions are deterministic regardless of a reused browser profile.
+ browser('eval','localStorage.setItem("agentgram.language","en"); "pinned"');browser('open',base);
+ browser('wait','#demo-contacts .demo-contact');browser('set','viewport','1440','960');
  assert.equal(value('document.documentElement.scrollWidth>innerWidth'),false);
- assert.equal(value('document.querySelector("#demo-title").textContent'),'营销机会讨论');
- assert.equal(value('document.querySelector(".demo-tag").textContent'),'通信场景动画');
+ assert.equal(value('document.querySelector("#demo-title").textContent'),'Campaign planning');
+ assert.equal(value('document.querySelector(".demo-tag").textContent'),'Example conversation');
  const page=value('document.documentElement.outerHTML');assert.ok(!page.includes(privateOrigin));assert.ok(!/Mock|测试工具|通信验证记录/.test(value('document.body.innerText')));
  assert.equal(value('document.querySelectorAll("#pair-agent, #pair-copy, #pair-approve").length'),0);
  assert.equal(value('document.querySelectorAll("a[href*=research]").length'),0);
@@ -20,13 +23,15 @@ try{
  assert.ok(value('document.querySelector("#deploy-instruction").textContent').includes('/install-agent.md'));
  browser('click','#copy-deploy-hero');browser('wait','--fn','document.querySelector("#deploy-hero-status").textContent.length > 0');
  checks.push('Installation is prominent; hero copy action works; Dots and Manus Cue names are present');
+ // Open the retained detailed sections explicitly; interactions below must not depend on clipboard fallbacks.
+ browser('eval','document.getElementById("explore").open=true; "opened"');
  assert.equal(value('document.querySelectorAll(".demo-bubble").length'),10);
  browser('click','.artifact-link');assert.equal(value('document.querySelector("#artifact-dialog").open'),true);browser('click','#artifact-close');
  browser('select','#demo-perspective','dots');browser('click','[data-thread=launch-preferences]');assert.ok(value('document.querySelectorAll(".demo-bubble.mine").length')>0);
  browser('select','#demo-perspective','grok');assert.equal(value('document.querySelectorAll("[data-thread=launch-preferences]").length'),0);
  browser('select','#demo-perspective','all');browser('click','[data-scenario=preferences]');assert.equal(value('document.querySelector("#demo-title").textContent'),'Dots · Muse');
  browser('select','#demo-perspective','grok');assert.equal(value('document.querySelectorAll("[data-thread=preferences-dm]").length'),0);
- browser('select','#demo-perspective','dots');browser('click','[data-thread=preferences-group]');browser('click','.artifact-link');assert.ok(value('document.querySelector("#artifact-content").textContent').includes('趋势分析'));browser('click','#artifact-close');
+ browser('select','#demo-perspective','dots');browser('click','[data-thread=preferences-group]');browser('click','.artifact-link');assert.ok(value('document.querySelector("#artifact-content").textContent').includes('Preferences and trends'));browser('click','#artifact-close');
  browser('click','#replay');browser('wait','--fn','document.querySelectorAll(".demo-bubble").length === 4');
  checks.push('Reciprocal messages, three perspectives, direct/group visibility and output previews work');
  browser('eval','document.documentElement.style.scrollBehavior="auto";document.querySelector("#network").scrollIntoView({behavior:"instant",block:"center"})');
