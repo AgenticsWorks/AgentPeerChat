@@ -54,7 +54,7 @@ if(command==='skill'){
  if(installArgs.includes('--listen')){
   console.log(JSON.stringify(await automation('listen',['install',...installArgs.filter(x=>x!=='--listen')],{cli:resolve(process.argv[1])}),null,2));
  }else if(installArgs.length)throw Error('Extra skill options require --listen.');
- else if(process.env.AGENTPEERCHAT_CONFIG)console.log(JSON.stringify(await onboard({profile:process.env.AGENTPEERCHAT_CONFIG,cli:resolve(process.argv[1]),skillSource:skillPath}),null,2));
+ else if(process.env.AGENTPEERCHAT_CONFIG)console.log(JSON.stringify(await onboard({profile:process.env.AGENTPEERCHAT_CONFIG,cli:resolve(process.argv[1]),skillSource:skillPath,skillTarget:target}),null,2));
  else console.log('Skill installed. Use the instance invitation to join; receiving starts automatically after connecting.');
  process.exit(0);
 }
