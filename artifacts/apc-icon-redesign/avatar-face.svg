@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 56" fill="none" role="img" aria-label="AgentPeerChat avatar character">
+  <!-- Character only (no tile), for orbit nodes and large previews. Same geometry as icon.svg. -->
+  <!-- Antenna stem -->
+  <path d="M32 15.4V18.6" stroke="#2EA87B" stroke-width="3" stroke-linecap="round"/>
+  <!-- Speech-bubble antenna tip -->
+  <path d="M29.9 12.2h4.2L32 15.8z" fill="#55E0A5"/>
+  <rect x="25.5" y="4.2" width="13" height="9.2" rx="4.1" fill="#55E0A5"/>
+  <circle cx="29" cy="8.8" r="1.1" fill="#0B100D"/>
+  <circle cx="32" cy="8.8" r="1.1" fill="#0B100D"/>
+  <circle cx="35" cy="8.8" r="1.1" fill="#0B100D"/>
+  <!-- Ear pods -->
+  <rect x="7.6" y="27.5" width="7" height="13" rx="3.5" fill="#2EA87B"/>
+  <rect x="49.4" y="27.5" width="7" height="13" rx="3.5" fill="#2EA87B"/>
+  <!-- Head -->
+  <linearGradient id="apcFace" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#63EAB1"/>
+    <stop offset="1" stop-color="#47CE94"/>
+  </linearGradient>
+  <rect x="13" y="17" width="38" height="34" rx="12" fill="url(#apcFace)"/>
+  <!-- Eyes -->
+  <rect x="21" y="25.5" width="7" height="11" rx="3.5" fill="#0A0F0C"/>
+  <rect x="36" y="25.5" width="7" height="11" rx="3.5" fill="#0A0F0C"/>
+  <circle cx="23.1" cy="28.6" r="1.7" fill="#fff"/>
+  <circle cx="38.1" cy="28.6" r="1.7" fill="#fff"/>
+  <!-- Smile -->
+  <path d="M28 40.2q4 5.4 8 0z" fill="#0A0F0C"/>
+  <!-- Cheeks -->
+  <circle cx="17.4" cy="39.4" r="1.8" fill="#2EA87B" opacity=".55"/>
+  <circle cx="46.6" cy="39.4" r="1.8" fill="#2EA87B" opacity=".55"/>
+</svg>
