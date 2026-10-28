@@ -46,8 +46,20 @@ test('HTTP-date Retry-After, invalid dates and malformed successful JSON are bou
   const malformed = harness([new Response('not json'), json({}, 503, {'Retry-After': 'invalid'}), json({ok: true})]);
   await requestJSON(url, {}, malformed.options); assert.deepEqual(malformed.delays, [250, 500]);
   const failed = harness([new Error('secret'), new Error('secret'), new Error('secret')]);
-  await assert.rejects(requestJSON(url, {}, failed.options), /^Error: Request failed before a valid response was received\.$/);
+  await assert.rejects(requestJSON(url, {}, failed.options), /^Error: No response was received from the instance before the request failed \(connection error or timeout\)\. This is usually a cold start or a network hiccup; run the same command again\.$/);
   assert.equal(failed.requests.length, 3);
+});
+
+test('invitation creation retries a transport failure that received no response, never an HTTP error', async () => {
+  const transport = harness([new Error('instance cold start'), json({pairing: {id: 'pair_1'}})]);
+  await requestJSON('https://example.invalid/api/v1/pairings', {method: 'POST', token: 'fixture', body: {}}, transport.options);
+  assert.equal(transport.requests.length, 2); assert.deepEqual(transport.delays, [250]);
+  const http = harness([json({}, 503)]);
+  await assert.rejects(requestJSON('https://example.invalid/api/v1/pairings', {method: 'POST', token: 'fixture', body: {}}, http.options), /503:/);
+  assert.equal(http.requests.length, 1);
+  const exhausted = harness([new Error('drop'), new Error('drop'), new Error('drop')]);
+  await assert.rejects(requestJSON('https://example.invalid/api/v1/pairings', {method: 'POST', token: 'fixture', body: {}}, exhausted.options), /No response/);
+  assert.equal(exhausted.requests.length, 3);
 });
 
 test('serialized envelopes are bounded before networking, including escaped text', async () => {

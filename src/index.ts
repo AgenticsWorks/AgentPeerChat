@@ -40,6 +40,14 @@ async function threadMembers(env: Env, threadId: string) {
   return (await env.DB.prepare(`SELECT p.* FROM thread_members tm JOIN principals p ON p.id = tm.principal_id
     WHERE tm.thread_id = ? ORDER BY p.created_at, p.id`).bind(threadId).all<Principal>()).results;
 }
+// Direct threads store one title from the creator's perspective. Each participant reads
+// the conversation as titled with the other party, so the API rewrites the stored value
+// per viewer instead of leaking the recipient's own name back to it.
+function viewerTitle<T extends Record<string, unknown>>(thread: T, participants: { id: string; name: string }[], viewerId: string): T {
+  if (thread.kind !== 'direct' || !participants.some(participant => participant.id === viewerId)) return thread;
+  const peer = participants.find(participant => participant.id !== viewerId);
+  return peer ? { ...thread, title: peer.name } : thread;
+}
 
 async function publicRoutes(request: Request, env: Env, path: string) {
   const pairingResponse = await pairingPublic(request, env, path);
@@ -298,7 +306,8 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
         .bind(...members.flatMap(member => [threadId, member]))
     ]);
     await notifyAgents(env, members.filter(member => member !== p.id));
-    return json({ thread: { ...await threadAccess(env, threadId, p), members: await threadMembers(env, threadId) } }, 201);
+    const threadMembersList = await threadMembers(env, threadId);
+    return json({ thread: { ...viewerTitle(await threadAccess(env, threadId, p), threadMembersList, p.id), members: threadMembersList } }, 201);
   }
   if (path === '/threads' && method === 'GET') {
     const { after, limit } = pagination(url);
@@ -309,7 +318,7 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
       (SELECT json_object('type', m.type, 'content', json(m.content), 'sender_id', m.sender_id, 'created_at', m.created_at) FROM messages m WHERE m.seq = t.last_message_seq) AS last_message
       FROM threads t WHERE t.rowid > ? ${p.kind === 'agent' ? 'AND EXISTS (SELECT 1 FROM thread_members tm WHERE tm.thread_id = t.id AND tm.principal_id = ?)' : ''}
       ORDER BY t.rowid ASC LIMIT ?`).bind(after, ...(p.kind === 'agent' ? [p.id] : []), limit + 1).all<{ cursor: number; last_message: string | null }>();
-    const items = results.slice(0, limit).map(row => ({ ...row, last_message: row.last_message ? JSON.parse(row.last_message) : null, participants: JSON.parse((row as unknown as { participants: string }).participants) }));
+    const items = results.slice(0, limit).map(row => { const item = { ...row, last_message: row.last_message ? JSON.parse(row.last_message) : null, participants: JSON.parse((row as unknown as { participants: string }).participants) }; return viewerTitle(item, item.participants, p.id); });
     return json({ items, next_cursor: String(items.at(-1)?.cursor ?? after), has_more: results.length > limit });
   }
   match = /^\/threads\/([^/]+)\/members$/.exec(path);
@@ -362,8 +371,9 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
   }
   if (match && method === 'GET') {
     const thread = await threadAccess(env, match[1], p), { after, limit } = pagination(url);
+    const members = await threadMembers(env, match[1]);
     const page = await store.listThread(match[1], after, limit);
-    return json({ thread: { ...thread, members: await threadMembers(env, match[1]) }, ...page });
+    return json({ thread: { ...viewerTitle(thread, members, p.id), members }, ...page });
   }
   if (path === '/messages' && method === 'POST') {
     const b = await body(request), key = str(request.headers.get('Idempotency-Key'), 'Idempotency-Key', 128);

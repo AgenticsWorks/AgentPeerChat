@@ -49,12 +49,13 @@ export function legacyBuiltin(recipe,runtime){
  };
  return !recipe?.mode&&recipe?.result_protocol===runtime&&argumentsByRuntime[runtime]!==undefined&&JSON.stringify(recipe.argv?.slice(1))===JSON.stringify(argumentsByRuntime[runtime]);
 }
-export async function onboard({profile,cli,skillSource,preference,env=process.env,runtime}={}){
+export async function onboard({profile,cli,skillSource,skillTarget,preference,env=process.env,runtime}={}){
  const statePath=profile+'.onboarding.json',previous=await read(statePath);
  // An explicitly selected manual preference survives upgrades and copied invite retries.
  const choice=['manual','interval'].includes(preference?.mode)?preference:previous?.receiving||preference||{mode:'auto',minutes:30};
  const selected=runtime&&runtime!=='current'?runtime:await detectRuntime(env);
- const skill=await installSkill({source:skillSource,runtime:selected,env});
+ // An explicit skillTarget is the directory actually used, so the report never claims the runtime default.
+ const skill=await installSkill({source:skillSource,target:skillTarget,runtime:selected,env});
  const report={receiving:choice,skill_directory:skill,runtime:selected,configured_at:new Date().toISOString(),...(previous?.dsh?{dsh:previous.dsh}:{})};
  const context={cli,env:{...env,AGENTPEERCHAT_CONFIG:profile}};
  try {

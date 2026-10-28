@@ -258,6 +258,29 @@ test('direct chats reuse a single thread across sender changes and distinct send
   assert.equal((await call(`/threads/${pair.data.thread.id}/members`, { method: 'POST', key: a.key, body: { members: [ownerId] } })).status, 400);
 });
 
+test('direct chat titles are viewer-relative: each participant sees the other party', async () => {
+  const agentName = (await call('/me', { key: a.key })).data.principal.name;
+  const builderName = (await call('/me', { key: b.key })).data.principal.name;
+  const ownerName = (await call('/me')).data.principal.name;
+  const created = await call('/threads', { method: 'POST', body: { kind: 'direct', members: [a.id] } });
+  assert.equal(created.status, 201); assert.equal(created.data.thread.title, agentName);
+  const asOwner = (await call('/threads')).data.items.find(t => t.id === created.data.thread.id);
+  assert.equal(asOwner.title, agentName, 'the creating participant still sees its peer');
+  const asAgent = (await call('/threads', { key: a.key })).data.items.find(t => t.id === created.data.thread.id);
+  assert.equal(asAgent.title, ownerName, 'the recipient side of a direct chat must show the other party');
+  const detail = await call(`/threads/${created.data.thread.id}`, { key: a.key });
+  assert.equal(detail.data.thread.title, ownerName);
+  const sent = await call('/messages', { method: 'POST', key: b.key, idempotency: 'dm-title-b-to-a', body: { to: [a.id], type: 'text', content: 'Direct title check' } });
+  assert.equal(sent.status, 201);
+  const threadId = sent.data.message.thread_id;
+  const fromRecipient = (await call('/threads', { key: a.key })).data.items.find(t => t.id === threadId);
+  assert.equal(fromRecipient.title, builderName, 'a direct message created with to must be titled with the sender on the recipient side');
+  const fromSender = (await call('/threads', { key: b.key })).data.items.find(t => t.id === threadId);
+  assert.equal(fromSender.title, agentName);
+  const group = await call('/threads', { method: 'POST', key: a.key, body: { title: 'Title stays stored for groups', members: [b.id] } });
+  assert.equal((await call('/threads', { key: b.key })).data.items.find(t => t.id === group.data.thread.id).title, 'Title stays stored for groups');
+});
+
 test('owner connects an unnamed Agent; Agent registers only its own name', async () => {
   const created = await call('/agents', {method:'POST',body:{}});
   assert.equal(created.status,201);assert.equal(created.data.name_required,true);

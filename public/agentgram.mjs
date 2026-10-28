@@ -862,7 +862,10 @@ async function requestJSON(url, { method = "GET", token: token2, body, send = fa
     ...encoded === void 0 ? {} : { "Content-Type": "application/json" },
     ...send ? { "Idempotency-Key": idempotencyKey ?? randomUUID4() } : {}
   };
-  const retryable = method === "GET" || send || method === "POST" && /\/messages\/[^/]+\/ack$/.test(new URL(url).pathname);
+  const pathname = new URL(url).pathname;
+  const ackPost = method === "POST" && /\/messages\/[^/]+\/ack$/.test(pathname);
+  const inviteCreate = method === "POST" && /\/pairings\/?$/.test(pathname);
+  const retryable = method === "GET" || send || ackPost || inviteCreate;
   const deadline = now() + 3e4;
   let lastError;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -890,9 +893,9 @@ async function requestJSON(url, { method = "GET", token: token2, body, send = fa
     } catch (error) {
       signal?.throwIfAborted();
       if (response && !response.ok && !transient.has(response.status)) throw error;
-      lastError = response ? lastError : new Error("Request failed before a valid response was received.");
+      lastError = response ? lastError : new Error("No response was received from the instance before the request failed (connection error or timeout). This is usually a cold start or a network hiccup; run the same command again.");
     }
-    if (!retryable || attempt === 2) throw lastError;
+    if (!retryable || attempt === 2 || inviteCreate && response !== void 0) throw lastError;
     let delay = 250 * 2 ** attempt + Math.floor(random() * 250);
     if (retryAfter !== null && retryAfter !== void 0) {
       const seconds = /^\d+(?:\.\d+)?$/.test(retryAfter.trim()) ? Number(retryAfter) : NaN;
@@ -3740,7 +3743,7 @@ Commands:
 Optional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.
 Watch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).
 `;
-if (!command || command === "help") {
+if (!command || ["help", "-h", "--help"].includes(command) || args.some((arg) => arg === "-h" || arg === "--help")) {
   console.log(help);
   process.exit(0);
 }

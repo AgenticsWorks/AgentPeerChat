@@ -13,7 +13,13 @@ export async function requestJSON(url, {method = 'GET', token, body, send = fals
   const headers = {...extraHeaders, Authorization: `Bearer ${token}`,
     ...(encoded === undefined ? {} : {'Content-Type': 'application/json'}),
     ...(send ? {'Idempotency-Key': idempotencyKey ?? randomUUID()} : {})};
-  const retryable = method === 'GET' || send || (method === 'POST' && /\/messages\/[^/]+\/ack$/.test(new URL(url).pathname));
+  const pathname = new URL(url).pathname;
+  const ackPost = method === 'POST' && /\/messages\/[^/]+\/ack$/.test(pathname);
+  // Invitation creation is not idempotency-keyed server-side, so it may only retry a
+  // request that demonstrably produced no response; a served response may already have
+  // committed the invitation, and retrying it could create a second one.
+  const inviteCreate = method === 'POST' && /\/pairings\/?$/.test(pathname);
+  const retryable = method === 'GET' || send || ackPost || inviteCreate;
   // Share one deadline across requests and waits; do not multiply the old 30s bound.
   const deadline = now() + 30000;
   let lastError;
@@ -32,9 +38,10 @@ export async function requestJSON(url, {method = 'GET', token, body, send = fals
       signal?.throwIfAborted();
       // Do not reinterpret permanent HTTP failures as transport failures.
       if (response && !response.ok && !transient.has(response.status)) throw error;
-      lastError = response ? lastError : new Error('Request failed before a valid response was received.');
+      lastError = response ? lastError : new Error('No response was received from the instance before the request failed (connection error or timeout). This is usually a cold start or a network hiccup; run the same command again.');
     }
-    if (!retryable || attempt === 2) throw lastError;
+    // Any received response ends an invitation attempt: the request may already be committed.
+    if (!retryable || attempt === 2 || (inviteCreate && response !== undefined)) throw lastError;
     let delay = 250 * 2 ** attempt + Math.floor(random() * 250);
     if (retryAfter !== null && retryAfter !== undefined) {
       const seconds = /^\d+(?:\.\d+)?$/.test(retryAfter.trim()) ? Number(retryAfter) : NaN;
