@@ -977,7 +977,10 @@ async function requestJSON(url2, { method = "GET", token, body, send = false, id
     ...encoded === void 0 ? {} : { "Content-Type": "application/json" },
     ...send ? { "Idempotency-Key": idempotencyKey ?? randomUUID4() } : {}
   };
-  const retryable = method === "GET" || send || method === "POST" && /\/messages\/[^/]+\/ack$/.test(new URL(url2).pathname);
+  const pathname = new URL(url2).pathname;
+  const ackPost = method === "POST" && /\/messages\/[^/]+\/ack$/.test(pathname);
+  const inviteCreate = method === "POST" && /\/pairings\/?$/.test(pathname);
+  const retryable = method === "GET" || send || ackPost || inviteCreate;
   const deadline = now() + 3e4;
   let lastError;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -1005,9 +1008,9 @@ async function requestJSON(url2, { method = "GET", token, body, send = false, id
     } catch (error) {
       signal?.throwIfAborted();
       if (response && !response.ok && !transient.has(response.status)) throw error;
-      lastError = response ? lastError : new Error("Request failed before a valid response was received.");
+      lastError = response ? lastError : new Error("No response was received from the instance before the request failed (connection error or timeout). This is usually a cold start or a network hiccup; run the same command again.");
     }
-    if (!retryable || attempt === 2) throw lastError;
+    if (!retryable || attempt === 2 || inviteCreate && response !== void 0) throw lastError;
     let delay = 250 * 2 ** attempt + Math.floor(random() * 250);
     if (retryAfter !== null && retryAfter !== void 0) {
       const seconds = /^\d+(?:\.\d+)?$/.test(retryAfter.trim()) ? Number(retryAfter) : NaN;
@@ -3705,11 +3708,11 @@ function legacyBuiltin(recipe, runtime) {
   };
   return !recipe?.mode && recipe?.result_protocol === runtime && argumentsByRuntime[runtime] !== void 0 && JSON.stringify(recipe.argv?.slice(1)) === JSON.stringify(argumentsByRuntime[runtime]);
 }
-async function onboard({ profile: profile2, cli: cli2, skillSource: skillSource2, preference, env: env2 = process.env, runtime } = {}) {
+async function onboard({ profile: profile2, cli: cli2, skillSource: skillSource2, skillTarget, preference, env: env2 = process.env, runtime } = {}) {
   const statePath = profile2 + ".onboarding.json", previous2 = await read2(statePath);
   const choice = ["manual", "interval"].includes(preference?.mode) ? preference : previous2?.receiving || preference || { mode: "auto", minutes: 30 };
   const selected = runtime && runtime !== "current" ? runtime : await detectRuntime(env2);
-  const skill = await installSkill({ source: skillSource2, runtime: selected, env: env2 });
+  const skill = await installSkill({ source: skillSource2, target: skillTarget, runtime: selected, env: env2 });
   const report = { receiving: choice, skill_directory: skill, runtime: selected, configured_at: (/* @__PURE__ */ new Date()).toISOString(), ...previous2?.dsh ? { dsh: previous2.dsh } : {} };
   const context = { cli: cli2, env: { ...env2, AGENTPEERCHAT_CONFIG: profile2 } };
   try {
