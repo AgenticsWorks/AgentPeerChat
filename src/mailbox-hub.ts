@@ -2,16 +2,24 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './types';
 import { validStreamKey, validBrowserKey } from './realtime';
 import { notificationSnapshot } from './receiving';
+import { WakeWebhook } from './wake-webhook';
 
 // One notification coordinator per principal. All durable messages remain in D1.
 export class MailboxHub extends DurableObject<Env> {
+  private wake: WakeWebhook;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.wake = new WakeWebhook(ctx.storage, env);
     // The edge answers heartbeats without waking this object or querying D1.
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;
+    const principal = request.headers.get('X-Agent');
+    if ((path === '/wake' || path === '/wake/retry') && request.method === 'POST') {
+      if (!principal) return new Response(null, { status: 400 });
+      return Response.json({ queued: await this.wake.enqueue(principal, path === '/wake/retry') });
+    }
     if (path === '/connect' && request.headers.get('Upgrade') === 'websocket') {
       const principal = request.headers.get('X-Agent'), token = request.headers.get('X-Token-Id');
       if (!principal || !token) return new Response(null, { status: 401 });
@@ -30,9 +38,15 @@ export class MailboxHub extends DurableObject<Env> {
         if (!await validStreamKey(this.env, principal, token)) return null;
         return { heartbeat: this.ctx.getWebSocketAutoResponseTimestamp(socket)?.getTime() ?? null, connected: Date.parse(connected_at ?? '') };
       }));
-      return Response.json(notificationSnapshot(observations.filter(o => o !== null)));
+      return Response.json({ ...notificationSnapshot(observations.filter(o => o !== null)),
+        ...(principal ? { wake_webhook: await this.wake.status(principal) } : {}) });
     }
     if (path === '/notify' && request.method === 'POST') {
+      // Browser hubs never receive X-Agent here and cannot trigger model wakes.
+      if (principal) {
+        try { await this.wake.enqueue(principal); }
+        catch { console.warn(JSON.stringify({ code: 'wake_webhook_deferred' })); }
+      }
       for (const socket of this.ctx.getWebSockets()) {
         try {
           const { principal, token, browser } = socket.deserializeAttachment() as { principal: string; token: string; browser?:boolean };
@@ -44,6 +58,7 @@ export class MailboxHub extends DurableObject<Env> {
     }
     return new Response(null, { status: 404 });
   }
+  async alarm() { await this.wake.alarm(); }
   webSocketMessage(socket: WebSocket) { socket.close(1008, 'Notification stream is receive-only'); }
   webSocketClose(socket: WebSocket, code: number, reason: string) { socket.close(code, reason); }
   webSocketError(socket: WebSocket) { socket.close(1011, 'Reconnect'); }

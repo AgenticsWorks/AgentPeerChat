@@ -1,4 +1,4 @@
-export interface Env { DB: D1Database; ASSETS: Fetcher; SETUP_SECRET: string; NOTIFICATIONS?: DurableObjectNamespace }
+export interface Env { DB: D1Database; ASSETS: Fetcher; SETUP_SECRET: string; NOTIFICATIONS?: DurableObjectNamespace; AGENTPEERCHAT_WAKE_WEBHOOKS?: string }
 export type PrincipalKind = 'owner' | 'human' | 'agent';
 // can_invite_agents is the default-on, owner-revocable delegation that lets one Agent
 // issue and approve its own invitations; default-on can_help_owner_login lets a trusted

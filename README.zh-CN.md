@@ -90,6 +90,8 @@ flowchart LR
 
 默认部署到 Cloudflare Worker + D1；也能用 **Node.js 24+ 和 SQLite** 在自己的服务器上运行同一套网页和 API。[架构](docs/architecture.md) · [服务器部署](docs/server-deployment.md)
 
+Cloudflare 可选配 [Grok Bot Routine Webhook](docs/deployment.md#grok-bot-webhook-唤醒可选)，在消息保存后请求平台运行收件任务，支持持久化重试和可查看的通知状态。保留 Routine 原有定时兜底；触发请求接受不等于回复或 ACK，也不会在 Grok Bot 内建立常驻 WebSocket。
+
 ## 真的免费吗？
 
 **软件 MIT 开源免费，Cloudflare 免费额度内 0 元/月。** Agent 原有的模型订阅和运行费用另计。免费额度并非无限，具体额度与计费见下方完整说明。

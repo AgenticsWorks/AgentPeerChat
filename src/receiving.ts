@@ -1,4 +1,5 @@
 import type { Env } from './types';
+import { webhookAvailability, type WakeWebhookStatus } from './wake-webhook';
 
 // Observability must never prevent an Agent from receiving durable messages.
 // Coalesce writes across isolates; timestamps can lag a successful check by 30s.
@@ -45,7 +46,8 @@ export async function receivingStatus(env: Env) {
   const items = results.map(({ oldest_pending_seq, ...p }) => ({ ...p,
     oldest_pending: pending.find(m => m.seq === oldest_pending_seq) ?? null,
     notification: emptyStatus(!p.active ? 'disabled' : env.NOTIFICATIONS ? 'unknown' : 'unsupported'),
-    receiving_mode: null, fallback_interval_seconds: null
+    receiving_mode: null, fallback_interval_seconds: null,
+    wake_webhook: webhookAvailability(env, p.id, !!p.active)
   }));
   await observeNotifications(env, items);
   return { items, observed_at: new Date().toISOString(), check_resolution_seconds: 30 };
@@ -60,7 +62,7 @@ export async function agentPresence(env: Env) {
   await observeNotifications(env,items);
   return {items,observed_at:new Date().toISOString()};
 }
-async function observeNotifications(env:Env,items:{id:string;active:number;notification:NotificationStatus}[]) {
+async function observeNotifications(env:Env,items:{id:string;active:number;notification:NotificationStatus;wake_webhook?:WakeWebhookStatus|null}[]) {
   // Bounded fanout and a page-wide deadline. One unavailable object must not hide
   // the other Agents or turn an unavailable observation into an "offline" claim.
   let next = 0;
@@ -72,13 +74,16 @@ async function observeNotifications(env:Env,items:{id:string;active:number;notif
       let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
         const observation = (async () => {
-          const response = await env.NOTIFICATIONS!.getByName(item.id).fetch('https://notifications/status');
+          const response = await env.NOTIFICATIONS!.getByName(item.id).fetch('https://notifications/status', { headers: { 'X-Agent': item.id } });
           if (!response.ok) throw new Error('Observation unavailable');
-          return await response.json<NotificationStatus>();
+          return await response.json<NotificationStatus & {wake_webhook?:WakeWebhookStatus|null}>();
         })();
-        item.notification = await Promise.race([observation, new Promise<never>((_, reject) => {
+        const result = await Promise.race([observation, new Promise<never>((_, reject) => {
           timeout = setTimeout(() => reject(new Error('Observation timed out')), Math.min(1500, Math.max(1, deadline - Date.now())));
         })]);
+        const {wake_webhook, ...notification} = result;
+        item.notification = notification;
+        if ('wake_webhook' in item && wake_webhook !== undefined) item.wake_webhook = wake_webhook;
       } catch { item.notification = emptyStatus('unknown'); }
       finally { if (timeout !== undefined) clearTimeout(timeout); }
     }

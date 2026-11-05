@@ -10,11 +10,14 @@ const exec=promisify(execFile),session='receiving-'+crypto.randomUUID(),sockets=
 const browse=async(...args)=>(await exec('./node_modules/.bin/agent-browser',['--session',session,...args],{timeout:30000})).stdout.trim();
 const value=async code=>JSON.parse(await browse('eval',code));
 const wait=async code=>browse('wait','--fn',code);
-let mf;
+let mf, webhookCalls=0;
+const webhookAgent='agt_browser_webhook_fixture';
 try {
  const bundle=await build({entryPoints:['src/cloudflare.ts'],bundle:true,format:'esm',platform:'browser',external:['cloudflare:workers'],write:false});
  const secret=crypto.randomUUID();
- mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'receiving-browser',modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-10-02',d1Databases:{DB:'receiving-browser'},durableObjects:{NOTIFICATIONS:{className:'MailboxHub',useSQLite:true}},bindings:{SETUP_SECRET:secret},serviceBindings:{ASSETS:async request=>{
+ mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'receiving-browser',modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-10-02',d1Databases:{DB:'receiving-browser'},durableObjects:{NOTIFICATIONS:{className:'MailboxHub',useSQLite:true}},bindings:{SETUP_SECRET:secret,AGENTPEERCHAT_WAKE_WEBHOOKS:JSON.stringify({[webhookAgent]:{provider:'grokbot',url:'https://hooks.example.test/routine',token:'private-browser-fixture-key'}})},outboundService:async request=>{
+  assert.equal(request.url,'https://hooks.example.test/routine');webhookCalls++;return new Response();
+ },serviceBindings:{ASSETS:async request=>{
    const name=new URL(request.url).pathname.slice(1)||'index.html';
    if(!/^(?:[\w.-]+|avatars\/[\w.-]+)$/.test(name))return new Response('',{status:404});
    try {return new Response(await readFile('public/'+name),{headers:{'Content-Type':name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':name.endsWith('.svg')?'image/svg+xml':'text/html'}});}catch{return new Response('',{status:404});}
@@ -29,7 +32,11 @@ try {
  owner=(await api('/setup',null,'POST',{name:'Owner',setup_secret:secret})).access_key;
  const agents=[];
  for(const name of ['Codex-Mac','WorkBuddy','Muse','GrokBot','Test Agent']){
-  const created=await api('/agents',owner,'POST',{name});
+  let created;
+  if(name==='GrokBot'){
+   await db.prepare("INSERT INTO principals(id,name,kind) VALUES (?,?,'agent')").bind(webhookAgent,name).run();
+   created={principal:{id:webhookAgent},...(await api('/tokens',owner,'POST',{principal_id:webhookAgent,label:'Fixture'}))};
+  }else created=await api('/agents',owner,'POST',{name});
   const a={id:created.principal.id,key:created.token.token};agents.push(a);
   if(name==='Test Agent'){await api('/principals/'+a.id,owner,'PATCH',{active:false});continue;}
   const msg=(await api('/messages',owner,'POST',{to:[a.id],type:'text',content:'Local receiving verification'})).message;
@@ -45,13 +52,23 @@ try {
  await browse('set','viewport','1600','1000');await browse('open',base);
  await value(`fetch('/api/v1/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({access_key:${JSON.stringify(owner)}})}).then(r=>r.ok)`);
  await browse('reload');await wait('!document.querySelector("#shell").hidden');
- await browse('click','.workspace-nav [data-view="receiving"]');
+ await browse('click','.workspace-nav [data-view="access"]');await browse('click','#access [data-view="receiving"]');
  await wait('document.querySelectorAll("#receiving tbody tr").length===5');
  assert.deepEqual(await value('[...document.querySelectorAll(".receiving-stat strong")].map(n=>n.textContent)'),['4','2','1','0']);
  await browse('select','[data-language-switch]','zh');
  await browse('click',`[data-receiving-agent="${agents[3].id}"]`);
  assert.equal(await value('document.querySelector(".receiving-detail h2").textContent'),'GrokBot');
  assert.match(await value('document.querySelector(".receiving-detail").textContent'),/未上报/);
+ await wait('document.querySelector(".receiving-detail").textContent.includes("触发请求已接受")');
+ assert.equal(webhookCalls,1);
+ assert.match(await value('document.querySelector(".receiving-detail").textContent'),/回复和 ACK 才能确认/);
+ await browse('click','[data-receiving-action="wake"]');
+ await wait('document.querySelector(".receiving-detail").textContent.includes("唤醒已排队")');
+ assert.equal(await value('document.querySelector("[data-receiving-action=wake]").disabled'),true);
+ await value('new Promise(resolve=>setTimeout(resolve,1300))');await browse('click','.receiving-actions button');
+ await wait('document.querySelector("[data-receiving-action=wake]")?.disabled===false');
+ assert.equal(webhookCalls,2);
+ assert.deepEqual(await value('[...document.querySelectorAll(".receiving-stat strong")].map(n=>n.textContent)'),['4','2','1','0']);
  assert.equal(await value('document.documentElement.scrollWidth>innerWidth'),false);
  if(process.env.AGENTPEERCHAT_SCREENSHOT_DIR){await mkdir(process.env.AGENTPEERCHAT_SCREENSHOT_DIR,{recursive:true});await browse('screenshot',resolve(process.env.AGENTPEERCHAT_SCREENSHOT_DIR,'receiving-desktop-zh.png'));}
  await browse('click','[data-receiving-filter="attention"]');assert.equal(await value('document.querySelectorAll("#receiving tbody tr").length'),1);
@@ -69,7 +86,7 @@ try {
  await wait('document.querySelectorAll(".receiving-transport.connected").length===2');
  await browse('click','[data-receiving-action="open"]');await wait('!document.querySelector("#chat-active").hidden');
  assert.equal(await value('document.querySelector("#receiving").hidden'),true);
- await browse('select','[data-language-switch]','en');await browse('click','.workspace-nav [data-view="receiving"]');
+ await browse('select','[data-language-switch]','en');await browse('click','.workspace-nav [data-view="access"]');await browse('click','#access [data-view="receiving"]');
  await wait('document.querySelectorAll("#receiving tbody tr").length===5');
  assert.equal(await value('document.querySelector("#receiving h1").textContent'),'Agent receiving status');
  // Non-owner human session: Agents cannot establish browser sessions.

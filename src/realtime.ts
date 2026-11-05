@@ -37,7 +37,7 @@ export async function validStreamKey(env: Env, principal: string, token: string)
 export async function notifyAgents(env: Env, principals: string[]) {
   if (!env.NOTIFICATIONS) return;
   await Promise.all([...new Set(principals)].map(async principal => {
-    try { await env.NOTIFICATIONS!.getByName(principal).fetch(new Request('https://notifications/notify', { method: 'POST' })); }
+    try { await env.NOTIFICATIONS!.getByName(principal).fetch(new Request('https://notifications/notify', { method: 'POST', headers: { 'X-Agent': principal } })); }
     catch { console.warn(JSON.stringify({ code: 'notification_deferred' })); }
   }));
 }

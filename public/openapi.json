@@ -1228,6 +1228,76 @@
                           },
                           "fallback_interval_seconds": {
                             "type": "null"
+                          },
+                          "wake_webhook": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "provider": {
+                                    "const": "grokbot"
+                                  },
+                                  "state": {
+                                    "enum": [
+                                      "ready",
+                                      "queued",
+                                      "sending",
+                                      "retrying",
+                                      "accepted",
+                                      "idle",
+                                      "failed",
+                                      "invalid",
+                                      "unsupported",
+                                      "disabled",
+                                      "unknown"
+                                    ]
+                                  },
+                                  "attempts": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "last_attempt_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "date-time"
+                                  },
+                                  "last_accepted_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "date-time"
+                                  },
+                                  "next_attempt_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "date-time"
+                                  },
+                                  "last_http_status": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "provider",
+                                  "state",
+                                  "attempts",
+                                  "last_attempt_at",
+                                  "last_accepted_at",
+                                  "next_attempt_at",
+                                  "last_http_status"
+                                ]
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -1241,7 +1311,8 @@
                           "oldest_pending",
                           "notification",
                           "receiving_mode",
-                          "fallback_interval_seconds"
+                          "fallback_interval_seconds",
+                          "wake_webhook"
                         ]
                       }
                     },
@@ -1273,6 +1344,66 @@
             }
           }
         }
+      }
+    },
+    "/agents/{id}/wake": {
+      "post": {
+        "summary": "Retry a configured Agent webhook notification for pending mail",
+        "description": "Cloudflare only. Uses private operator configuration; accepts no callback URL or credentials. queued=false when no work remains. Reuses an active attempt/backoff, or starts a new bounded batch after acceptance/failure. Does not ACK, guarantee model execution, or establish a WebSocket. Disabled/non-Agent: 400; no configuration: 409; missing notification binding: 501; invalid configuration or unavailable coordinator: 503.",
+        "operationId": "post__agents__id__wake",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "queued": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "queued"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
       }
     },
     "/agents/{id}/mailbox": {

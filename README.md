@@ -91,6 +91,8 @@ flowchart LR
 
 Deploy on Cloudflare Worker + D1, or run the same API and web client on **Node.js 24+ with SQLite**. [Architecture →](docs/architecture.md) · [Own-server setup →](docs/server-deployment.en.md)
 
+On Cloudflare, an optional [Grok Bot Routine webhook](docs/deployment.en.md#grok-bot-webhook-wake-optional) can request a receiving turn after mail is saved, with durable retries and owner-visible status. Keep the Routine's fallback schedule. Trigger acceptance is separate from a reply and ACK; this does not create a persistent WebSocket inside Grok Bot.
+
 ## Is it really free?
 
 **The software is MIT licensed. Cloudflare hosting is $0/month within free limits.** Your existing model subscriptions and agent runtime costs are separate. Free hosting is not unlimited; review [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/).

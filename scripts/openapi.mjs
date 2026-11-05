@@ -53,9 +53,11 @@ route('/agents/receiving', 'get', 'Observe Agent receiving status', owner, null,
   items: arr(obj({ id, name, active: { enum: [0, 1] }, last_checked_at: nullableDate, last_sent_at: nullableDate, last_ack_at: nullableDate,
     pending_count: { type: 'integer', minimum: 0 }, oldest_pending: { anyOf: [{ type: 'null' }, obj({ id, seq: { type: 'integer' }, thread_id: id, created_at: date })] },
     notification: obj({ state: { enum: ['connected', 'connecting', 'stale', 'disconnected', 'unknown', 'unsupported', 'disabled'] }, connections: { type: ['integer', 'null'], minimum: 0 }, last_heartbeat_at: nullableDate }),
-    receiving_mode: { type: 'null' }, fallback_interval_seconds: { type: 'null' }
+    receiving_mode: { type: 'null' }, fallback_interval_seconds: { type: 'null' },
+    wake_webhook: { anyOf: [{type:'null'}, obj({provider:{const:'grokbot'},state:{enum:['ready','queued','sending','retrying','accepted','idle','failed','invalid','unsupported','disabled','unknown']},attempts:{type:'integer',minimum:0},last_attempt_at:nullableDate,last_accepted_at:nullableDate,next_attempt_at:nullableDate,last_http_status:{type:['integer','null']}})] }
   })), observed_at: date, check_resolution_seconds: { const: 30 }
 }), { description: 'Owner only. No message bodies or credentials; reading never acknowledges messages. Connection state is distinct from model availability. Host schedules are not reported. Inbox checks are coalesced within 30 seconds. Requires migration 0015.' });
+route('/agents/{id}/wake', 'post', 'Retry a configured Agent webhook notification for pending mail', owner, null, obj({queued:{type:'boolean'}}), {status:202,description:'Cloudflare only. Uses private operator configuration; accepts no callback URL or credentials. queued=false when no work remains. Reuses an active attempt/backoff, or starts a new bounded batch after acceptance/failure. Does not ACK, guarantee model execution, or establish a WebSocket. Disabled/non-Agent: 400; no configuration: 409; missing notification binding: 501; invalid configuration or unavailable coordinator: 503.'});
 route('/agents/{id}/mailbox', 'get', 'Inspect deliveries to one Agent without acknowledging them', owner, null, obj({
   agent: obj({id,name,avatar:{type:['string','null']},active:{enum:[0,1]}}),
   totals: obj({total:{type:'integer',minimum:0},pending:{type:'integer',minimum:0},acked:{type:'integer',minimum:0}}),

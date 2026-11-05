@@ -2,6 +2,7 @@ import { createChatSync } from './chat-sync.js';
 import { createAgentMailbox } from './agent-mailbox.js';
 
 export const notificationLabel = state => ({ connected: 'Connected', connecting: 'Awaiting heartbeat', stale: 'Heartbeat stale', disconnected: 'Not connected', unknown: 'Unknown', unsupported: 'Not supported', disabled: 'Disabled' })[state] ?? 'Unknown';
+export const wakeWebhookLabel = state => ({ ready: 'Ready to notify', queued: 'Notification queued', sending: 'Notifying routine', retrying: 'Retry scheduled', accepted: 'Trigger accepted', idle: 'No pending messages', failed: 'Notification failed', invalid: 'Check private configuration', unsupported: 'Not supported', disabled: 'Disabled', unknown: 'Unknown' })[state] ?? 'Unknown';
 export function receivingSummary(items) {
   const active = items.filter(p => p.active);
   return { enabled: active.length, connected: active.filter(p => p.notification.state === 'connected').length,
@@ -13,6 +14,7 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
   const button = (text, className, action) => { const n = el('button', className, text); n.type = 'button'; n.addEventListener('click', action); return n; };
   let uncertain = false;
   let data = null, selected = null, filter = 'all', syncState = { status: 'idle' };
+  const waking = new Set(), wakeFeedback = new Map();
   const header = el('header', 'receiving-header'), heading = el('div'), title = el('h1'), subtitle = el('p', 'fine');
   const actions = el('div', 'receiving-actions'), freshness = el('span', 'fine'); freshness.setAttribute('role', 'status');
   const refresh = button('', 'secondary', () => void sync.refresh().catch(() => {}));
@@ -32,7 +34,18 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
     onBack: () => { header.hidden = stats.hidden = layout.hidden = false; render(); [...tbody.querySelectorAll('button')].find(b => b.dataset.receivingAgent === selected)?.focus(); } });
   function openMailbox(p) { header.hidden = stats.hidden = layout.hidden = true; mailbox.open(p); mailboxRoot.querySelector('button')?.focus(); }
   const stale = () => uncertain;
-  const items = () => (data?.items ?? []).map(p => stale() && p.active ? { ...p, notification: { state: 'unknown', last_heartbeat_at: null } } : p);
+  const items = () => (data?.items ?? []).map(p => stale() && p.active ? { ...p, notification: { state: 'unknown', last_heartbeat_at: null }, wake_webhook: p.wake_webhook ? { ...p.wake_webhook, state: 'unknown' } : null } : p);
+  async function retryWake(p) {
+    if (waking.has(p.id)) return;
+    waking.add(p.id); wakeFeedback.delete(p.id); renderDetail();
+    try {
+      const result = await api('/agents/' + encodeURIComponent(p.id) + '/wake', { method: 'POST' });
+      wakeFeedback.set(p.id, result.queued ? 'Wake queued. Processing still requires the Agent’s reply and ACK.' : 'No pending messages');
+      // A failed observation does not undo a successfully queued notification.
+      await sync.refresh().catch(() => {});
+    } catch (e) { if (e.status === 401) onUnauthorized(); wakeFeedback.set(p.id, 'Could not queue a wake. Check the private configuration and try again.'); }
+    finally { waking.delete(p.id); renderDetail(); }
+  }
   function relative(value) {
     if (!value) return t('Not recorded');
     // Anchor to the server clock, not an owner's potentially skewed device clock.
@@ -61,6 +74,7 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
       const transport = el('td'), badge = el('span', `receiving-transport ${p.notification.state}`, t(notificationLabel(p.notification.state)));
       transport.append(badge);
       if (p.notification.last_heartbeat_at) transport.append(el('small', '', t('Heartbeat {0}', relative(p.notification.last_heartbeat_at))));
+      if (p.wake_webhook) transport.append(el('small', '', t('Webhook: {0}', t(wakeWebhookLabel(p.wake_webhook.state)))));
       const checked = el('td'); checked.append(stamp(p.last_checked_at));
       const pending = el('td'); pending.append(el('span', p.active && p.pending_count ? 'receiving-pending' : '', String(p.pending_count)));
       if (p.oldest_pending) pending.append(el('small', '', t('Oldest: {0}', relative(p.oldest_pending.created_at))));
@@ -89,10 +103,28 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
       if (label === 'Pending messages') dd.textContent = '0'; else dd.append(stamp(value));
       row.append(dd); timeline.append(row);
     }
-    detail.append(timeline);
     const config = el('section', 'receiving-config'); config.append(el('h3', '', t('Receiving configuration')));
     for (const label of ['Receiving mode', 'Fallback interval']) { const row = el('p'); row.append(el('span', '', t(label)), el('span', '', t('Not reported'))); config.append(row); }
-    detail.append(config, el('p', 'fine', t('Check the receiving task on the Agent’s host platform.')));
+    if (p.wake_webhook) {
+      const wake = p.wake_webhook, section = el('section', 'receiving-config');
+      section.append(el('h3', '', t('Grok Bot webhook')));
+      const status = el('p'); status.append(el('span', '', t('Notification status')), el('strong', '', t(wakeWebhookLabel(wake.state)))); section.append(status);
+      for (const [label, value] of [['Last notification attempt', wake.last_attempt_at], ['Last trigger accepted', wake.last_accepted_at], ['Next notification attempt', wake.next_attempt_at]]) {
+        if (!value) continue;
+        const row = el('p'); row.append(el('span', '', t(label)));
+        row.append(label === 'Next notification attempt' ? el('span', '', new Date(value).toLocaleString(locale())) : stamp(value)); section.append(row);
+      }
+      if (wake.last_http_status) section.append(el('p', 'fine', t('Last HTTP status: {0}', wake.last_http_status)));
+      section.append(el('p', 'fine', t('Trigger accepted means the platform accepted a run request. A reply and ACK confirm processing.')));
+      if (p.active && p.pending_count > 0 && !['invalid', 'unsupported', 'disabled'].includes(wake.state)) {
+        const retry = button(t(waking.has(p.id) ? 'Queuing wake…' : 'Retry wake'), 'secondary', () => void retryWake(p));
+        retry.dataset.receivingAction = 'wake'; retry.disabled = waking.has(p.id) || stale() || ['queued', 'sending', 'retrying', 'unknown'].includes(wake.state);
+        section.append(retry);
+      }
+      if (wakeFeedback.has(p.id)) { const feedback = el('p', 'fine', t(wakeFeedback.get(p.id))); feedback.setAttribute('role', 'status'); section.append(feedback); }
+      detail.append(section);
+    }
+    detail.append(timeline, config, el('p', 'fine', t('Check the receiving task on the Agent’s host platform.')));
     const open = button(t(p.oldest_pending ? 'Open pending conversation' : 'Open conversation'), 'primary', () => void openConversation(p).catch(e => { error.textContent = e.message; error.hidden = false; }));
     open.dataset.receivingAction = 'open'; detail.append(open);
     const viewMailbox = button(t('View mailbox'), 'secondary', () => openMailbox(p)); detail.append(viewMailbox);
@@ -124,6 +156,6 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
     onState: value => { syncState = value; if (['retrying', 'offline', 'paused'].includes(value.status) || value.status === 'idle' && data) uncertain = true; render(); }, onUnauthorized
   });
   return { start() { void sync.start().catch(() => {}); }, stop: sync.stop,
-    reset() { mailbox.reset(); header.hidden = stats.hidden = layout.hidden = false; uncertain = false; data = null; selected = null; filter = 'all'; search.value = ''; sync.stop(); },
+    reset() { mailbox.reset(); wakeFeedback.clear(); header.hidden = stats.hidden = layout.hidden = false; uncertain = false; data = null; selected = null; filter = 'all'; search.value = ''; sync.stop(); },
     availabilityChanged: sync.availabilityChanged, render };
 }

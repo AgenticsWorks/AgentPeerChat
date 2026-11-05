@@ -10,6 +10,7 @@ import { D1MessageStore, IdempotencyConflict } from './store';
 import { ApiError, authenticate, browserSessionToken, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
 import pkg from '../package.json';
 import {receiverRoutes,checkReceiverFence,directHints} from './receiver';
+import { enqueueWakeWebhooks, webhookTarget } from './wake-webhook';
 
 const json = (data: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(data), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }
@@ -131,6 +132,19 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
   if (path === '/agents/receiving' && method === 'GET') {
     owner(p);
     return json(await receivingStatus(env));
+  }
+  const wakeMatch = /^\/agents\/([^/]+)\/wake$/.exec(path);
+  if (wakeMatch && method === 'POST') {
+    owner(p);
+    const agent = await findPrincipal(env, wakeMatch[1]);
+    if (agent.kind !== 'agent' || !agent.active) fail(400, 'invalid_agent', 'Choose an enabled Agent.');
+    if (!env.NOTIFICATIONS) fail(501, 'wake_unavailable', 'Webhook wakes require the Cloudflare notification binding.');
+    let target;
+    try { target = webhookTarget(env, agent.id); } catch { fail(503, 'wake_unconfigured', 'Check the private webhook configuration.'); }
+    if (!target) fail(409, 'wake_unconfigured', 'No webhook is configured for this Agent.');
+    const response = await env.NOTIFICATIONS.getByName(agent.id).fetch('https://notifications/wake/retry', { method: 'POST', headers: { 'X-Agent': agent.id } });
+    if (!response.ok) fail(503, 'wake_unavailable', 'Wake could not be queued. Try again.');
+    return json(await response.json(), 202);
   }
   const mailboxMatch = /^\/agents\/([^/]+)\/mailbox$/.exec(path);
   if (mailboxMatch && method === 'GET') {
@@ -407,6 +421,7 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
       if (existing.request_hash !== requestHash) fail(409, 'idempotency_conflict', 'This key was already used for a different request.');
       const message=(await store.get(existing.id))!;
       const recipients=(await env.DB.prepare('SELECT recipient_id FROM deliveries WHERE message_seq=? AND acked_at IS NULL').bind(message.seq).all<{recipient_id:string}>()).results.map(r=>r.recipient_id);
+      await enqueueWakeWebhooks(env, recipients);
       return json({ message, replayed: true, direct:await directHints(env,message,recipients) });
     }
     let threadId: string, recipients: string[], newThread: { title: string; members: string[]; kind?: 'group' | 'direct' } | undefined;
@@ -440,6 +455,7 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
     const result = await store.put({ id: id('msg'), thread_id: threadId, sender_id: p.id, type, content,
       idempotency_key: key, request_hash: requestHash, recipients, new_thread: newThread, reply_to: replyTo, mentions });
     if (!result.replayed) await notifyAgents(env, recipients);
+    else await enqueueWakeWebhooks(env, recipients);
     if (!result.replayed && env.NOTIFICATIONS) await notifyBrowsers(env, (await threadMembers(env,threadId)).map(member=>member.id));
     if(!result.replayed){const job=notifyPush(env,recipients,threadId,url.origin).catch(()=>console.warn(JSON.stringify({code:'browser_push_deferred'})));if(ctx)ctx.waitUntil(job);else await job;}
     const direct=await directHints(env,result.message,recipients);
