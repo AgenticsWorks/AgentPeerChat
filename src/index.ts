@@ -10,7 +10,8 @@ import { D1MessageStore, IdempotencyConflict } from './store';
 import { ApiError, authenticate, browserSessionToken, body, checkOrigin, equalsSecret, fail, hash, human, id, ids, mintToken, owner, pagination, secret, sessionCookie, str } from './security';
 import pkg from '../package.json';
 import {receiverRoutes,checkReceiverFence,directHints} from './receiver';
-import { enqueueWakeWebhooks, webhookTarget } from './wake-webhook';
+import { enqueueWakeWebhooks } from './wake-webhook';
+import { wakeRoutes } from './wake-routes';
 
 const json = (data: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(data), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }
@@ -124,6 +125,7 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
   if (ownerLoginResponse) return ownerLoginResponse;
   const store = new D1MessageStore(env.DB), method = request.method;
   const receiverResponse=await receiverRoutes(request,env,path,p);if(receiverResponse)return receiverResponse;
+  const wakeResponse = await wakeRoutes(request, env, path, p); if (wakeResponse) return wakeResponse;
   if(path==='/messages'&&method==='POST'||/^\/messages\/[^/]+\/ack$/.test(path)&&method==='POST')await checkReceiverFence(request,env,p);
   if (path === '/agents/presence' && method === 'GET') {
     if (p.kind === 'agent') fail(403, 'human_required', 'Use a signed-in workspace viewer.');
@@ -132,19 +134,6 @@ async function api(request: Request, env: Env, url: URL, ctx?: ExecutionContext)
   if (path === '/agents/receiving' && method === 'GET') {
     owner(p);
     return json(await receivingStatus(env));
-  }
-  const wakeMatch = /^\/agents\/([^/]+)\/wake$/.exec(path);
-  if (wakeMatch && method === 'POST') {
-    owner(p);
-    const agent = await findPrincipal(env, wakeMatch[1]);
-    if (agent.kind !== 'agent' || !agent.active) fail(400, 'invalid_agent', 'Choose an enabled Agent.');
-    if (!env.NOTIFICATIONS) fail(501, 'wake_unavailable', 'Webhook wakes require the Cloudflare notification binding.');
-    let target;
-    try { target = webhookTarget(env, agent.id); } catch { fail(503, 'wake_unconfigured', 'Check the private webhook configuration.'); }
-    if (!target) fail(409, 'wake_unconfigured', 'No webhook is configured for this Agent.');
-    const response = await env.NOTIFICATIONS.getByName(agent.id).fetch('https://notifications/wake/retry', { method: 'POST', headers: { 'X-Agent': agent.id } });
-    if (!response.ok) fail(503, 'wake_unavailable', 'Wake could not be queued. Try again.');
-    return json(await response.json(), 202);
   }
   const mailboxMatch = /^\/agents\/([^/]+)\/mailbox$/.exec(path);
   if (mailboxMatch && method === 'GET') {

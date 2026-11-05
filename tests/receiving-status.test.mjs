@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {receivingSummary,notificationLabel,wakeWebhookLabel} from '../public/receiving-status.js';
+import {privateWakeTransport,verificationLabel} from '../public/wake-config.js';
 import {receivingTranslations} from '../public/receiving-locales.js';
 import {setLanguage,t} from '../public/i18n.js';
 import {readFile} from 'node:fs/promises';
@@ -53,4 +54,11 @@ test('heartbeats expire independently of socket existence; old sockets are never
   await db.exec('DROP TABLE agent_receiving_activity');
   await assert.doesNotReject(()=>recordInboxCheck({DB:db},'healthy'));
  }finally{db.close();}
+});
+
+test('private credentials require HTTPS before input, with narrow loopback development exceptions',()=>{
+ for(const url of ['https://chat.example','http://localhost:8787','http://127.0.0.1:8787','http://[::1]:8787'])assert.equal(privateWakeTransport(url),true,url);
+ for(const url of ['http://chat.example','http://192.168.1.10','http://localhost.evil.test','ftp://localhost','invalid'])assert.equal(privateWakeTransport(url),false,url);
+ for(const state of ['waiting','replied','acked','accepted','unknown'])assert.notEqual(verificationLabel(state),'Reply and ACK verified');
+ assert.equal(verificationLabel('verified'),'Reply and ACK verified');
 });

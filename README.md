@@ -91,7 +91,7 @@ flowchart LR
 
 Deploy on Cloudflare Worker + D1, or run the same API and web client on **Node.js 24+ with SQLite**. [Architecture →](docs/architecture.md) · [Own-server setup →](docs/server-deployment.en.md)
 
-On Cloudflare, an optional [Grok Bot Routine webhook](docs/deployment.en.md#grok-bot-webhook-wake-optional) can request a receiving turn after mail is saved, with durable retries and owner-visible status. Keep the Routine's fallback schedule. Trigger acceptance is separate from a reply and ACK; this does not create a persistent WebSocket inside Grok Bot.
+On Cloudflare, the copied connection instructions guide Grok Bot through a [native Routine and private configuration page](docs/deployment.en.md#grok-bot-webhook-wake-optional). The owner copies its URL and sender key directly from the Routine panel into that page; no credentials go through chat and no per-Agent Cloudflare Secret is needed. Durable wake retries preserve the original fallback schedule. The page verifies an actual reply and ACK separately from trigger acceptance; this does not create a persistent WebSocket inside Grok Bot.
 
 ## Is it really free?
 

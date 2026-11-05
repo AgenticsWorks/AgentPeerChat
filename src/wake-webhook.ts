@@ -1,9 +1,11 @@
 import type { Env } from './types';
 import { hash } from './security';
 
-// Operator-owned secret binding, never an Agent-supplied callback URL. Grok Bot
-// Routines use Bearer authentication and HTTP 200 (not Grok.com's HMAC protocol).
+// Grok Bot Routines use Bearer authentication and HTTP 200 (not Grok.com's
+// HMAC protocol). Browser registration has a narrower provider allowlist than
+// the legacy operator-owned binding.
 type Target = { provider: 'grokbot'; url: string; token: string };
+interface PrivateConfig { principal_id: string; target: Target | null }
 type State = 'ready' | 'queued' | 'sending' | 'retrying' | 'accepted' | 'idle' | 'failed' | 'invalid' | 'unsupported' | 'disabled' | 'unknown';
 export interface WakeWebhookStatus {
   provider: 'grokbot'; state: State; attempts: number;
@@ -16,11 +18,28 @@ interface RecordState extends Omit<WakeWebhookStatus, 'next_attempt_at'> {
 }
 type Storage = Pick<DurableObjectStorage, 'get' | 'put' | 'setAlarm' | 'deleteAlarm'>;
 const key = 'wake-webhook';
+const configKey = 'wake-webhook-private-config';
 const maxAttempts = 5;
 const delay = (attempt: number) => 30000 * 2 ** Math.max(0, attempt - 1);
 const queued = (state: State) => ['queued', 'sending', 'retrying'].includes(state);
 const empty = (state: State): WakeWebhookStatus => ({ provider: 'grokbot', state, attempts: 0,
   last_attempt_at: null, last_accepted_at: null, next_attempt_at: null, last_http_status: null });
+
+// A saved URL can cause server-side requests. Accept only the native provider's
+// exact endpoint, never arbitrary callbacks, IP addresses or redirect targets.
+export function privateWebhookTarget(value: unknown): Target {
+  try {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error();
+    const target = value as Record<string, unknown>;
+    if (target.provider !== 'grokbot' || typeof target.url !== 'string' || target.url.length > 2048
+      || typeof target.token !== 'string' || !/^[\x21-\x7e]{1,4096}$/.test(target.token)) throw Error();
+    const url = new URL(target.url);
+    if (url.protocol !== 'https:' || url.hostname !== 'api2.cursor.sh' || url.port || url.username || url.password
+      || url.search || url.hash || !/^\/automations\/webhook\/[A-Za-z0-9_-]{1,256}$/.test(url.pathname)
+      || target.url !== url.href) throw Error();
+    return { provider: 'grokbot', url: url.href, token: target.token };
+  } catch { throw Error('Use the Grok Bot Routine POST URL and sender key from its desktop panel.'); }
+}
 
 export function webhookTarget(env: Env, principal: string): Target | null {
   if (!env.AGENTPEERCHAT_WAKE_WEBHOOKS) return null;
@@ -55,8 +74,9 @@ function publicStatus(record: RecordState): WakeWebhookStatus {
     last_http_status: record.last_http_status };
 }
 
-// One durable, coalesced wake per recipient. Only cursors and outcome metadata are
-// stored here: no endpoint, Bearer key, message body or Agent access key.
+// One durable, coalesced wake per recipient. Queue metadata contains no secrets.
+// Owner-entered credentials live in a separate private DO record, encrypted at
+// rest by Cloudflare, and are never returned by any application read endpoint.
 export class WakeWebhook {
   private serial: Promise<unknown> = Promise.resolve();
   constructor(private storage: Storage, private env: Env,
@@ -64,22 +84,46 @@ export class WakeWebhook {
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
     const result = this.serial.then(work); this.serial = result.catch(() => {}); return result;
   }
+  private async target(principal: string): Promise<Target | null> {
+    const saved = await this.storage.get<PrivateConfig>(configKey);
+    if (saved && saved.principal_id === principal) return saved.target === null ? null : privateWebhookTarget(saved.target);
+    return webhookTarget(this.env, principal);
+  }
+  async configuration(principal: string) {
+    const saved = await this.storage.get<PrivateConfig>(configKey);
+    let configured = false;
+    try { configured = !!await this.target(principal); } catch { /* Safe invalid status below. */ }
+    return { supported: !!this.env.NOTIFICATIONS, configured,
+      source: saved?.principal_id === principal ? saved.target ? 'private' as const : null : configured ? 'operator' as const : null,
+      wake_webhook: await this.status(principal) };
+  }
+  async configure(principal: string, value: unknown | null): Promise<void> {
+    const target = value === null ? null : privateWebhookTarget(value);
+    await this.exclusive(async () => {
+      // Null is a deliberate disconnect, not permission to restore env fallback.
+      // Atomic multi-key write: a restart after saving cannot retain an old
+      // queued attempt and unexpectedly execute the replacement credentials.
+      await this.storage.put({ [configKey]: { principal_id: principal, target }, [key]: null });
+      await this.storage.deleteAlarm();
+    });
+  }
   private async pending(principal: string) {
     return await this.env.DB.prepare(`SELECT p.active, MAX(d.message_seq) AS seq FROM principals p
       LEFT JOIN deliveries d ON d.recipient_id=p.id AND d.acked_at IS NULL
       WHERE p.id=? AND p.kind='agent' GROUP BY p.id`).bind(principal).first<{ active: number; seq: number | null }>();
   }
   async status(principal: string): Promise<WakeWebhookStatus | null> {
-    const available = webhookAvailability(this.env, principal);
-    if (!available || available.state === 'invalid' || available.state === 'unsupported') return available;
-    const target = webhookTarget(this.env, principal)!;
+    let target: Target | null;
+    try { target = await this.target(principal); } catch { return empty('invalid'); }
+    if (!target) return null;
+    if (!this.env.NOTIFICATIONS) return empty('unsupported');
     const record = await this.storage.get<RecordState>(key);
     if (!record || record.principal_id !== principal || record.fingerprint !== await hash(JSON.stringify(target))) return empty('ready');
     return publicStatus(record);
   }
   async enqueue(principal: string, force = false): Promise<boolean> {
     return this.exclusive(async () => {
-      const target = webhookTarget(this.env, principal);
+      const target = await this.target(principal);
       if (!target) return false;
       const pending = await this.pending(principal);
       if (!pending?.active || pending.seq === null) return false;
@@ -107,7 +151,7 @@ export class WakeWebhook {
       const record = await this.storage.get<RecordState>(key);
       if (!record || !queued(record.state)) return null;
       let target: Target | null;
-      try { target = webhookTarget(this.env, record.principal_id); }
+      try { target = await this.target(record.principal_id); }
       catch { record.state = 'invalid'; await this.finish(record); return null; }
       if (!target) { record.state = 'disabled'; await this.finish(record); return null; }
       const fingerprint = await hash(JSON.stringify(target));
@@ -173,7 +217,7 @@ export class WakeWebhook {
 // Used on idempotent send replay to recover a missed enqueue without emitting a
 // second WebSocket notification or restarting an already accepted webhook batch.
 export async function enqueueWakeWebhooks(env: Env, principals: string[]) {
-  if (!env.NOTIFICATIONS || !env.AGENTPEERCHAT_WAKE_WEBHOOKS) return;
+  if (!env.NOTIFICATIONS) return;
   await Promise.all([...new Set(principals)].map(async principal => {
     try {
       const response = await env.NOTIFICATIONS!.getByName(principal).fetch('https://notifications/wake', { method: 'POST', headers: { 'X-Agent': principal } });

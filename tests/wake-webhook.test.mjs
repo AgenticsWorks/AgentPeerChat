@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 import { SQLiteDatabase } from '../server/sqlite.mjs';
 
 const built = await build({ entryPoints: ['src/wake-webhook.ts'], bundle: true, format: 'esm', platform: 'node', write: false });
-const { WakeWebhook, webhookTarget, webhookAvailability } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
+const { WakeWebhook, webhookTarget, webhookAvailability, privateWebhookTarget } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
 const target = { provider: 'grokbot', url: 'https://hooks.example.test/routine', token: 'private-fixture-key' };
 const config = value => ({ AGENTPEERCHAT_WAKE_WEBHOOKS: JSON.stringify({ recipient: value }) });
 async function fixture(t, responder = async () => new Response(null, { status: 200 })) {
@@ -13,8 +13,13 @@ async function fixture(t, responder = async () => new Response(null, { status: 2
   for (const file of (await readdir('migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await readFile('migrations/' + file, 'utf8'));
   await db.exec("INSERT INTO principals(id,name,kind) VALUES ('sender','Sender','owner'),('recipient','Recipient','agent'); INSERT INTO threads(id,title,created_by) VALUES ('thread','Private','sender')");
   let now = Date.parse('2026-11-01T00:00:00Z'), seq = 0;
+  const privateRecords = new Map();
   const storage = { record: null, alarmAt: null,
-    async get() { return structuredClone(this.record); }, async put(_, value) { this.record = structuredClone(value); },
+    async get(key) { return structuredClone(key === 'wake-webhook' ? this.record : privateRecords.get(key)); },
+    async put(key, value) {
+      if (typeof key === 'object') { for (const [name, entry] of Object.entries(key)) await this.put(name, entry); return; }
+      if (key === 'wake-webhook') this.record = structuredClone(value); else privateRecords.set(key, structuredClone(value));
+    },
     async setAlarm(value) { this.alarmAt = value; }, async deleteAlarm() { this.alarmAt = null; } };
   const env = { DB: db, NOTIFICATIONS: {}, ...config(target) }, requests = [];
   const fetcher = async (url, init) => { requests.push({ url, ...init, body: JSON.parse(init.body) }); return responder(url, init); };
@@ -149,4 +154,59 @@ test('messages arriving during the outbound request produce a trailing wake, wit
   assert.deepEqual(f.requests.map(r => r.body.event_id), ['wake_recipient_1', 'wake_recipient_2']);
   assert.equal((await f.wake.status('recipient')).state, 'accepted');
   assert.equal(await f.pending(), 2);
+});
+
+const privateTarget = { provider: 'grokbot', url: 'https://api2.cursor.sh/automations/webhook/test_routine-123', token: 'fixture-private-key' };
+test('private registration accepts only native provider paths and never echoes rejected secrets', () => {
+  assert.deepEqual(privateWebhookTarget(privateTarget), privateTarget);
+  for (const url of ['https://attacker.example/automations/webhook/x', 'https://api2.cursor.sh.attacker.test/automations/webhook/x',
+    'http://api2.cursor.sh/automations/webhook/x', 'https://api2.cursor.sh:8443/automations/webhook/x',
+    'https://api2.cursor.sh:443/automations/webhook/x', 'https://user:secret@api2.cursor.sh/automations/webhook/x',
+    'https://api2.cursor.sh/automations/webhook/x?secret=key', 'https://api2.cursor.sh/automations/webhook/x#secret',
+    'https://api2.cursor.sh/automations/webhook/x/other', 'https://api2.cursor.sh/automations/webhook/%2fother',
+    'https://api2.cursor.sh/automations/webhook/../x', 'https://127.0.0.1/automations/webhook/x',
+    'https://169.254.169.254/automations/webhook/x', 'https://[::1]/automations/webhook/x',
+    'https://api2.cursor.sh/other', 'https://api2.cursor.sh./automations/webhook/x']) {
+    assert.throws(() => privateWebhookTarget({ ...privateTarget, url }), error => !error.message.includes(url) && !error.message.includes(privateTarget.token));
+  }
+  for (const token of ['', 'key key', 'key\r\nheader', 'a'.repeat(4097)]) assert.throws(() => privateWebhookTarget({ ...privateTarget, token }));
+  assert.throws(() => privateWebhookTarget({ ...privateTarget, provider: 'grok.com' }));
+});
+
+test('private credentials are durable and write-only; disconnect tombstones operator fallback', async t => {
+  const f = await fixture(t); await f.send();
+  await f.wake.configure('recipient', privateTarget);
+  assert.equal(f.requests.length, 0, 'saving must not execute a model turn');
+  assert.equal(f.storage.alarmAt, null);
+  const status = await f.create().configuration('recipient');
+  assert.equal(status.configured, true); assert.equal(status.source, 'private');
+  for (const secret of [privateTarget.url, privateTarget.token, 'fingerprint']) assert.ok(!JSON.stringify(status).includes(secret));
+  await f.wake.enqueue('recipient'); await f.tick();
+  assert.equal(f.requests[0].url, privateTarget.url); assert.equal(f.requests[0].headers.Authorization, 'Bearer ' + privateTarget.token);
+  await f.wake.configure('recipient', null);
+  assert.deepEqual(await f.create().configuration('recipient'), { supported: true, configured: false, source: null, wake_webhook: null });
+  assert.equal(await f.create().enqueue('recipient', true), false);
+  assert.equal(f.storage.alarmAt, null); assert.equal(await f.pending(), 1);
+  await f.wake.configure('recipient', privateTarget);
+  assert.equal((await f.wake.status('recipient')).state, 'ready');
+});
+
+test('rotation or disconnect during an outbound attempt cannot revive its stale outcome', async t => {
+  for (const replacement of [null, { ...privateTarget, token: 'replacement-key' }]) {
+    let release;
+    const f = await fixture(t, () => new Promise(resolve => { release = () => resolve(new Response()); }));
+    await f.wake.configure('recipient', privateTarget); await f.send(); await f.wake.enqueue('recipient');
+    const pending = f.tick();
+    while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+    await f.wake.configure('recipient', replacement); release(); await pending;
+    assert.equal(f.storage.alarmAt, null);
+    assert.equal((await f.wake.status('recipient'))?.state ?? null, replacement ? 'ready' : null);
+    assert.equal(await f.pending(), 1);
+    if (replacement) {
+      release = null; await f.wake.enqueue('recipient'); const next = f.tick();
+      while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+      release(); await next;
+      assert.equal(f.requests[1].headers.Authorization, 'Bearer replacement-key');
+    }
+  }
 });

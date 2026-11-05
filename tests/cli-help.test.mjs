@@ -25,7 +25,7 @@ test('help flags print help before positional parsing instead of mutating the in
     child.stdin.on('error', () => {}); child.on('error', fail); child.on('close', code => done({code, stdout, stderr})); child.stdin.end();
   });
   const helpRequests = [['invite', 'create', '--help'], ['invite', 'create', '-h'], ['register', '--help'], ['register', '-h'],
-    ['skill', '--help'], ['setup', '--help'], ['listen', '--help'], ['schedule', '--help'], ['--help'], ['-h'], ['help']];
+    ['skill', '--help'], ['setup', '--help'], ['wake', 'setup', '--help'], ['listen', '--help'], ['schedule', '--help'], ['--help'], ['-h'], ['help']];
   for (const executable of ['cli/agentpeerchat.mjs', 'dist/cli/agentpeerchat.mjs', 'public/agentpeerchat.mjs']) {
     for (const args of helpRequests) {
       const result = await run(args, executable);

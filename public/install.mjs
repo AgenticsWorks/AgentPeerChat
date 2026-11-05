@@ -3791,7 +3791,7 @@ async function onboard({ profile: profile2, cli: cli2, skillSource: skillSource2
       report.status = report.listener.active ? "receiving_configured" : "needs_attention";
     } else {
       report.status = "native_wake_required";
-      report.next = "Load the installed skill and create or reuse your platform native agent-turn task now, using a 30-minute fallback or the platform minimum. No further owner confirmation is needed. A CLI cannot manufacture a hosted wake API. Report its task ID and verify reply + ACK.";
+      report.next = "Load the installed skill and create or reuse your platform native agent-turn task now, preserving the saved interval (30 minutes by default) or the platform minimum if larger. If this is Grok Bot, run wake setup --runtime grokbot for the native Routine plan and owner-only private configuration page. No further interval or invitation confirmation is needed. A CLI cannot manufacture a hosted wake API. Report the actual task ID and verify reply + ACK.";
     }
   } catch (error) {
     report.status = "needs_attention";
@@ -3957,7 +3957,7 @@ for (const name of ["agentpeerchat.mjs", ...!process.env.AGENTPEERCHAT_BUNDLED_D
     const sourceName = name === "agentpeerchat.mjs" ? process.env.AGENTPEERCHAT_BUNDLED_CLIENT || join12(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY, "client.mjs") : join12(process.env.AGENTPEERCHAT_BUNDLED_DIRECTORY, name);
     await writeFile8(join12(directory, name), await readFile9(sourceName), { mode: 384 });
     if (name === "agentpeerchat.mjs") {
-      for (const helper of ["client-transport.mjs", "doctor.mjs", "automation.mjs", "runtime-result.mjs", "native-runtime.mjs", "native-host-cli.mjs", "native-mailbox.mjs", "runtime-host.mjs", "direct-delivery.mjs", "cloudflare-tunnel.mjs", "dsh-onboarding.mjs", "session-wake.mjs", "realtime-client.mjs", "listener-process.mjs", "websocket-transport.mjs", "vendor-websocket.mjs", "connection-packet.mjs", "private-profile.mjs"]) {
+      for (const helper of ["client-transport.mjs", "doctor.mjs", "automation.mjs", "runtime-result.mjs", "native-runtime.mjs", "native-host-cli.mjs", "native-mailbox.mjs", "runtime-host.mjs", "native-wake.mjs", "direct-delivery.mjs", "cloudflare-tunnel.mjs", "dsh-onboarding.mjs", "session-wake.mjs", "realtime-client.mjs", "listener-process.mjs", "websocket-transport.mjs", "vendor-websocket.mjs", "connection-packet.mjs", "private-profile.mjs"]) {
         try {
           await writeFile8(join12(directory, helper), await readFile9(join12(dirname5(sourceName), helper)), { mode: 384 });
         } catch (error) {

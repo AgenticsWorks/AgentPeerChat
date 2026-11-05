@@ -1,8 +1,9 @@
 import { createChatSync } from './chat-sync.js';
 import { createAgentMailbox } from './agent-mailbox.js';
+import { createWakeConfig, wakeStatusLabel } from './wake-config.js';
 
 export const notificationLabel = state => ({ connected: 'Connected', connecting: 'Awaiting heartbeat', stale: 'Heartbeat stale', disconnected: 'Not connected', unknown: 'Unknown', unsupported: 'Not supported', disabled: 'Disabled' })[state] ?? 'Unknown';
-export const wakeWebhookLabel = state => ({ ready: 'Ready to notify', queued: 'Notification queued', sending: 'Notifying routine', retrying: 'Retry scheduled', accepted: 'Trigger accepted', idle: 'No pending messages', failed: 'Notification failed', invalid: 'Check private configuration', unsupported: 'Not supported', disabled: 'Disabled', unknown: 'Unknown' })[state] ?? 'Unknown';
+export const wakeWebhookLabel = wakeStatusLabel;
 export function receivingSummary(items) {
   const active = items.filter(p => p.active);
   return { enabled: active.length, connected: active.filter(p => p.notification.state === 'connected').length,
@@ -32,6 +33,10 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
   const mailboxRoot = el('section', 'agent-mailbox'); mailboxRoot.hidden = true; root.append(mailboxRoot);
   const mailbox = createAgentMailbox({ root: mailboxRoot, api, t, locale, avatar, openConversation, onUnauthorized,
     onBack: () => { header.hidden = stats.hidden = layout.hidden = false; render(); [...tbody.querySelectorAll('button')].find(b => b.dataset.receivingAgent === selected)?.focus(); } });
+  const wakeRoot = el('section', 'wake-setup'); wakeRoot.hidden = true; root.append(wakeRoot);
+  const wakeConfig = createWakeConfig({ root: wakeRoot, api, t, locale, avatar, onUnauthorized, openConversation,
+    onBack: () => { header.hidden = stats.hidden = layout.hidden = false; render(); void sync.start().catch(() => {}); } });
+  function openSetup(p) { selected = p.id; sync.stop(); mailbox.reset(); header.hidden = stats.hidden = layout.hidden = true; error.hidden = true; wakeConfig.open(p); }
   function openMailbox(p) { header.hidden = stats.hidden = layout.hidden = true; mailbox.open(p); mailboxRoot.querySelector('button')?.focus(); }
   const stale = () => uncertain;
   const items = () => (data?.items ?? []).map(p => stale() && p.active ? { ...p, notification: { state: 'unknown', last_heartbeat_at: null }, wake_webhook: p.wake_webhook ? { ...p.wake_webhook, state: 'unknown' } : null } : p);
@@ -124,6 +129,8 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
       if (wakeFeedback.has(p.id)) { const feedback = el('p', 'fine', t(wakeFeedback.get(p.id))); feedback.setAttribute('role', 'status'); section.append(feedback); }
       detail.append(section);
     }
+    const setup = button(t(p.wake_webhook ? 'Manage Grok Bot webhook' : 'Set up Grok Bot webhook'), 'secondary', () => openSetup(p));
+    setup.dataset.receivingAction = 'setup'; detail.append(setup);
     detail.append(timeline, config, el('p', 'fine', t('Check the receiving task on the Agent’s host platform.')));
     const open = button(t(p.oldest_pending ? 'Open pending conversation' : 'Open conversation'), 'primary', () => void openConversation(p).catch(e => { error.textContent = e.message; error.hidden = false; }));
     open.dataset.receivingAction = 'open'; detail.append(open);
@@ -134,7 +141,7 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
     title.textContent = t('Agent receiving status'); subtitle.textContent = t('Notification connections, inbox checks and message processing.');
     refresh.textContent = t('Refresh'); refresh.disabled = syncState.status === 'syncing';
     freshness.textContent = data ? t('Observed at {0}', new Date(data.observed_at).toLocaleTimeString(locale())) : t('Loading receiving status…');
-    error.hidden = !stale(); error.textContent = t('Status could not be refreshed. Previous records are stale; current connections are unknown.');
+    error.hidden = wakeConfig.isOpen || !stale(); error.textContent = t('Status could not be refreshed. Previous records are stale; current connections are unknown.');
     search.placeholder = t('Search Agents'); search.setAttribute('aria-label', t('Search Agents'));
     const summary = receivingSummary(items()); stats.replaceChildren();
     for (const [label, key] of [['Enabled Agents', 'enabled'], ['Realtime connections', 'connected'], ['Pending messages', 'pending'], ['Unknown status', 'unknown']]) {
@@ -149,13 +156,14 @@ export function createReceivingPage({ root, api, t, locale, avatar, openConversa
     if (focusedFilter) [...filters.children].find(b => b.dataset.receivingFilter === focusedFilter)?.focus({ preventScroll: true });
     const headers = el('tr'); for (const text of ['Agent', 'Realtime notifications', 'Last inbox check', 'Pending messages', 'Last acknowledgment', 'Mailbox']) { const th = el('th', '', t(text)); th.scope = 'col'; headers.append(th); } thead.replaceChildren(headers);
     hint.textContent = t('Not connected does not mean offline. ACK confirms handling, not task correctness. Inbox check times may lag by up to 30 seconds.');
-    detail.setAttribute('aria-label', t('Agent details')); renderRows(); renderDetail(); mailbox.render();
+    detail.setAttribute('aria-label', t('Agent details')); renderRows(); renderDetail(); mailbox.render(); wakeConfig.render();
   }
   const sync = createChatSync({ baseDelay: 15000, random: () => 0,
     refresh: async current => { const result = await api('/agents/receiving'); if (current()) { data = result; uncertain = false; } },
     onState: value => { syncState = value; if (['retrying', 'offline', 'paused'].includes(value.status) || value.status === 'idle' && data) uncertain = true; render(); }, onUnauthorized
   });
-  return { start() { void sync.start().catch(() => {}); }, stop: sync.stop,
-    reset() { mailbox.reset(); wakeFeedback.clear(); header.hidden = stats.hidden = layout.hidden = false; uncertain = false; data = null; selected = null; filter = 'all'; search.value = ''; sync.stop(); },
-    availabilityChanged: sync.availabilityChanged, render };
+  return { start() { if (!wakeConfig.isOpen) void sync.start().catch(() => {}); },
+    stop() { sync.stop(); wakeConfig.close(); header.hidden = stats.hidden = layout.hidden = false; }, openSetup,
+    reset() { wakeConfig.close(); mailbox.reset(); wakeFeedback.clear(); header.hidden = stats.hidden = layout.hidden = false; uncertain = false; data = null; selected = null; filter = 'all'; search.value = ''; sync.stop(); },
+    availabilityChanged() { sync.availabilityChanged(); wakeConfig.availabilityChanged(); }, clearSecrets: wakeConfig.clearSecrets, render };
 }
