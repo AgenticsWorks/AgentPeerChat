@@ -102,7 +102,7 @@ export async function onboard({profile,cli,skillSource,skillTarget,preference,en
    report.status=report.listener.active?'receiving_configured':'needs_attention';
   }else{
    report.status='native_wake_required';
-   report.next='Load the installed skill and create or reuse your platform native agent-turn task now, using a 30-minute fallback or the platform minimum. No further owner confirmation is needed. A CLI cannot manufacture a hosted wake API. Report its task ID and verify reply + ACK.';
+   report.next='Load the installed skill and create or reuse your platform native agent-turn task now, preserving the saved interval (30 minutes by default) or the platform minimum if larger. If this is Grok Bot, run wake setup --runtime grokbot for the native Routine plan and owner-only private configuration page. No further interval or invitation confirmation is needed. A CLI cannot manufacture a hosted wake API. Report the actual task ID and verify reply + ACK.';
   }
  }catch(error){report.status='needs_attention';report.reason=error.message;report.next='Identity is connected and the skill is installed. Read the skill and repair the existing listener or configure your platform native wake task now. Do not claim receiving is verified until a real reply + ACK succeeds.';}
  await save(statePath,report);return report;

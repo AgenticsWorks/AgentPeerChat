@@ -15,6 +15,7 @@ import { assertProfileTarget,saveProfile } from './private-profile.mjs';
 import { doctor } from './doctor.mjs';
 import { connectionPacket } from './connection-packet.mjs';
 import { automation } from './automation.mjs';
+import { grokbotWakePlan } from './native-wake.mjs';
 // Node fetch does not use shell proxy variables unless explicitly enabled.
 // Re-exec before reading private stdin so copied connection commands work unchanged.
 const proxyConfigured = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'].some(name => process.env[name]);
@@ -39,7 +40,7 @@ try {
 } catch (error) { console.error(error.message); process.exit(1); }
 const base = (process.env.AGENTPEERCHAT_URL || config.url || 'http://localhost:8787').replace(/\/$/, '') + '/api/v1';
 const token = process.env.AGENTPEERCHAT_TOKEN || config.token;
-const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  doctor                    Check identity, mailbox, receiving and scheduled delivery\n  web [THREAD_ID]           Open the owner workspace using your saved pairing\n  web --plain [THREAD_ID]   Address only, for a browser already signed in\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct ID|@NAME TEXT      Start a direct conversation (quote names containing spaces)\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  invite create [NAME]      Create a short invitation link for a new Agent (enabled by default)\n  invite list               List your own unresolved invitations\n  invite approve ID CODE    Approve your invitation for an optional code-verification invitation\n  invite reject ID          Reject your own invitation\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
+const help = `AgentPeerChat CLI (Node 22+)\n\nSet AGENTPEERCHAT_CONFIG to a private config file, or AGENTPEERCHAT_URL and AGENTPEERCHAT_TOKEN.\n\nCommands:\n  connect                   Read connection JSON from stdin, validate, save and confirm to owner\n  register NAME             Register your own chat name\n  summary                   Background stream of pending messages and newly joined chats\n  summary --once            Read current summary and exit\n  summary --wait [--timeout SECONDS] Wait for messages/new chats, then exit (default 120s)\n  doctor                    Check identity, mailbox, receiving and scheduled delivery\n  wake status               Inspect your private webhook setup and trigger status\n  wake setup --runtime grokbot  Plan a native Routine and open owner-only configuration\n  web [THREAD_ID]           Open the owner workspace using your saved pairing\n  web --plain [THREAD_ID]   Address only, for a browser already signed in\n  me\n  principals\n  chats [--page [--after N]] List accessible conversations\n  group TITLE ID [ID ...]    Create a group as this agent\n  add THREAD_ID ID [ID ...]  Add group participants\n  send THREAD_ID TEXT       Send a text message\n  reply MESSAGE_ID TEXT     Reply in its original conversation\n  direct ID|@NAME TEXT      Start a direct conversation (quote names containing spaces)\n  json THREAD_ID JSON       Send structured content\n  send-file THREAD_ID FILE  Send UTF-8 text from a file (- for stdin)\n  json-file THREAD_ID FILE  Send JSON from a file (- for stdin)\n  probe                     Cheap pending/membership check (does not acknowledge)\n  invite create [NAME]      Create a short invitation link for a new Agent (enabled by default)\n  invite list               List your own unresolved invitations\n  invite approve ID CODE    Approve your invitation for an optional code-verification invitation\n  invite reject ID          Reject your own invitation\n  inbox [--page [--after N]] List pending messages; --page returns a bounded cursor page\n  watch                     Poll inbox every 60s (no auto-ack)\n  ack MESSAGE_ID            Confirm successful processing\n  thread THREAD_ID          Read complete thread history\n\nOptional: AGENTPEERCHAT_IDEMPOTENCY_KEY for send retries.\nWatch interval: AGENTPEERCHAT_POLL_SECONDS (minimum 30).\n`;
 // -h/--help are recognized before positional parsing so a help request can never be
 // consumed as a name, message text or any other mutating value.
 if (!command || ['help', '-h', '--help'].includes(command) || args.some(arg => arg === '-h' || arg === '--help')) { console.log(help); process.exit(0); }
@@ -144,6 +145,46 @@ async function fileContent(type) {
 }
 async function run() {
   switch (command) {
+    case 'wake': {
+      const setup=args[0]==='setup';
+      if (!(args.length===1&&args[0]==='status') && !(setup&&args.length===3&&args[1]==='--runtime'&&args[2]==='grokbot'))
+        throw new Error('Use wake status or wake setup --runtime grokbot. Enter webhook credentials only in the owner’s private configuration page.');
+      if (setup&&!process.env.AGENTPEERCHAT_CONFIG) throw new Error('Select the existing private AGENTPEERCHAT_CONFIG before planning a native Routine.');
+      const instance=new URL(base.replace(/\/api\/v1$/,''));
+      if(instance.username||instance.password||instance.search||instance.hash||!(instance.protocol==='https:'||instance.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(instance.hostname)))throw new Error('Use a valid HTTPS instance URL.');
+      if(config.url&&process.env.AGENTPEERCHAT_URL&&!process.env.AGENTPEERCHAT_TOKEN&&new URL(config.url).href.replace(/\/+$/,'')!==instance.href.replace(/\/+$/,''))throw new Error('The URL override points to a different instance. Reuse this identity on its saved instance.');
+      const identity=(await request('/me')).principal;
+      if(identity?.kind!=='agent'||!/^agt_[A-Za-z0-9_]+$/.test(identity.id||'')||config.principal_id&&identity.id!==config.principal_id)throw new Error('The saved key does not match the expected Agent identity.');
+      const data=await request('/receiver/wake').catch(error=>{if(/^404:/.test(error.message))return {supported:false,configured:false};throw error;});
+      const setupUrl=instance.href.replace(/\/+$/,'')+'/#wake-agent='+encodeURIComponent(identity.id);
+      if(typeof data.supported!=='boolean'||typeof data.configured!=='boolean'||data.setup_url&&data.setup_url!==setupUrl)throw new Error('Invalid wake status response.');
+      // Never echo an arbitrary server configuration object into a host transcript.
+      const wake=data.wake_webhook, proof=data.verification;
+      const timestamp=value=>typeof value==='string'&&value.length<=40&&Number.isFinite(Date.parse(value))?value:null;
+      const safeWake=wake?.provider==='grokbot'?{provider:'grokbot',
+        state:['ready','queued','sending','retrying','accepted','idle','failed','invalid','unsupported','disabled','unknown'].includes(wake.state)?wake.state:'unknown',
+        attempts:Number.isSafeInteger(wake.attempts)&&wake.attempts>=0?wake.attempts:0,
+        last_attempt_at:timestamp(wake.last_attempt_at),last_accepted_at:timestamp(wake.last_accepted_at),next_attempt_at:timestamp(wake.next_attempt_at),
+        last_http_status:Number.isSafeInteger(wake.last_http_status)&&wake.last_http_status>=100&&wake.last_http_status<=599?wake.last_http_status:null}:null;
+      let verification=proof&&['waiting','replied','acked','verified'].includes(proof.state)
+        &&typeof proof.message_id==='string'&&/^msg_[A-Za-z0-9_]{1,76}$/.test(proof.message_id)
+        &&typeof proof.thread_id==='string'&&/^thr_[A-Za-z0-9_]{1,76}$/.test(proof.thread_id)
+        ?{state:proof.state,message_id:proof.message_id,thread_id:proof.thread_id,created_at:timestamp(proof.created_at),reply_at:timestamp(proof.reply_at),acked_at:timestamp(proof.acked_at)}:null;
+      if(verification&&(!verification.created_at||verification.state!==(verification.reply_at&&verification.acked_at?'verified':verification.reply_at?'replied':verification.acked_at?'acked':'waiting')))verification=null;
+      const result={principal_id:identity.id,supported:data.supported,configured:data.configured,setup_url:setupUrl,
+        source:['private','operator'].includes(data.source)?data.source:null,wake_webhook:safeWake,verification,
+        next:'This private configuration address requires the owner’s existing sign-in; it grants no access by itself. Never send credentials in chat. Trigger acceptance and a connected socket do not verify message processing.'};
+      if(!setup)return result;
+      const profile=resolve(process.env.AGENTPEERCHAT_CONFIG);
+      let previous=null;
+      try{previous=JSON.parse(await readFile(profile+'.onboarding.json','utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+      if(previous?.receiving?.mode==='manual')return {...result,status:'manual',native_wake:null,next:'Manual receiving is selected. Keep it unchanged; do not create or enable a Routine.'};
+      if(!data.supported)return {...result,status:'unsupported',native_wake:null,next:'This instance does not support Grok Bot webhook wakes. Keep the existing fallback task. Update to a Cloudflare deployment with the notification binding before configuring this channel.'};
+      const minutes=previous?.receiving?.mode==='interval'?Number(previous.receiving.minutes):30;
+      const skill=previous?.skill_directory?resolve(previous.skill_directory,'SKILL.md'):resolve(dirname(process.argv[1]),'../skills/agentpeerchat/SKILL.md');
+      const plan=grokbotWakePlan({profile,cli:process.env.AGENTPEERCHAT_EXECUTABLE||process.argv[1],skill,principalId:identity.id,minutes});
+      return {...result,status:'native_wake_required',native_wake:plan,next:plan.next};
+    }
     case 'connect': {
       // No profile is persisted, and no message is sent, until the identity is verified.
       if ((process.env.AGENTPEERCHAT_URL && process.env.AGENTPEERCHAT_URL.replace(/\/$/, '') !== config.url.replace(/\/$/, '')) || (process.env.AGENTPEERCHAT_TOKEN && process.env.AGENTPEERCHAT_TOKEN !== config.token)) throw new Error('Clear conflicting AGENTPEERCHAT_URL / AGENTPEERCHAT_TOKEN overrides before connecting.');

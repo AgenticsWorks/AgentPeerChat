@@ -629,3 +629,16 @@ test('reply migration preserves populated legacy history and nullable foreign-ke
     assert.equal((await migrationDb.prepare("SELECT reply_to FROM messages WHERE id = 'migration-reply'").first()).reply_to, null);
   } finally { if (sqlite) migrationDb.close(); }
 });
+
+test('hosts without Durable Objects report webhook setup unsupported and never accept credentials', async () => {
+  // The earlier capacity test fills the directory; reuse its enabled fixture.
+  const path = '/agents/cap_0/wake';
+  const status = await call(path + '/config');
+  assert.equal(status.status, 200);
+  assert.deepEqual(status.data, { supported: false, configured: false, source: null, wake_webhook: null, verification: null });
+  for (const [method, suffix] of [['PUT', '/config'], ['DELETE', '/config'], ['POST', '/test'], ['POST', '']]) {
+    const result = await call(path + suffix, { method, idempotency: 'fixture-wake-unsupported', body: { provider: 'grokbot', url: 'https://api2.cursor.sh/automations/webhook/fixture', token: 'private-fixture' } });
+    assert.equal(result.status, 501); assert.equal(result.data.error.code, 'wake_unavailable');
+    assert.ok(!JSON.stringify(result.data).includes('private-fixture'));
+  }
+});

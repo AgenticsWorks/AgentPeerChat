@@ -108,3 +108,48 @@
 .mailbox-notice{padding:14px 18px;margin-bottom:16px;border:1px solid #806631;border-radius:8px;background:#b68a2715;color:#eac88c;font-size:13px}
 @media(max-width:1050px){.mailbox-workspace{grid-template-columns:minmax(240px,42%) minmax(0,1fr)}.mailbox-reader{padding:22px}.mailbox-message{padding:16px}.mailbox-context{align-items:flex-start;flex-direction:column}}
 @media(max-width:700px){.mailbox-toolbar{align-items:stretch;gap:12px}.mailbox-toolbar input{max-width:none;flex-basis:100%}.mailbox-tabs{width:100%;justify-content:space-between}.mailbox-tab{padding:8px;gap:6px;font-size:11px}.mailbox-workspace{display:block;min-height:440px}.mailbox-list-pane{border-right:0}.mailbox-reader{display:none}.mailbox-workspace.is-reading .mailbox-list-pane{display:none}.mailbox-workspace.is-reading .mailbox-reader{display:flex;min-height:440px}.mailbox-message{padding:18px}.mailbox-messages{max-height:none}.mailbox-caption{font-size:12px}.mailbox-identity h2{font-size:21px}.mailbox-reader{padding:20px}.mailbox-preview{min-height:0}.mailbox-header>button{font-size:12px;padding:9px 12px}}
+
+/* Private wake setup is separate from the read-only mailbox and its polling UI. */
+.wake-setup{max-width:1000px;margin:0 auto;min-width:0}
+.wake-header{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.wake-private-badge{color:#a6d1bb;background:#4d9a7410;border:1px solid #659c7d40;border-radius:20px;padding:6px 11px;font-size:11px;white-space:nowrap}
+.wake-intro{color:var(--muted);line-height:1.8;font-size:14px;margin:18px 0 28px;max-width:720px}
+.wake-steps{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.wake-card{border:1px solid #484c57;border-radius:12px;padding:26px 30px;background:var(--paper);min-width:0}
+.wake-card-heading{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.wake-card-heading h3{font-size:17px;letter-spacing:-.2px}
+.wake-step-number{display:grid;place-items:center;width:27px;height:27px;flex-shrink:0;border:1px solid #8691f750;border-radius:9px;color:#bdc5ff;background:#8691f715;font-size:12px}
+.wake-description{font-size:13px;line-height:1.85;color:#d0d3dc;max-width:780px;margin-bottom:12px}
+.wake-card>.fine,.wake-saved .fine{line-height:1.8;font-size:12px;max-width:760px}
+.wake-help-link{display:inline-block;font-size:12px;margin-top:14px}
+.wake-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.wake-field{display:block;color:var(--ink);font-size:12px;font-weight:500;min-width:0}
+.wake-field input{display:block;margin:10px 0 0;width:100%;min-width:0;background:var(--base);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:1px;font-size:13px;border-radius:8px}
+.wake-field input:focus{outline:2px solid #8d98ff;outline-offset:2px}
+.wake-secret-hint{grid-column:1/-1;font-size:12px;line-height:1.8;color:var(--muted);margin:0}
+.wake-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.wake-form>.wake-actions{grid-column:1/-1}
+.wake-actions button{font-size:12px;padding:10px 15px;min-height:40px}
+.wake-save-note{margin-top:17px}
+.wake-saved{padding:17px 20px;border:1px solid #659c7d40;border-radius:8px;background:#4d9a740c}
+.wake-saved strong{font-size:13px;color:#a6d1bb}
+.wake-saved p{margin-top:8px}
+.wake-saved .wake-actions{margin-top:16px}
+.wake-remove-confirm{margin-top:14px;padding:16px;border:1px solid #a67d3655;border-radius:8px;font-size:12px;line-height:1.8}
+.wake-remove-confirm .wake-actions{margin-top:12px}
+.wake-observations{margin:22px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.wake-observations>div{padding:16px 18px;background:var(--base);border:1px solid var(--line);border-radius:8px;min-width:0}
+.wake-observations dt{font-size:11px;color:var(--muted);margin-bottom:10px}
+.wake-observations dd{margin:0;font-size:13px;font-weight:600;line-height:1.6;overflow-wrap:anywhere}
+.wake-verified{color:#95d6b3}
+.wake-evidence{display:flex;flex-direction:column;gap:10px;margin:0 0 22px;max-width:650px}
+.wake-evidence:empty{display:none}
+.wake-evidence p{display:flex;justify-content:space-between;gap:18px;font-size:11px;color:var(--muted);line-height:1.6;margin:0}
+.wake-evidence time{font-variant-numeric:tabular-nums;text-align:right}
+.wake-card>.wake-actions+.fine{margin-top:16px}
+.wake-error,.wake-notice,.wake-feedback{font-size:13px;line-height:1.8;padding:13px 17px;margin-bottom:18px;border-radius:8px;overflow-wrap:anywhere}
+.wake-error{border:1px solid #bc73735c;background:#ae424210;color:#efb1b1}
+.wake-notice{border:1px solid #a67d3655;background:#b68a2710;color:#eac88c}
+.wake-feedback{border:1px solid #659c7d40;background:#4d9a7410;color:#a6d1bb}
+@media(max-width:640px){.wake-card{padding:21px 17px}.wake-header{gap:12px;align-items:flex-start}.wake-private-badge{font-size:10px;padding:5px 8px}.wake-header h2{font-size:21px}.wake-intro{font-size:13px;margin-bottom:22px}.wake-form,.wake-observations{grid-template-columns:minmax(0,1fr)}.wake-form{gap:16px}.wake-card-heading h3{font-size:16px}.wake-actions{gap:8px}.wake-actions button{flex-grow:1}.wake-evidence p{flex-direction:column;gap:3px}.wake-evidence time{text-align:left}.wake-saved{padding:15px}}
+.wake-setup :is(button,input){scroll-margin-block:calc(var(--topbar-height) + 16px) 20px}

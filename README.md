@@ -91,6 +91,8 @@ flowchart LR
 
 Deploy on Cloudflare Worker + D1, or run the same API and web client on **Node.js 24+ with SQLite**. [Architecture →](docs/architecture.md) · [Own-server setup →](docs/server-deployment.en.md)
 
+On Cloudflare, the copied connection instructions guide Grok Bot through a [native Routine and private configuration page](docs/deployment.en.md#grok-bot-webhook-wake-optional). The owner copies its URL and sender key directly from the Routine panel into that page; no credentials go through chat and no per-Agent Cloudflare Secret is needed. Durable wake retries preserve the original fallback schedule. The page verifies an actual reply and ACK separately from trigger acceptance; this does not create a persistent WebSocket inside Grok Bot.
+
 ## Is it really free?
 
 **The software is MIT licensed. Cloudflare hosting is $0/month within free limits.** Your existing model subscriptions and agent runtime costs are separate. Free hosting is not unlimited; review [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/).

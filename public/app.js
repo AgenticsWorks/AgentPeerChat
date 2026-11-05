@@ -13,7 +13,7 @@ import { createReceivingPage } from './receiving-status.js';
 initLanguage();
 const $ = selector => document.querySelector(selector);
 const appBase = document.querySelector('meta[name="agentpeerchat-base"]')?.content ?? document.querySelector('meta[name="agentgram-base"]')?.content ?? '';
-const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: false, chatFilter: 'all', currentThread: null, inviteCode: null, pendingThread: null, receiptCounts: new Map(), receivingCheckedAt: 0, presence: new Map(), presenceAt: 0, presenceAttempt: 0 };
+const state = { me: null, principals: [], threads: [], selected: null, messages: [], members: [], cursor: '0', view: 'conversations', authMode: 'login', modalAction: null, secretOpen: false, inspector: false, chatFilter: 'all', currentThread: null, inviteCode: null, pendingThread: null, pendingWakeAgent: null, wakeNavigation: 0, receiptCounts: new Map(), receivingCheckedAt: 0, presence: new Map(), presenceAt: 0, presenceAttempt: 0 };
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 const avatarColors = ['#a45767', '#547767', '#526c9c', '#7861a0', '#916c43', '#477e85'];
 function colorAvatar(node, name) { node.style.background = avatarColors[Array.from(name).reduce((n, c) => n + c.codePointAt(0), 0) % avatarColors.length]; }
@@ -152,6 +152,26 @@ async function enter() {
   if(!state.pendingThread&&!state.selected)try{const saved=localStorage.getItem('agentpeerchat.last-thread.'+state.me.id);if(state.threads.some(t=>t.id===saved))state.pendingThread=saved;}catch{}
   if (state.view === 'receiving' && state.me.kind === 'owner') receivingPage.start();
   await consumePendingThread();
+  await consumePendingWake();
+}
+async function consumePendingWake() {
+  if (!state.pendingWakeAgent || !state.me) return;
+  const target = state.pendingWakeAgent; state.pendingWakeAgent = null;
+  if (state.me.kind !== 'owner') { toast(t('Only the owner can configure private receiving.')); return; }
+  const owner = state.me.id, navigation = ++state.wakeNavigation;
+  try {
+    // An Agent may have just joined while this browser was already open.
+    const directory = await api('/principals');
+    if (state.me?.id !== owner || navigation !== state.wakeNavigation) return;
+    state.principals = directory.items;
+    const agent = state.principals.find(p => p.id === target && p.kind === 'agent');
+    if (!agent) { toast(t('This Agent is not available in your workspace.')); return; }
+    showView('receiving'); receivingPage.openSetup(agent);
+  } catch (error) {
+    if (navigation !== state.wakeNavigation) return;
+    if (error.status === 401) { state.pendingWakeAgent = target; state.me = null; authMode('login'); }
+    else toast(t('The request could not be completed. Refresh the status and try again.'));
+  }
 }
 // A deep link (#thread=…) survives manual sign-in: the target is held until a session exists.
 async function consumePendingThread() {
@@ -216,7 +236,7 @@ document.addEventListener('visibilitychange', receivingPage.availabilityChanged)
 window.addEventListener('online', receivingPage.availabilityChanged);
 window.addEventListener('offline', receivingPage.availabilityChanged);
 window.addEventListener('online', chatSync.availabilityChanged);
-window.addEventListener('pagehide',()=>composer.save());
+window.addEventListener('pagehide',()=>{composer.save();receivingPage.clearSecrets();});
 window.addEventListener('offline',()=>{state.presenceAt=0;if(state.me){renderThreads();renderPrincipals();renderMembers();renderChatPresence();}composer.update();chatSync.availabilityChanged();});
 $('#logout').addEventListener('click', async () => {
   try { await pushClient.stop();await api('/session', { method: 'DELETE' });composer.reset({forget:true});notifications.stop();browserEvents.stop();state.me = null; state.selected = null; state.messages = []; $('#chat-empty').hidden = false; $('#chat-active').hidden = true; authMode('login'); } catch (error) { toast(error.message); }
@@ -606,6 +626,11 @@ $('#export-history').addEventListener('click', async () => {
 async function boot() {
   try {
     const parameters=new URLSearchParams(location.hash.slice(1)),signInKey=parameters.get('access_key');
+    const wakeTarget = parameters.get('wake-agent');
+    if (wakeTarget && /^agt_[A-Za-z0-9_]+$/.test(wakeTarget)) {
+      state.pendingWakeAgent = wakeTarget;
+      history.replaceState(null, '', location.pathname + location.search);
+    }
     if(signInKey){
       // Fragments are never sent to the server; remove them before any API or navigation.
       history.replaceState(null,'',location.pathname+location.search);
@@ -661,11 +686,16 @@ async function redeemOwnerLogin(code, target) {
   }
 }
 window.addEventListener('hashchange',()=>{
+ receivingPage.clearSecrets();
  const params=new URLSearchParams(location.hash.slice(1));
  if(params.has('access_key')||params.has('invite')||params.has('agent-invite')||params.has('owner-login')){
   chatSync.stop();$('#shell').hidden=true;$('#boot-state').hidden=false;
   void boot();
   return;
+ }
+ const wake=params.get('wake-agent');
+ if(wake && /^agt_[A-Za-z0-9_]+$/.test(wake)){
+  history.replaceState(null,'',location.pathname+location.search); state.pendingWakeAgent=wake; void consumePendingWake(); return;
  }
  const thread=params.get('thread');
  if(thread){

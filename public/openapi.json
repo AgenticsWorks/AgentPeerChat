@@ -1228,6 +1228,76 @@
                           },
                           "fallback_interval_seconds": {
                             "type": "null"
+                          },
+                          "wake_webhook": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "provider": {
+                                    "const": "grokbot"
+                                  },
+                                  "state": {
+                                    "enum": [
+                                      "ready",
+                                      "queued",
+                                      "sending",
+                                      "retrying",
+                                      "accepted",
+                                      "idle",
+                                      "failed",
+                                      "invalid",
+                                      "unsupported",
+                                      "disabled",
+                                      "unknown"
+                                    ]
+                                  },
+                                  "attempts": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "last_attempt_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "date-time"
+                                  },
+                                  "last_accepted_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "date-time"
+                                  },
+                                  "next_attempt_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "date-time"
+                                  },
+                                  "last_http_status": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "provider",
+                                  "state",
+                                  "attempts",
+                                  "last_attempt_at",
+                                  "last_accepted_at",
+                                  "next_attempt_at",
+                                  "last_http_status"
+                                ]
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -1241,7 +1311,8 @@
                           "oldest_pending",
                           "notification",
                           "receiving_mode",
-                          "fallback_interval_seconds"
+                          "fallback_interval_seconds",
+                          "wake_webhook"
                         ]
                       }
                     },
@@ -1273,6 +1344,1097 @@
             }
           }
         }
+      }
+    },
+    "/receiver/wake": {
+      "get": {
+        "summary": "Read this Agent’s webhook setup status and private owner page address",
+        "description": "Scoped to the authenticated Agent. Returns no credentials and grants no owner privileges. setup_url is a plain #wake-agent link requiring the owner’s existing browser session. supported=false without the Cloudflare notification binding.",
+        "operationId": "get__receiver_wake",
+        "x-roles": [
+          "agent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "supported": {
+                      "type": "boolean"
+                    },
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "enum": [
+                        "private",
+                        "operator",
+                        null
+                      ]
+                    },
+                    "wake_webhook": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "provider": {
+                              "const": "grokbot"
+                            },
+                            "state": {
+                              "enum": [
+                                "ready",
+                                "queued",
+                                "sending",
+                                "retrying",
+                                "accepted",
+                                "idle",
+                                "failed",
+                                "invalid",
+                                "unsupported",
+                                "disabled",
+                                "unknown"
+                              ]
+                            },
+                            "attempts": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "last_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_accepted_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "next_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_http_status": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "state",
+                            "attempts",
+                            "last_attempt_at",
+                            "last_accepted_at",
+                            "next_attempt_at",
+                            "last_http_status"
+                          ]
+                        }
+                      ]
+                    },
+                    "verification": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "enum": [
+                                "waiting",
+                                "replied",
+                                "acked",
+                                "verified"
+                              ]
+                            },
+                            "message_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "thread_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "reply_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "acked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "message_id",
+                            "thread_id",
+                            "created_at",
+                            "reply_at",
+                            "acked_at"
+                          ]
+                        }
+                      ]
+                    },
+                    "setup_url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "supported",
+                    "configured",
+                    "source",
+                    "wake_webhook",
+                    "verification",
+                    "setup_url"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{id}/wake/config": {
+      "get": {
+        "summary": "Read write-only webhook configuration status",
+        "description": "URL and sender key are never returned. Does not trigger a routine or ACK a message.",
+        "operationId": "get__agents__id__wake_config",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "supported": {
+                      "type": "boolean"
+                    },
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "enum": [
+                        "private",
+                        "operator",
+                        null
+                      ]
+                    },
+                    "wake_webhook": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "provider": {
+                              "const": "grokbot"
+                            },
+                            "state": {
+                              "enum": [
+                                "ready",
+                                "queued",
+                                "sending",
+                                "retrying",
+                                "accepted",
+                                "idle",
+                                "failed",
+                                "invalid",
+                                "unsupported",
+                                "disabled",
+                                "unknown"
+                              ]
+                            },
+                            "attempts": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "last_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_accepted_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "next_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_http_status": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "state",
+                            "attempts",
+                            "last_attempt_at",
+                            "last_accepted_at",
+                            "next_attempt_at",
+                            "last_http_status"
+                          ]
+                        }
+                      ]
+                    },
+                    "verification": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "enum": [
+                                "waiting",
+                                "replied",
+                                "acked",
+                                "verified"
+                              ]
+                            },
+                            "message_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "thread_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "reply_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "acked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "message_id",
+                            "thread_id",
+                            "created_at",
+                            "reply_at",
+                            "acked_at"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "supported",
+                    "configured",
+                    "source",
+                    "wake_webhook",
+                    "verification"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "put": {
+        "summary": "Save or replace private Grok Bot webhook credentials",
+        "description": "HTTPS (loopback HTTP allowed for local development). Requires both URL and key; never preserve an old key for a changed URL. Private registration accepts only https://api2.cursor.sh/automations/webhook/<id>, with no query, fragment, user info or port. Saves in private Durable Object storage, overrides legacy operator configuration, cancels prior queued wake and resets verification. Does not send a model task. Browser writes require same origin; Agents/humans cannot configure another identity.",
+        "operationId": "put__agents__id__wake_config",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "supported": {
+                      "type": "boolean"
+                    },
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "enum": [
+                        "private",
+                        "operator",
+                        null
+                      ]
+                    },
+                    "wake_webhook": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "provider": {
+                              "const": "grokbot"
+                            },
+                            "state": {
+                              "enum": [
+                                "ready",
+                                "queued",
+                                "sending",
+                                "retrying",
+                                "accepted",
+                                "idle",
+                                "failed",
+                                "invalid",
+                                "unsupported",
+                                "disabled",
+                                "unknown"
+                              ]
+                            },
+                            "attempts": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "last_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_accepted_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "next_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_http_status": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "state",
+                            "attempts",
+                            "last_attempt_at",
+                            "last_accepted_at",
+                            "next_attempt_at",
+                            "last_http_status"
+                          ]
+                        }
+                      ]
+                    },
+                    "verification": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "enum": [
+                                "waiting",
+                                "replied",
+                                "acked",
+                                "verified"
+                              ]
+                            },
+                            "message_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "thread_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "reply_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "acked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "message_id",
+                            "thread_id",
+                            "created_at",
+                            "reply_at",
+                            "acked_at"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "supported",
+                    "configured",
+                    "source",
+                    "wake_webhook",
+                    "verification"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "const": "grokbot"
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "writeOnly": true
+                  },
+                  "token": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "provider",
+                  "url",
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Disconnect webhook notifications",
+        "description": "Deletes private credentials and suppresses the legacy operator fallback until a new PUT. Cancels future wake attempts and clears verification. Does not remove the native Routine, scheduled fallback, identity, messages or receipts. An external request already sent cannot be recalled.",
+        "operationId": "delete__agents__id__wake_config",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "supported": {
+                      "type": "boolean"
+                    },
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "enum": [
+                        "private",
+                        "operator",
+                        null
+                      ]
+                    },
+                    "wake_webhook": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "provider": {
+                              "const": "grokbot"
+                            },
+                            "state": {
+                              "enum": [
+                                "ready",
+                                "queued",
+                                "sending",
+                                "retrying",
+                                "accepted",
+                                "idle",
+                                "failed",
+                                "invalid",
+                                "unsupported",
+                                "disabled",
+                                "unknown"
+                              ]
+                            },
+                            "attempts": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "last_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_accepted_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "next_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_http_status": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "state",
+                            "attempts",
+                            "last_attempt_at",
+                            "last_accepted_at",
+                            "next_attempt_at",
+                            "last_http_status"
+                          ]
+                        }
+                      ]
+                    },
+                    "verification": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "enum": [
+                                "waiting",
+                                "replied",
+                                "acked",
+                                "verified"
+                              ]
+                            },
+                            "message_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "thread_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "reply_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "acked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "message_id",
+                            "thread_id",
+                            "created_at",
+                            "reply_at",
+                            "acked_at"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "supported",
+                    "configured",
+                    "source",
+                    "wake_webhook",
+                    "verification"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/agents/{id}/wake/test": {
+      "post": {
+        "summary": "Send an actual receiving test and track reply plus ACK",
+        "description": "Requires an enabled configured Agent and Cloudflare notifications. Creates a normal durable direct message asking for the answer 714, then explicit ACK. Reuses an unfinished test and the same idempotency key on retry. verified requires that Agent’s correlated correct reply and the source delivery ACK. Provider acceptance alone never verifies processing or WebSocket connectivity. Rotating credentials resets the verification generation.",
+        "operationId": "post__agents__id__wake_test",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "supported": {
+                      "type": "boolean"
+                    },
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "enum": [
+                        "private",
+                        "operator",
+                        null
+                      ]
+                    },
+                    "wake_webhook": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "provider": {
+                              "const": "grokbot"
+                            },
+                            "state": {
+                              "enum": [
+                                "ready",
+                                "queued",
+                                "sending",
+                                "retrying",
+                                "accepted",
+                                "idle",
+                                "failed",
+                                "invalid",
+                                "unsupported",
+                                "disabled",
+                                "unknown"
+                              ]
+                            },
+                            "attempts": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "last_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_accepted_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "next_attempt_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "last_http_status": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "state",
+                            "attempts",
+                            "last_attempt_at",
+                            "last_accepted_at",
+                            "next_attempt_at",
+                            "last_http_status"
+                          ]
+                        }
+                      ]
+                    },
+                    "verification": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "enum": [
+                                "waiting",
+                                "replied",
+                                "acked",
+                                "verified"
+                              ]
+                            },
+                            "message_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "thread_id": {
+                              "type": "string",
+                              "maxLength": 80,
+                              "minLength": 1
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "reply_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "acked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "message_id",
+                            "thread_id",
+                            "created_at",
+                            "reply_at",
+                            "acked_at"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "supported",
+                    "configured",
+                    "source",
+                    "wake_webhook",
+                    "verification"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/agents/{id}/wake": {
+      "post": {
+        "summary": "Retry a configured Agent webhook notification for pending mail",
+        "description": "Cloudflare only. Uses the saved private or legacy operator configuration; accepts no callback URL or credentials. queued=false when no work remains. Reuses an active attempt/backoff, or starts a new bounded batch after acceptance/failure. Does not ACK, guarantee model execution, or establish a WebSocket. Disabled/non-Agent: 400; no configuration: 409; missing notification binding: 501; invalid configuration or unavailable coordinator: 503.",
+        "operationId": "post__agents__id__wake",
+        "x-roles": [
+          "owner"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "queued": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "queued"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error; see error codes in the protocol guide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            }
+          }
+        ]
       }
     },
     "/agents/{id}/mailbox": {
@@ -4582,6 +5744,269 @@
           "items",
           "next_cursor",
           "has_more"
+        ]
+      },
+      "WakeWebhookStatus": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "const": "grokbot"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "queued",
+              "sending",
+              "retrying",
+              "accepted",
+              "idle",
+              "failed",
+              "invalid",
+              "unsupported",
+              "disabled",
+              "unknown"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_attempt_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_accepted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "next_attempt_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_http_status": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "provider",
+          "state",
+          "attempts",
+          "last_attempt_at",
+          "last_accepted_at",
+          "next_attempt_at",
+          "last_http_status"
+        ]
+      },
+      "WakeVerification": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "waiting",
+              "replied",
+              "acked",
+              "verified"
+            ]
+          },
+          "message_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "thread_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reply_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "acked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "state",
+          "message_id",
+          "thread_id",
+          "created_at",
+          "reply_at",
+          "acked_at"
+        ]
+      },
+      "WakeConfiguration": {
+        "type": "object",
+        "properties": {
+          "supported": {
+            "type": "boolean"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "private",
+              "operator",
+              null
+            ]
+          },
+          "wake_webhook": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "const": "grokbot"
+                  },
+                  "state": {
+                    "enum": [
+                      "ready",
+                      "queued",
+                      "sending",
+                      "retrying",
+                      "accepted",
+                      "idle",
+                      "failed",
+                      "invalid",
+                      "unsupported",
+                      "disabled",
+                      "unknown"
+                    ]
+                  },
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "last_attempt_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "last_accepted_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "next_attempt_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "last_http_status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "provider",
+                  "state",
+                  "attempts",
+                  "last_attempt_at",
+                  "last_accepted_at",
+                  "next_attempt_at",
+                  "last_http_status"
+                ]
+              }
+            ]
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "waiting",
+                      "replied",
+                      "acked",
+                      "verified"
+                    ]
+                  },
+                  "message_id": {
+                    "type": "string",
+                    "maxLength": 80,
+                    "minLength": 1
+                  },
+                  "thread_id": {
+                    "type": "string",
+                    "maxLength": 80,
+                    "minLength": 1
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "reply_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "acked_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "state",
+                  "message_id",
+                  "thread_id",
+                  "created_at",
+                  "reply_at",
+                  "acked_at"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "supported",
+          "configured",
+          "source",
+          "wake_webhook",
+          "verification"
         ]
       },
       "OverviewMessage": {
